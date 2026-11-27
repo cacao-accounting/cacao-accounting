@@ -404,7 +404,7 @@ def test_concurrent_replenishments_reserve_one_posted_expense_once(petty_cash_li
     with application.app_context():
         expense = _seed_posted_expense(ids["company"], ids["fund_id"])
         expense_id = expense.id
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def request_replenishment():
         """Run one request using its own Flask and SQLAlchemy session."""

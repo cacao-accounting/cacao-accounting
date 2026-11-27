@@ -110,8 +110,9 @@ def test_alta_solicitud_rechaza_decimal_invalido(
         )
 
 
-def test_alta_solicitud_con_hueco_guarda_linea_posterior(app, authenticated_client):
+def test_alta_solicitud_con_hueco_guarda_linea_posterior(app, entorno_contable, authenticated_client):
     """Una fila inicial vacía no hace que la solicitud se persista sin su artículo."""
+    del entorno_contable
     marker = f"GAP-PR-{uuid4().hex[:8]}"
     form = {
         "company": "cacao",

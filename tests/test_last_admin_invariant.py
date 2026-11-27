@@ -214,7 +214,7 @@ def test_rejects_removing_last_admin_role_assignment(last_admin_app):
 
 def test_concurrent_demotions_cannot_remove_all_admins(last_admin_app):
     app, ids = last_admin_app
-    barrier = Barrier(WORKERS)
+    barrier = Barrier(WORKERS, timeout=30)
 
     def demote(user_key: str) -> str:
         with app.app_context():

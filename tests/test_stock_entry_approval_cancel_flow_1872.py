@@ -151,7 +151,7 @@ def _seed(app):
         )
         database.session.add(sle)
         database.session.flush()
-        book = database.session.execute(database.select(Book).filter_by(entity="cacao", status="activo")).scalar_one()
+        book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="DEFAULT_BOOK")).scalar_one()
         database.session.add(
             StockLedgerBookEntry(
                 stock_ledger_entry_id=sle.id,

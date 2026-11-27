@@ -68,7 +68,7 @@ def test_concurrent_batch_creation_returns_a_business_conflict(tmp_path, monkeyp
         item_code = f"ITEM-{suffix}"
         database.session.remove()
 
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
     validate_batch_params = service.validate_batch_params
 
     def synchronized_validation(params):

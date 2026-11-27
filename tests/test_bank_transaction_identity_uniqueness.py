@@ -203,10 +203,12 @@ def test_adapter_translates_a_real_unique_conflict(bank_identity_scenario):
             **_movement(account_id, reference="REF-CONFLICT"),
             "company_id": company_code,
         }
-        document = [dict(movement), dict(movement)]
+        adapter = BankStatementAdapter()
+        adapter.persist_document([dict(movement)])
+        duplicate = adapter._build_transaction(dict(movement), "REF-CONFLICT")
 
         with pytest.raises(ValueError, match="ya existe") as error:
-            BankStatementAdapter().persist_document(document)
+            adapter._insert_transaction(duplicate, "REF-CONFLICT")
 
         assert str(error.value) == DUPLICATE_MESSAGE
         assert isinstance(error.value.__cause__, IntegrityError)

@@ -188,6 +188,7 @@ def pytest_collection_modifyitems(config, items):
 def _seed_worker_base_data(app: Flask) -> None:
     """Crea únicamente los datos base necesarios para cada worker."""
     with app.app_context():
+        database.session.expire_on_commit = False
         database.create_all()
 
         for code, name in (("NIO", "Córdoba"), ("USD", "Dólar")):
@@ -239,81 +240,11 @@ def _seed_worker_base_data(app: Flask) -> None:
         database.session.commit()
 
 
-@pytest.fixture(autouse=True)
-def contexto_de_aplicacion_por_prueba(app):
-    """Ejecuta cada prueba dentro de su propio contexto de aplicación.
-
-    Varias pruebas abren contextos anidados y dejan ``g`` con el usuario de una
-    sesión anterior; al compartir el contexto, la siguiente prueba puede ver un
-    ``current_user`` ajeno. Un contexto propio por prueba aísla ``g`` y la
-    sesión de SQLAlchemy sin alterar el motor en memoria del worker.
-    """
-    contexto = app.app_context()
-    contexto.push()
-    try:
-        yield
-    finally:
-        database.session.remove()
-        contexto.pop()
-
-
-@pytest.fixture(scope="session")
-def app():
-    """App de prueba con SQLite en memoria creada una sola vez por worker."""
-    settings = {
-        **configuracion,
-        "SQLALCHEMY_DATABASE_URI": "sqlite://",
-        "SQLALCHEMY_ENGINE_OPTIONS": {
-            "poolclass": StaticPool,
-            "connect_args": {"check_same_thread": False},
-        },
-        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-        "WTF_CSRF_ENABLED": False,
-        "TESTING": True,
-        "SECRET_KEY": "test-worker-secret",
-    }
-    application: Flask = create_app(settings)
-
-    with application.app_context():
-        _seed_worker_base_data(application)
-
-    yield application
-
-    with application.app_context():
-        database.session.remove()
-        database.engine.dispose()
-
-
-@pytest.fixture
-def db_session(app):
-    """Cada prueba recibe su propia sesión y transacción externa de aislamiento."""
-    with app.app_context():
-        connection = database.engine.connect()
-        connection.connection.cursor().execute("PRAGMA foreign_keys=ON")
-        transaction = connection.begin()
-        session = Session(bind=connection, join_transaction_mode="create_savepoint")
-        session.begin_nested()
-        try:
-            yield session
-        finally:
-            session.rollback()
-            session.close()
-            transaction.rollback()
-            connection.close()
-
-
-@pytest.fixture
-def client(app):
-    """Cliente HTTP independiente por prueba."""
-    with app.test_client() as test_client:
-        yield test_client
-
-
-@pytest.fixture(scope="session")
-def reference_users(app):
-    """Usuarios base reutilizados por perfil para la autenticación de pruebas."""
+def _seed_reference_users(app: Flask) -> dict[str, User]:
+    """Crea los usuarios y roles de referencia usados por la autenticación de pruebas."""
     with app.app_context():
         session = database.session()
+        session.expire_on_commit = False
         if session.execute(select(Entity).filter_by(code="alpha")).scalar_one_or_none() is None:
             session.add(
                 Entity(
@@ -378,8 +309,135 @@ def reference_users(app):
                     session.add(RolesUser(user_id=users["admin"].id, role_id=role.id, active=True))
 
         session.commit()
+        return users
+
+
+_seeded_db_template: sqlite3.Connection | None = None
+
+
+def _capture_seeded_db_template() -> None:
+    """Congela el estado inicial del worker para restaurarlo antes de cada prueba.
+
+    La app se comparte por worker para no reconstruir todo el esquema en cada
+    prueba, pero el estado de datos sí debe aislarse: una prueba que desactiva
+    un módulo, revoca un rol o altera la compañía no puede condicionar a las
+    siguientes. La copia con la API ``backup`` de SQLite es barata y conserva
+    exactamente el esquema y los datos base sembrados.
+    """
+    global _seeded_db_template
+    engine = database.engine
+    if engine.dialect.name != "sqlite":
+        return
+    raw = engine.raw_connection()
+    try:
+        template = sqlite3.connect(":memory:")
+        raw.driver_connection.backup(template)
+        template.commit()
+        _seeded_db_template = template
+    finally:
+        raw.close()
+
+
+def _restore_seeded_db_template() -> None:
+    """Devuelve la base SQLite del worker al estado congelado al iniciar la sesión."""
+    if _seeded_db_template is None:
+        return
+    engine = database.engine
+    if engine.dialect.name != "sqlite":
+        return
+    database.session.remove()
+    raw = engine.raw_connection()
+    try:
+        raw.driver_connection.rollback()
+        _seeded_db_template.backup(raw.driver_connection)
+    finally:
+        raw.close()
+
+
+@pytest.fixture(autouse=True)
+def contexto_de_aplicacion_por_prueba(app):
+    """Ejecuta cada prueba dentro de su propio contexto de aplicación aislado.
+
+    Varias pruebas abren contextos anidados y dejan ``g`` con el usuario de una
+    sesión anterior; al compartir el contexto, la siguiente prueba puede ver un
+    ``current_user`` ajeno. Además del contexto propio, la base SQLite se
+    restaura al estado base del worker para que las mutaciones de una prueba no
+    alteren a las siguientes.
+    """
+    contexto = app.app_context()
+    contexto.push()
+    _restore_seeded_db_template()
+    configuracion_inicial = dict(app.config)
+    try:
+        yield
+    finally:
+        database.session.remove()
+        app.config.clear()
+        app.config.update(configuracion_inicial)
+        contexto.pop()
+
+
+@pytest.fixture(scope="session")
+def app():
+    """App de prueba con SQLite en memoria creada una sola vez por worker."""
+    settings = {
+        **configuracion,
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "SQLALCHEMY_ENGINE_OPTIONS": {
+            "poolclass": StaticPool,
+            "connect_args": {"check_same_thread": False},
+        },
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "TESTING": True,
+        "SECRET_KEY": "test-worker-secret",
+    }
+    application: Flask = create_app(settings)
+
+    with application.app_context():
+        _seed_worker_base_data(application)
+        _seed_reference_users(application)
+        _capture_seeded_db_template()
+
+    yield application
+
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+@pytest.fixture
+def db_session(app):
+    """Cada prueba recibe su propia sesión y transacción externa de aislamiento."""
+    with app.app_context():
+        connection = database.engine.connect()
+        connection.connection.cursor().execute("PRAGMA foreign_keys=ON")
+        transaction = connection.begin()
+        session = Session(bind=connection, join_transaction_mode="create_savepoint")
+        session.begin_nested()
+        try:
+            yield session
+        finally:
+            session.rollback()
+            session.close()
+            transaction.rollback()
+            connection.close()
+
+
+@pytest.fixture
+def client(app):
+    """Cliente HTTP independiente por prueba."""
+    with app.test_client() as test_client:
+        yield test_client
+
+
+@pytest.fixture(scope="session")
+def reference_users(app):
+    """Usuarios base reutilizados por perfil para la autenticación de pruebas."""
+    with app.app_context():
+        users = _seed_reference_users(app)
         yield users
-        session.close()
+        database.session.remove()
 
 
 @pytest.fixture

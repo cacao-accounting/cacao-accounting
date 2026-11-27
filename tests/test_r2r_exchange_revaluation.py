@@ -428,7 +428,7 @@ def test_concurrent_revaluations_preserve_one_active_period_result(business_app)
         prior_run = ExchangeRevaluationService().run(company=company, period_id=prior_period_id, user_id=actor_id)
         prior_run_id = str(prior_run.id)
 
-    start_together = Barrier(2)
+    start_together = Barrier(2, timeout=30)
 
     def close_month() -> str | None:
         with business_app.app_context():
@@ -571,7 +571,7 @@ def test_concurrent_revaluations_preserve_one_active_period_result(business_app)
         assert sum(line.debit for line in posted_lines) == Decimal("60.0000")
         assert sum(line.credit for line in posted_lines) == Decimal("60.0000")
 
-    void_together = Barrier(2)
+    void_together = Barrier(2, timeout=30)
 
     def void_month() -> bool:
         with business_app.app_context():
@@ -856,9 +856,7 @@ def test_cierre_fiscal_incluye_reversa_fx_interperiodo_real(business_app):
     """El cierre del año de reversión incluye FX y el año origen detecta el par futuro."""
     company = f"R{uuid4().hex[:9]}"
     with business_app.app_context():
-        company, year, _month, _prior_period_id, period_id, following_period_id, following_start = _seed_bank_exposure(
-            company
-        )
+        company, year, _month, _prior_period_id, period_id, following_period_id, following_start = _seed_bank_exposure(company)
         fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(entity=company)).scalar_one()
         original_period = database.session.get(AccountingPeriod, period_id)
         following_period = database.session.get(AccountingPeriod, following_period_id)
@@ -1147,7 +1145,7 @@ def test_concurrent_revaluation_void_pg_isolated_url(pg_business_app):
         run = ExchangeRevaluationService().run(company=company, year=year, month=month, period_id=period_id, user_id=actor_id)
         run_id = str(run.id)
 
-    start_together = Barrier(2)
+    start_together = Barrier(2, timeout=30)
 
     def void_run() -> str:
         with pg_business_app.app_context():

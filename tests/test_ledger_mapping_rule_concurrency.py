@@ -162,7 +162,7 @@ def test_concurrent_mapping_rules_keep_one_target_sqlite(tmp_path):
     """Solo una regla activa prospera para la misma cuenta y libros."""
     app = _create_app(f"sqlite:///{tmp_path / 'ledger-mapping.sqlite'}")
     ids = _seed_identidad(app)
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def create(target_account_id: str) -> str:
         with app.app_context():

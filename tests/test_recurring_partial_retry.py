@@ -114,7 +114,4 @@ def test_partial_recurring_retry_is_idempotent(app, entorno_contable):
                 for it in database.session.execute(database.select(RecurringJournalItem).filter_by(template_id=tid)).scalars():
                     database.session.delete(it)
                 database.session.delete(t)
-        p = database.session.get(AccountingPeriod, period_id)
-        if p:
-            database.session.delete(p)
         database.session.commit()

@@ -440,7 +440,7 @@ def test_concurrent_fiscal_year_close_submissions_share_one_approval_request(clo
             pytest.skip("La serialización por SELECT FOR UPDATE requiere PostgreSQL o MySQL.")
         case = _create_fiscal_year_closing_case(f"E{uuid4().hex[:8]}")
 
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def submit_close(_attempt: int) -> str:
         with cloud_app.app_context():

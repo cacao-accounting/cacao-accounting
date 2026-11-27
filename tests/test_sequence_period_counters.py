@@ -242,7 +242,7 @@ def test_reservas_concurrentes_del_mismo_periodo_en_motor_configurado(tmp_path: 
         database.session.commit()
         series_id, sequence_id = series.id, sequence.id
 
-    barrier = Barrier(4)
+    barrier = Barrier(4, timeout=30)
 
     def reservar(indice: int) -> str:
         with application.app_context():

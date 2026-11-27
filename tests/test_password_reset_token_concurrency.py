@@ -48,7 +48,7 @@ def test_emisiones_concurrentes_conservan_un_solo_token(tmp_path, monkeypatch):
         original_lock(target_user_id)
 
     monkeypatch.setattr(device_verification, "_lock_secret_issuance", tracking_lock)
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def issue_token() -> str:
         with app.app_context():

@@ -209,7 +209,7 @@ def test_dos_companias_pueden_generar_el_mismo_folio_a_la_vez(tmp_path: Path):
         database.session.commit()
         ids = [("A", serie_a.id, secuencia_a.id), ("B", serie_b.id, secuencia_b.id)]
 
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def ejecutar(indice: int):
         company, series_id, sequence_id = ids[indice]

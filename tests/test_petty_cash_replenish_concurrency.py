@@ -246,7 +246,7 @@ def _solicitar(app, ids, barrera: Barrier, dia: int) -> str:
 def test_dos_solicitudes_concurrentes_reservan_una_vez(caja_chica_app):
     """Una sola solicitud reserva el gasto; la otra se rechaza sin duplicar el vínculo."""
     app, ids = caja_chica_app
-    barrera = Barrier(2)
+    barrera = Barrier(2, timeout=30)
     with ThreadPoolExecutor(max_workers=2) as pool:
         resultados = list(pool.map(lambda dia: _solicitar(app, ids, barrera, dia), (20, 21)))
 
@@ -339,7 +339,7 @@ def test_el_segundo_reembolso_espera_mientras_el_primero_tiene_el_lock(caja_chic
 def test_dos_reembolsos_concurrentes_crean_una_sola_nota(caja_chica_app):
     """Dos pagos simultáneos de la misma solicitud dejan una sola nota y un GL."""
     app, ids = caja_chica_app
-    barrera = Barrier(2)
+    barrera = Barrier(2, timeout=30)
     with ThreadPoolExecutor(max_workers=2) as pool:
         resultados = list(pool.map(lambda _: _reembolsar(app, ids, barrera), range(2)))
 

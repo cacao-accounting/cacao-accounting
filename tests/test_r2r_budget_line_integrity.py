@@ -33,7 +33,6 @@ from cacao_accounting.database import (
     database,
 )
 
-
 pytestmark = pytest.mark.database
 
 
@@ -167,7 +166,7 @@ def _budget_line_data(scenario, amount: str) -> dict[str, str | None]:
 def test_concurrent_expense_authorizations_cannot_duplicate_a_budget_combination(budget_scenario):
     """Two users cannot double the same cost authorization by submitting together."""
     app = budget_scenario["app"]
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def add_authorization(amount: str) -> str:
         with app.app_context():
@@ -234,7 +233,7 @@ def test_two_confirmations_of_the_same_expense_import_keep_imported_status(budge
         )
         import_id = batch.id
 
-    after_validated_read = Barrier(2)
+    after_validated_read = Barrier(2, timeout=30)
     original_lock = budget_import_module._lock_budget_for_line_write
 
     def wait_for_both_validated_reads(budget_id):

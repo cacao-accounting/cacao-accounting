@@ -778,7 +778,7 @@ def test_concurrent_voucher_liquidation_posts_one_expense(replenishment_app):
 
     application, ids = replenishment_app
     scenario = _prepare_delivered_expense_voucher(application, ids)
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def liquidate() -> str:
         """Attempt the same voucher settlement using an isolated request session."""
@@ -920,7 +920,7 @@ def test_concurrent_default_selection_keeps_one_fund(replenishment_app):
 
     from threading import Barrier
 
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def select_default(fund_id: str) -> None:
         """Run one real default-selection transaction in its own session."""
@@ -970,7 +970,7 @@ def test_concurrent_naming_series_activation_keeps_one_default(replenishment_app
 
     from threading import Barrier
 
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def activate_default(series_id: str) -> None:
         """Run one series activation in its own transaction and session."""
@@ -1035,7 +1035,7 @@ def test_concurrent_automatic_series_bootstrap_creates_one_default(replenishment
     application, ids = replenishment_app
     from threading import Barrier
 
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def ensure_series() -> None:
         """Run automatic series setup in an independent session."""
@@ -1070,7 +1070,7 @@ def test_concurrent_global_series_bootstrap_creates_one_default(replenishment_ap
     application, _ids = replenishment_app
     from threading import Barrier
 
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def ensure_global_series() -> None:
         """Run global series setup in an independent session."""
@@ -1108,7 +1108,7 @@ def test_concurrent_petty_cash_setup_creates_one_default(replenishment_app):
 
     from threading import Barrier
 
-    start = Barrier(2)
+    start = Barrier(2, timeout=30)
 
     def ensure_petty_cash():
         """Run company setup in an independent session."""
@@ -1274,7 +1274,7 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
                 database.session.remove()
 
     if database.engine.dialect.name == "sqlite":
-        start = Barrier(2)
+        start = Barrier(2, timeout=30)
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(post_adjustment, start) for _ in range(2)]
             results = [future.result(timeout=30) for future in futures]
@@ -1339,9 +1339,7 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
                             break
                     time.sleep(0.05)
 
-                assert blocked, (
-                    "El segundo ajuste no mostr? contenci?n de lock real contra el primer worker en PostgreSQL"
-                )
+                assert blocked, "El segundo ajuste no mostr? contenci?n de lock real contra el primer worker en PostgreSQL"
                 release.set()
                 results = [first.result(timeout=30), second.result(timeout=30)]
         finally:

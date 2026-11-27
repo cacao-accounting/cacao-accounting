@@ -195,7 +195,7 @@ def concurrent_reversal_scenario(tmp_path):
 def test_concurrent_reversal_requests_create_one_draft_and_transition(concurrent_reversal_scenario):
     """Source locking and the unique transition prevent duplicate posted intent."""
     app, seed = concurrent_reversal_scenario
-    request_barrier = Barrier(2)
+    request_barrier = Barrier(2, timeout=30)
 
     def create_reversal():
         with app.app_context():
@@ -240,7 +240,7 @@ def test_concurrent_reversal_requests_create_one_draft_and_transition(concurrent
     with app.app_context():
         reject_journal_draft(transition.target_id, user_id=seed["user_id"])
 
-    retry_barrier = Barrier(2)
+    retry_barrier = Barrier(2, timeout=30)
 
     def create_retry():
         with app.app_context():

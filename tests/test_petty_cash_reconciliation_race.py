@@ -120,7 +120,7 @@ def test_concurrencia_postgresql_persiste_una_sola_conciliacion():
         database.session.commit()
         fund_id = fund.id
 
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def create_one(_):
         with app.app_context():

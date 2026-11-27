@@ -349,7 +349,7 @@ def test_item_price_creation_accepts_active_references_and_optional_uom(
 def test_item_price_update_accepts_active_references_and_optional_uom(
     app, authenticated_client, item_price_reference_scenario, empty_uom
 ):
-    """La edición válida conserva una UOM activa o vacía y aplica todos los campos."""
+    """La edición rápida válida conserva UOM y criterios, y solo cambia el precio."""
     scenario = item_price_reference_scenario
     with app.app_context():
         item_price = database.session.get(ItemPrice, scenario.item_price_id)
@@ -362,6 +362,7 @@ def test_item_price_update_accepts_active_references_and_optional_uom(
         f"/settings/item-prices/{scenario.item_price_id}",
         data={
             "price": "18.7500",
+            "expected_price": "10",
             "min_qty": "2.5",
             "valid_from": "2026-05-01",
             "valid_upto": "2026-05-31",
@@ -375,6 +376,6 @@ def test_item_price_update_accepts_active_references_and_optional_uom(
         assert item_price is not None
         assert item_price.uom == (None if empty_uom else scenario.uom_code)
         assert item_price.price == Decimal("18.7500")
-        assert item_price.min_qty == Decimal("2.5")
-        assert item_price.valid_from == date(2026, 5, 1)
-        assert item_price.valid_upto == date(2026, 5, 31)
+        assert item_price.min_qty == Decimal("0")
+        assert item_price.valid_from is None
+        assert item_price.valid_upto is None

@@ -175,7 +175,7 @@ def test_legacy_monthly_close_table_gets_unique_index(monthly_close_scenario):
                 text("CREATE TABLE period_close_run (company VARCHAR(10) NOT NULL, period_id VARCHAR(26) NOT NULL)")
             )
 
-        barrier = Barrier(2)
+        barrier = Barrier(2, timeout=30)
 
         def install_guard():
             with app.app_context():
@@ -264,7 +264,7 @@ def test_legacy_duplicate_monthly_close_runs_block_unique_index_without_rewritin
 def test_concurrent_monthly_close_requests_share_one_period_run(monthly_close_scenario, monkeypatch):
     """Parallel close requests resolve to the same open run for one period."""
     app, company, period_id, user_id, endpoint = monthly_close_scenario
-    after_authorization = Barrier(2)
+    after_authorization = Barrier(2, timeout=30)
     original_create = accounting_routes.create_monthly_close_run
 
     def synchronize_after_authorization(company_code: str, selected_period_id: str):

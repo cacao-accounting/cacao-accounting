@@ -224,7 +224,7 @@ def test_dos_sesiones_siembran_una_sola_plantilla_global(printing_app, monkeypat
     _single_document_registry(monkeypatch)
     first = printing_app("carrera-a")
     second = printing_app("carrera-b")
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def sow(application: Flask) -> None:
         with application.app_context():

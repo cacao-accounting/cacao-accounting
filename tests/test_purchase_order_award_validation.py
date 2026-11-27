@@ -584,7 +584,7 @@ def test_ordenes_concurrentes_no_superan_saldo_adjudicado(adjudicaciones, monkey
         database.session.commit()
         database.session.remove()
 
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def create_partial_order() -> bool:
         form = _form_orden(ids, qty_0="0.3")

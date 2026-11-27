@@ -40,6 +40,7 @@ def test_css_de_plantilla_no_puede_definir_el_tamano_de_pagina(stylesheet):
     with pytest.raises(TemplateValidationError, match="tama?o de p?gina|tama"):
         PrintService().build_print_html("<p>Documento</p>", stylesheet, paper_size="a4", orientation="landscape")
 
+
 def test_margenes_del_css_no_alteran_la_pagina_configurada():
     """Un @page sin `size` conserva márgenes y la configuración se aplica después."""
     html = PrintService().build_print_html(
@@ -84,7 +85,7 @@ def test_rutas_admin_muestran_error_controlado_para_pagina_invalida(
     with app.app_context():
         template = PrintTemplate(
             document_type="sales_invoice",
-            code=f"invalid-page-{endpoint.rsplit('/', 1)[-1]}-{id(app)}",
+            code=f"invalid-page-{endpoint.rsplit('/', 1)[-1]}-{paper_size}-{orientation}-{id(app)}",
             name="Invalid page setting test",
             template_body="<p>Documento</p>",
             stylesheet_body="",

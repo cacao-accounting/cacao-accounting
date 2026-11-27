@@ -209,7 +209,7 @@ def test_dos_aprobaciones_concurrentes_no_exceden_la_orden():
         orden_item_id = orden_item.id
         item_code = item.code
 
-    barrera = Barrier(2)
+    barrera = Barrier(2, timeout=30)
 
     def aprobar(receipt_id: str) -> str:
         with app.app_context():

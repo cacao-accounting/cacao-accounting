@@ -148,6 +148,7 @@ def companias_caja():
             active=True,
             enabled=True,
             account_type="bank",
+            currency="NIO",
         )
         gl_banco_beta = Accounts(
             entity=beta,
@@ -157,6 +158,7 @@ def companias_caja():
             active=True,
             enabled=True,
             account_type="bank",
+            currency="NIO",
         )
         gl_caja_alpha = Accounts(
             entity=alpha,

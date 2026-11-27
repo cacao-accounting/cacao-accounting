@@ -89,7 +89,7 @@ def role_permission_app(tmp_path):
 def test_concurrent_admin_saves_leave_one_complete_role_permission_matrix(role_permission_app):
     """Two full replacements may leave either submitted matrix, never their union."""
     app, user_id, role_id, module_id = role_permission_app
-    start_requests = Barrier(2)
+    start_requests = Barrier(2, timeout=30)
 
     def save_permission(action: str) -> int:
         client = app.test_client()

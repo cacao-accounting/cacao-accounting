@@ -43,6 +43,7 @@ def _crear_cuenta_gl_banco(sufijo: str, entidad: str = "cacao", **banderas) -> s
         name=f"Bancos forma {sufijo}",
         classification="asset",
         account_type="bank",
+        currency="NIO",
         **banderas,
     )
     database.session.add(cuenta)

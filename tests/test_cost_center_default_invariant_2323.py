@@ -105,12 +105,24 @@ def test_nuevo_centro_costo_marca_unico_default(app, authenticated_client, admin
         assert rows[0].code == code
 
 
-def test_no_permite_desmarcar_unico_default(app, authenticated_client, admin_mod):
+@pytest.fixture
+def default_cacao(app, admin_mod):
+    """Garantiza el centro predeterminado base que estas pruebas editan o eliminan."""
+    del admin_mod
+    from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+
+    with app.app_context():
+        centro = _ensure_single_default_cost_center("cacao")
+        database.session.commit()
+        return str(centro.id)
+
+
+def test_no_permite_desmarcar_unico_default(app, authenticated_client, default_cacao):
     client = authenticated_client("admin")
     company = "cacao"
+    cc_id = default_cacao
     with app.app_context():
-        current = database.session.execute(database.select(CostCenter).filter_by(entity=company, default=True)).scalar_one()
-        cc_id = current.id
+        current = database.session.get(CostCenter, cc_id)
 
     resp = client.post(
         f"/accounting/costs_center/{cc_id}/edit",
@@ -123,12 +135,10 @@ def test_no_permite_desmarcar_unico_default(app, authenticated_client, admin_mod
     assert _count_defaults(app, company) == 1
 
 
-def test_no_permite_eliminar_unico_default(app, authenticated_client, admin_mod):
+def test_no_permite_eliminar_unico_default(app, authenticated_client, default_cacao):
     client = authenticated_client("admin")
     company = "cacao"
-    with app.app_context():
-        current = database.session.execute(database.select(CostCenter).filter_by(entity=company, default=True)).scalar_one()
-        cc_id = current.id
+    cc_id = default_cacao
 
     resp = client.post(f"/accounting/costs_center/{cc_id}/delete", follow_redirects=True)
     assert resp.status_code == 200

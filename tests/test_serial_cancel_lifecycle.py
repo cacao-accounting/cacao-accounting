@@ -329,7 +329,7 @@ def serial_concurrente():
 def test_dos_salidas_concurrentes_no_reclaman_el_mismo_serial(serial_concurrente):
     """Dos transacciones que llegan juntas obtienen como máximo una reserva."""
     application, item_code, serial_no, warehouse = serial_concurrente
-    at_reservation = Barrier(2)
+    at_reservation = Barrier(2, timeout=30)
     thread_state = local()
 
     def synchronize_first_serial_statement(connection, cursor, statement, parameters, context, executemany):
@@ -381,7 +381,7 @@ def test_two_receipts_racing_serial_insert_have_one_winner_and_usable_loser(seri
     """La constraint global real decide la carrera y el savepoint conserva la sesión (#1829)."""
     application, item_code, existing_serial_no, warehouse = serial_concurrente
     serial_no = f"RACE-{existing_serial_no}"
-    at_savepoint = Barrier(2)
+    at_savepoint = Barrier(2, timeout=30)
     winner_committed = Event()
     thread_state = local()
 

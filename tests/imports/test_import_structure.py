@@ -473,7 +473,7 @@ def test_batch_claim_is_atomic_for_concurrent_callers(tmp_path):
         database.session.commit()
         batch_id = batch.id
 
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
 
     def claim_batch():
         with app.app_context():

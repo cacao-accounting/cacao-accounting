@@ -15,6 +15,8 @@ from cacao_accounting.database import Entity, Modules, Roles, RolesUser, User, U
 @pytest.fixture
 def cloud_admin_access_app(app):
     with app.app_context():
+        previous_mode_present = "MODO_ESCRITORIO" in app.config
+        previous_mode = app.config.get("MODO_ESCRITORIO")
         app.config["MODO_ESCRITORIO"] = False
         for module in ("admin", "accounting"):
             row = database.session.execute(select(Modules).filter_by(module=module)).scalar_one_or_none()
@@ -25,7 +27,10 @@ def cloud_admin_access_app(app):
         database.session.commit()
     yield app
     with app.app_context():
-        app.config["MODO_ESCRITORIO"] = True
+        if previous_mode_present:
+            app.config["MODO_ESCRITORIO"] = previous_mode
+        else:
+            app.config.pop("MODO_ESCRITORIO", None)
 
 
 def _mk_company(app, suffix: str) -> str:

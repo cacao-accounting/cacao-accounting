@@ -20,6 +20,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.posting_service import _valuation_method_for_company
 from cacao_accounting.database import (
+    Currency,
     Entity,
     Item,
     StockLedgerEntry,
@@ -85,6 +86,8 @@ def pg_app():
         )
         with aplicacion.app_context():
             database.create_all()
+            database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+            database.session.flush()
             database.session.add(
                 Entity(
                     code="cacao",
@@ -95,7 +98,9 @@ def pg_app():
                     enabled=True,
                 )
             )
+            database.session.flush()
             database.session.add(UOM(code="UND1881", name="Unidad 1881"))
+            database.session.flush()
             database.session.add(
                 Item(code="ART-1881", name="Artículo 1881", item_type="goods", is_stock_item=True, default_uom="UND1881")
             )

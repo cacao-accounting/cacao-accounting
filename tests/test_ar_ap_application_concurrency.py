@@ -704,7 +704,7 @@ def test_payment_applications_cannot_consume_shared_balance_twice(arap_applicati
     with application.app_context():
         engine = database.engine
     if engine.dialect.name != "sqlite":
-        header_barrier = Barrier(2)
+        header_barrier = Barrier(2, timeout=30)
         lock_headers = arap_ledger_service._lock_payment_application_headers
 
         def synchronize_before_header_locks(payment, document):
@@ -786,7 +786,7 @@ def test_concurrent_manual_credits_never_overapply_one_receivable(arap_applicati
         journal_ids = [journal.id for journal in journals]
         database.session.remove()
 
-    submit_barrier = Barrier(2)
+    submit_barrier = Barrier(2, timeout=30)
     lock_references = arap_ledger_service.lock_journal_open_item_references
 
     def synchronize_before_reference_locks(journal):

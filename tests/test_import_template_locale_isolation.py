@@ -137,7 +137,7 @@ def test_construccion_concurrente_no_comparte_buffer(monkeypatch):
     idioma_hilo = threading.local()
     monkeypatch.setattr(modulo_rutas, "get_locale", lambda: getattr(idioma_hilo, "codigo", "es"))
     adapter = CustomerAdapter()
-    barrera = threading.Barrier(2)
+    barrera = threading.Barrier(2, timeout=30)
     resultados: dict[str, str] = {}
     errores: list[str] = []
 

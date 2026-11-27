@@ -122,7 +122,7 @@ def _expirar(application, confirmation_id: str) -> bool:
 
 
 def _carrera(application, confirmation_id: str) -> tuple[int, bool]:
-    barrier = Barrier(2)
+    barrier = Barrier(2, timeout=30)
     with ThreadPoolExecutor(max_workers=2) as workers:
 
         def responder():

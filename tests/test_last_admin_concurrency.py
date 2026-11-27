@@ -91,7 +91,7 @@ def _desactivar(app, user_id: str, barrera: Barrier) -> str:
 def test_dos_desactivaciones_concurrentes_conservan_un_admin(admin_app):
     """Exactamente una de las dos transiciones puede completarse."""
     app, ids = admin_app
-    barrera = Barrier(2)
+    barrera = Barrier(2, timeout=30)
     with ThreadPoolExecutor(max_workers=2) as pool:
         resultados = list(pool.map(lambda uid: _desactivar(app, uid, barrera), ids))
 
