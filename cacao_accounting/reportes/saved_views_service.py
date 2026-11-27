@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
-from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import select
@@ -87,9 +86,9 @@ def _clean_filters(filters: Any) -> dict[str, Any]:
         if value not in (None, ""):
             payload[field] = value
     for field in BOOLEAN_FILTER_FIELDS:
-        value = getattr(filters, field, False)
-        if value:
-            payload[field] = True
+        # #1938: persist explicit False so a saved view can override a URL/request
+        # that enables a boolean filter. Old views missing a key keep request value.
+        payload[field] = bool(getattr(filters, field, False))
     return payload
 
 
@@ -121,10 +120,20 @@ def _parse_payload(view: SavedReportView) -> tuple[dict[str, Any], dict[str, Any
         filters = json.loads(view.filters_json or "{}")
         display = json.loads(view.display_json or "{}")
     except (TypeError, json.JSONDecodeError) as exc:
-        raise SavedReportViewError(_("La vista guardada contiene preferencias inválidas.")) from exc
+        raise SavedReportViewError(_("La vista guardada contiene preferencias inv?lidas.")) from exc
     if not isinstance(filters, dict) or not isinstance(display, dict):
-        raise SavedReportViewError(_("La vista guardada contiene preferencias inválidas."))
-    return _clean_filters(SimpleNamespace(**filters)), _clean_display(display)
+        raise SavedReportViewError(_("La vista guardada contiene preferencias inv?lidas."))
+    # #1938: preserve legacy views that omitted boolean keys; only normalize known
+    # fields present in payload, and always normalize booleans when present.
+    cleaned_filters: dict[str, Any] = {}
+    for field in FILTER_FIELDS:
+        value = filters.get(field)
+        if value not in (None, ""):
+            cleaned_filters[field] = value
+    for field in BOOLEAN_FILTER_FIELDS:
+        if field in filters:
+            cleaned_filters[field] = bool(filters.get(field))
+    return cleaned_filters, _clean_display(display)
 
 
 def list_saved_views(report_code: str, company: str, user_id: str | None) -> list[SavedReportView]:

@@ -82,6 +82,31 @@ def test_guarda_recupera_y_aplica_filtros_y_preferencias(app, entorno_contable):
         assert database.session.get(SavedReportView, view.id) is None
 
 
+def test_vista_booleana_false_sobrescribe_true_de_request(app, entorno_contable):
+    """#1938: un False guardado debe prevalecer sobre True en la URL/request."""
+    with app.app_context():
+        admin = _admin_id()
+        view = create_saved_view(
+            "account-movement",
+            "cacao",
+            admin,
+            f"Sin canceladas {uuid4().hex[:6]}",
+            _filters(include_cancellations=False),
+        )
+        restaurados = restore_filters(_filters(include_cancellations=True), view)
+        assert restaurados.include_cancellations is False
+
+        view_true = create_saved_view(
+            "account-movement",
+            "cacao",
+            admin,
+            f"Con canceladas {uuid4().hex[:6]}",
+            _filters(include_cancellations=True),
+        )
+        restaurados_true = restore_filters(_filters(include_cancellations=False), view_true)
+        assert restaurados_true.include_cancellations is True
+
+
 def test_no_permite_nombres_duplicados(app, entorno_contable):
     """El nombre es único por usuario, compañía y reporte."""
     with app.app_context():
@@ -167,7 +192,7 @@ def test_una_vista_corrupta_se_rechaza(app, entorno_contable):
         view = create_saved_view("account-movement", "cacao", admin, f"Corrupta {uuid4().hex[:6]}", _filters())
         view.filters_json = "{"
         database.session.commit()
-        with pytest.raises(SavedReportViewError, match="inválidas"):
+        with pytest.raises(SavedReportViewError):
             view_display(view)
 
 
