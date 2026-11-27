@@ -337,3 +337,57 @@ def test_lista_predeterminada_genera_precios_de_venta(tmp_path):
         assert any(price.price == Decimal("25.0000") for price in prices)
         database.session.remove()
         database.engine.dispose()
+
+
+def test_creacion_invalida_concurrente_no_deja_predeterminada_parcial(tmp_path):
+    """Un alta rechazada no deja lista, default ni tarifas parciales."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6]
+    user_id = f"user-{suffix}"
+    _seed(app, suffix, user_id)
+    barrier = Barrier(2, timeout=30)
+
+    def create(name: str, currency: str) -> int:
+        client = _client(app, user_id)
+        barrier.wait(timeout=10)
+        return client.post(
+            "/settings/price-lists",
+            data={
+                "name": name,
+                "company": f"E{suffix}",
+                "currency": currency,
+                "is_selling": "y",
+                "is_active": "y",
+                "is_default": "y",
+            },
+        ).status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            statuses = list(
+                workers.map(
+                    lambda args: create(*args),
+                    ((f"Válida {suffix}", f"C{suffix}"), (f"Inválida {suffix}", "NOEXISTE")),
+                )
+            )
+        assert statuses == [302, 302]
+        with app.app_context():
+            assert (
+                database.session.execute(database.select(PriceList).filter_by(name=f"Inválida {suffix}")).scalar_one_or_none()
+                is None
+            )
+            defaults = (
+                database.session.execute(
+                    database.select(PriceList).filter_by(
+                        company=f"E{suffix}", is_selling=True, is_default=True, is_active=True
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(defaults) == 1
+            assert defaults[0].name == f"Válida {suffix}"
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
