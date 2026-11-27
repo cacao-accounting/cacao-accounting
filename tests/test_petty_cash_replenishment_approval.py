@@ -1279,11 +1279,14 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             futures = [executor.submit(post_adjustment, start) for _ in range(2)]
             results = [future.result(timeout=30) for future in futures]
     else:
+        import time
+
+        from sqlalchemy import create_engine, text
+
         from cacao_accounting.bancos import services
 
         original_lock = services._lock_row_for_transition
         first_locked = Event()
-        second_started = Event()
         release = Event()
         calls: list[int] = []
         calls_lock = Lock()
@@ -1292,25 +1295,45 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             with calls_lock:
                 calls.append(1)
                 number = len(calls)
+            locked = original_lock(model, record_id)
             if number == 1:
-                locked = original_lock(model, record_id)
                 first_locked.set()
                 assert release.wait(timeout=10)
-                return locked
-            second_started.set()
-            return original_lock(model, record_id)
+            return locked
 
         monkeypatch.setattr(services, "_lock_row_for_transition", lock_observable)
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            first = executor.submit(post_adjustment)
-            assert first_locked.wait(timeout=10)
-            second = executor.submit(post_adjustment)
-            try:
-                assert second_started.wait(timeout=10)
-                assert second.done() is False, "El segundo ajuste no esperó el lock"
-            finally:
+        monitor_engine = create_engine(application.config["SQLALCHEMY_DATABASE_URI"])
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                first = executor.submit(post_adjustment)
+                assert first_locked.wait(timeout=10)
+                second = executor.submit(post_adjustment)
+
+                blocked = False
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    with monitor_engine.connect() as conn:
+                        rows = (
+                            conn.execute(
+                                text(
+                                    "SELECT wait_event_type, state, pg_blocking_pids(pid) AS blockers "
+                                    "FROM pg_stat_activity WHERE pid <> pg_backend_pid()"
+                                )
+                            )
+                            .mappings()
+                            .all()
+                        )
+                    if any(row.get("wait_event_type") == "Lock" and (row.get("blockers") or []) for row in rows):
+                        blocked = True
+                        break
+                    time.sleep(0.05)
+
+                assert blocked, "El segundo ajuste no mostr? contenci?n de lock en PostgreSQL"
                 release.set()
-            results = [first.result(timeout=30), second.result(timeout=30)]
+                results = [first.result(timeout=30), second.result(timeout=30)]
+        finally:
+            release.set()
+            monitor_engine.dispose()
 
     assert sum(result.startswith("posted:") for result in results) == 1, results
     with application.app_context():
