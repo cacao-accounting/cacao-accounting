@@ -321,7 +321,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1232 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Libera gastos de reposiciones canceladas |
 | #1233 | #1655 | ✅ Implementado en `50b2666c`; GitHub: open / fix-proposed | Marca como incompleta la matriz y enumera proyecciones sin conversión; 6 pruebas focalizadas; Black/Ruff/Flake8/mypy/pydocstyle/Bandit/complexipy OK; Pylint 9.58/10 (avisos previos); sin migraciones |
 | #1234 | Consumidor | ✅ Implementado en `ebab6d06`; GitHub: open / fix-proposed | Proyecta CxC/CxP en la fecha derivada de los términos activos del tercero; prueba NET-60/NET-30 en julio/agosto; 10 pruebas de caja paralelas; Black/Ruff/Flake8/mypy/pydocstyle/Bandit/complexipy OK; Pylint 9.60/10 (avisos); sin cambios de esquema |
-| #1235 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Valida moneda en matriz de conciliación |
+| #1235 | #1655 | ✅ Implementado en `275c0707` / prueba `a299fa84`; GitHub: open / fix-proposed | Rechaza moneda distinta del libro y normaliza el código informado; 3 pruebas de conciliación; Black/Ruff/Flake8/pydocstyle OK; Pylint 9.89/10 (aviso previo); sin migraciones |
 | #1236 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Incluye las cuentas fiscales configuradas en conciliación |
 | #1237 | #1709 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Aplica el rango de cuentas al presupuesto comparado |
 | #1238 | #1709 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Respeta límites parciales de período presupuestario |
