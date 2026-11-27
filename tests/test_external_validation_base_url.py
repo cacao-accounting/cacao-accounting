@@ -40,7 +40,14 @@ def test_save_external_validation_settings_accepts_https_url(validation_settings
 
 @pytest.mark.parametrize(
     "base_url",
-    ["javascript:alert(1)", "https://validar.ejemplo.test/?q=1", "https://validar.ejemplo.test/#qr"],
+    [
+        "javascript:alert(1)",
+        "https://validar.ejemplo.test/?q=1",
+        "https://validar.ejemplo.test/#qr",
+        "https://validar.ejemplo.test/?",
+        "https://validar.ejemplo.test/#",
+        "https://validar.ejemplo.test/?#",
+    ],
 )
 def test_save_external_validation_settings_rejects_unsafe_url(validation_settings_app, base_url):
     app, values, committed = validation_settings_app

@@ -50,7 +50,7 @@ def _normalize_validation_base_url(base_url: str | None) -> str:
         raise ValueError(_("La URL base de validación externa debe usar http o https."))
     if parsed.username or parsed.password:
         raise ValueError(_("La URL base de validaci?n externa no debe incluir credenciales."))
-    if parsed.query or parsed.fragment:
+    if parsed.query or parsed.fragment or "?" in candidate or "#" in candidate:
         raise ValueError(_("La URL base de validaci?n externa no debe incluir query ni fragmento."))
 
     return candidate.rstrip("/")
