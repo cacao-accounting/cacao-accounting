@@ -285,7 +285,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1011 | #1707 | ✅ `4da61378` + `fe8d2442`; GitHub: open / fix-proposed | Deduplica conceptos en reglas, preview, motor y snapshot; 15+23 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1015 | #1707 | ✅ `66c49a43`; GitHub: open / fix-proposed | Buying permite purchase/both y selling sales/both; formulario y cálculo validan; 20 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1016 | #1655 | ✅ `4fa5166d` + catálogo `09d067fd`/`56c5ba03`/`637ded51`; GitHub: open / fix-proposed | Convierte lista a moneda documental y limpia precios obsoletos; bloquea al guardar sin tasa; 7 Python + 24 JS passed; sin migraciones; PostgreSQL pendiente por entorno |
-| #1017 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Aprobaciones: validar la acción recibida en el POST |
+| #1017 | #1708 | ✅ `b8da6123` + `9f6bb0ba`; GitHub: open / fix-proposed | Whitelist approve/reject; POST typo conserva Pending Approval y no crea ApprovalAction; 2 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1022 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Aprobaciones: doctypes válidos quedan sin rama de envío y quedan 'Approved' en borrador para siempre |
 | #1023 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Fiscal: la persistencia de líneas de impuesto sobrescribe concept_amounts y el total no se reconstruye desde las líneas canónicas |
 | #1026 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Tax pricing: impuesto aditivo se calcula sobre el precio mostrado que ya contiene el impuesto incluido |
