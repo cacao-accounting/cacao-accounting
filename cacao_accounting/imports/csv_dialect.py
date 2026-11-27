@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Any
+from typing import Any, TextIO
 
 from cacao_accounting.i18n import _
 
 CSV_SAMPLE_CHARS = 2048
 # UTF-8 necesita hasta 4 bytes por carácter: esta ventana garantiza la muestra
 # completa incluso cuando el archivo usa caracteres multibyte.
-CSV_SAMPLE_BYTES = CSV_SAMPLE_CHARS * 4
+CSV_SAMPLE_BYTES = CSV_SAMPLE_CHARS * 4 + 3
 ALLOWED_DELIMITERS = ",;"
 
 
@@ -44,10 +44,10 @@ def csv_sample_from_bytes(chunk: bytes) -> str:
     for trim in range(4):
         candidate = window if trim == 0 else window[:-trim]
         try:
-            return _as_universal_newlines(candidate.decode("utf-8-sig")[:CSV_SAMPLE_CHARS])
+            return _as_universal_newlines(candidate.decode("utf-8-sig"))[:CSV_SAMPLE_CHARS]
         except UnicodeDecodeError:
             continue
-    return _as_universal_newlines(window.decode("utf-8-sig")[:CSV_SAMPLE_CHARS])
+    return _as_universal_newlines(window.decode("utf-8-sig"))[:CSV_SAMPLE_CHARS]
 
 
 def sniff_csv_dialect(sample: str) -> Any:
@@ -63,35 +63,28 @@ def parse_csv_rows(text: str, dialect: Any) -> list[list[str]]:
     return list(csv.reader(io.StringIO(text), dialect))
 
 
-class _QuoteScanner:
+class CSVQuoteScanner:
     """Recorre la muestra para distinguir tabulaciones citadas de separadores."""
 
-    def __init__(
-        self,
-        delimiter: str,
-        quotechar: str,
-        escapechar: str | None,
-        doublequote: bool,
-        skipinitialspace: bool,
-    ) -> None:
+    def __init__(self, dialect: Any) -> None:
         """Inicia el estado de comillas, escapes y comienzo de campo."""
-        self.delimiter = delimiter
-        self.quotechar = quotechar
-        self.escapechar = escapechar
-        self.doublequote = doublequote
-        self.skipinitialspace = skipinitialspace
+        self.dialect = dialect
         self.in_quotes = False
         self.quote_pending = False
         self.escaped = False
         self.at_field_start = True
+
+    def scan(self, text: str) -> bool:
+        """Consume texto y reporta si contiene una tabulación no citada."""
+        return any(self.consume(character) for character in text)
 
     def consume(self, character: str) -> bool:
         """Indica si el carácter es una tabulación fuera de un campo citado."""
         if self.escaped:
             self.escaped = False
             self.at_field_start = False
-            return False
-        if self.escapechar and character == self.escapechar:
+            return character == "\t" and not self.in_quotes
+        if self.dialect.escapechar and character == self.dialect.escapechar:
             self.escaped = True
             return False
         if self.in_quotes and self._consume_quoted(character):
@@ -106,12 +99,13 @@ class _QuoteScanner:
         if character in ("\n", "\r"):
             self.at_field_start = True
             return False
-        if character == self.delimiter:
+        if character == self.dialect.delimiter:
             self.at_field_start = True
             return False
-        if self.skipinitialspace and self.at_field_start and character == " ":
+        if self.dialect.skipinitialspace and self.at_field_start and character == " ":
             return False
-        if self.quotechar and character == self.quotechar and self.at_field_start:
+        quotechar = self.dialect.quotechar or '"'
+        if quotechar and character == quotechar and self.at_field_start:
             self.in_quotes = True
             return False
         self.at_field_start = False
@@ -120,7 +114,8 @@ class _QuoteScanner:
     def _consume_quoted(self, character: str) -> bool:
         """Procesa el carácter citado e indica si el campo sigue entrecomillado."""
         if self.quote_pending:
-            if self.doublequote and character == self.quotechar:
+            quotechar = self.dialect.quotechar or '"'
+            if self.dialect.doublequote and character == quotechar:
                 self.quote_pending = False
                 return True
             self.in_quotes = False
@@ -128,18 +123,21 @@ class _QuoteScanner:
             # Un espacio posterior no reinicia el campo: skipinitialspace solo
             # aplica después de un delimitador, no después de una comilla.
             self.at_field_start = False
-        elif character == self.quotechar:
+        elif character == (self.dialect.quotechar or '"'):
             self.quote_pending = True
         return self.in_quotes
 
 
 def contains_unquoted_tab(sample: str, dialect: Any) -> bool:
     """Indica si alguna tabulación de la muestra queda fuera de las comillas."""
-    scanner = _QuoteScanner(
-        dialect.delimiter,
-        dialect.quotechar or '"',
-        dialect.escapechar,
-        dialect.doublequote,
-        bool(dialect.skipinitialspace),
-    )
-    return any(scanner.consume(character) for character in sample[:CSV_SAMPLE_CHARS])
+    scanner = CSVQuoteScanner(dialect)
+    return scanner.scan(sample)
+
+
+def contains_unquoted_tab_in_stream(stream: TextIO, dialect: Any) -> bool:
+    """Busca tabulaciones no citadas en todo el flujo sin cargarlo en memoria."""
+    scanner = CSVQuoteScanner(dialect)
+    while chunk := stream.read(64 * 1024):
+        if scanner.scan(chunk):
+            return True
+    return False

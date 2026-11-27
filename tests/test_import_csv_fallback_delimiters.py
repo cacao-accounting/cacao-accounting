@@ -5,8 +5,12 @@
 
 from __future__ import annotations
 
-import pytest
+import io
 
+import pytest
+from werkzeug.datastructures import FileStorage
+
+from cacao_accounting.imports import routes as import_routes
 from cacao_accounting.imports.csv_dialect import (
     CSV_SAMPLE_CHARS,
     ImportCSVFormatError,
@@ -199,3 +203,53 @@ def test_saltos_de_carro_se_igualan_entre_carga_y_lector(tmp_path):
     tabla = CSVReader().read(str(archivo))
     assert tabla.columns == ["a", "b"]
     assert tabla.rows == [["d", "c\td"]]
+
+
+def test_muestra_bom_crlf_normaliza_antes_de_recortar(tmp_path):
+    """Carga y lector inspeccionan 2048 caracteres ya normalizados."""
+    contenido = "\ufeffh1;h2\r\n" + "é;x\r\n" * 420 + "a\tb;c\r\n" + "z;end\r\n" * 100
+    bytes_csv = contenido.encode("utf-8")
+    muestra_lector = io.TextIOWrapper(io.BytesIO(bytes_csv), encoding="utf-8-sig", newline=None).read(CSV_SAMPLE_CHARS)
+
+    assert csv_sample_from_bytes(bytes_csv) == muestra_lector
+    assert len(csv_sample_from_bytes(bytes_csv)) == CSV_SAMPLE_CHARS
+    assert _valid_csv_fallback(bytes_csv) is False
+
+    ruta = tmp_path / "bom_crlf_borde.csv"
+    ruta.write_bytes(bytes_csv)
+    with pytest.raises(ImportCSVFormatError):
+        CSVReader().read(str(ruta))
+
+
+def test_upload_y_lector_rechazan_tab_fuera_de_la_muestra(tmp_path, monkeypatch, app):
+    """Una tabulación no citada tardía no pasa el MIME ni la lectura CSV."""
+    contenido = "h1;h2\n" + "x;y\n" * 520 + "a\tb;c\n"
+    bytes_csv = contenido.encode("utf-8")
+    archivo_subido = FileStorage(stream=io.BytesIO(bytes_csv), filename="datos.csv")
+    monkeypatch.setattr(import_routes, "is_desktop_mode", lambda: False)
+    monkeypatch.setattr(import_routes, "_load_magic", lambda: None)
+
+    with app.test_request_context("/imports/upload"):
+        assert import_routes._validate_mime_type(archivo_subido) is False
+
+    ruta = tmp_path / "tab_tardia.csv"
+    ruta.write_bytes(bytes_csv)
+    with pytest.raises(ImportCSVFormatError):
+        CSVReader().read(str(ruta))
+
+
+def test_upload_y_lector_aceptan_tab_citada_fuera_de_la_muestra(tmp_path, monkeypatch, app):
+    """Una tabulación tardía dentro de comillas sigue siendo contenido CSV válido."""
+    contenido = "h1;h2\n" + "x;y\n" * 520 + '"a\tb";c\n'
+    bytes_csv = contenido.encode("utf-8")
+    archivo_subido = FileStorage(stream=io.BytesIO(bytes_csv), filename="datos.csv")
+    monkeypatch.setattr(import_routes, "is_desktop_mode", lambda: False)
+    monkeypatch.setattr(import_routes, "_load_magic", lambda: None)
+
+    with app.test_request_context("/imports/upload"):
+        assert import_routes._validate_mime_type(archivo_subido) is True
+
+    ruta = tmp_path / "tab_citada_tardia.csv"
+    ruta.write_bytes(bytes_csv)
+    tabla = CSVReader().read(str(ruta))
+    assert tabla.rows[-1] == ["a\tb", "c"]

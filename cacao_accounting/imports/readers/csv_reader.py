@@ -7,6 +7,7 @@ import csv
 from typing import Any, TextIO
 from cacao_accounting.imports.csv_dialect import (
     CSV_SAMPLE_CHARS,
+    CSVQuoteScanner,
     ImportCSVFormatError,
     contains_unquoted_tab,
     sniff_csv_dialect,
@@ -57,8 +58,11 @@ class CSVReader(BaseReader):
 def _validate_shape(file: TextIO, dialect: Any) -> None:
     """Rechaza filas anchas antes de que csv.reader construya sus listas."""
     validator = _CSVShapeValidator(dialect)
+    tab_scanner = CSVQuoteScanner(dialect)
     while chunk := file.read(64 * 1024):
         for character in chunk:
+            if tab_scanner.consume(character):
+                raise ImportCSVFormatError()
             validator.consume(character)
     validator.finish()
 

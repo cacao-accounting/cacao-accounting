@@ -30,6 +30,7 @@ from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.imports.csv_dialect import (
     CSV_SAMPLE_BYTES,
     contains_unquoted_tab,
+    contains_unquoted_tab_in_stream,
     csv_sample_from_bytes,
     parse_csv_rows,
     sniff_csv_dialect,
@@ -274,14 +275,17 @@ def _extract_file_extension(filename: str) -> str:
 
 def _validate_mime_type(file: Any) -> bool:
     """Validate file MIME type using python-magic. Returns True if valid."""
+    extension = _extract_file_extension(getattr(file, "filename", ""))
     if is_desktop_mode():
-        return True
+        csv_valid = extension != "csv" or _valid_csv_tab_policy(file)
+        if not csv_valid:
+            flash(str(_INVALID_FILE_TYPE_MSG), "danger")
+        return csv_valid
     magic_modulo = _load_magic()
     if magic_modulo is None:
         chunk = file.read(CSV_SAMPLE_BYTES)
         file.seek(0)
-        extension = _extract_file_extension(getattr(file, "filename", ""))
-        if extension == "csv" and _valid_csv_fallback(chunk):
+        if extension == "csv" and _valid_csv_fallback(chunk, file):
             return True
         if extension in {"xlsx", "ods"} and chunk.startswith(b"PK"):
             return True
@@ -299,10 +303,13 @@ def _validate_mime_type(file: Any) -> bool:
     if mime not in _ALLOWED_MIMES:
         flash(_("Tipo de archivo no válido"), "danger")
         return False
-    return True
+    csv_valid = extension != "csv" or _valid_csv_tab_policy(file)
+    if not csv_valid:
+        flash(str(_INVALID_FILE_TYPE_MSG), "danger")
+    return csv_valid
 
 
-def _valid_csv_fallback(chunk: bytes) -> bool:
+def _valid_csv_fallback(chunk: bytes, file: Any | None = None) -> bool:
     """Validate minimal CSV structure when python-magic is unavailable."""
     try:
         text = csv_sample_from_bytes(chunk)
@@ -319,7 +326,37 @@ def _valid_csv_fallback(chunk: bytes) -> bool:
         rows = parse_csv_rows(text, dialect)
     except (csv.Error, ValueError):
         return False
+    if file is not None and _file_has_unquoted_tab(file, dialect):
+        return False
     return bool(rows and any(cell.strip() for row in rows for cell in row))
+
+
+def _valid_csv_tab_policy(file: Any) -> bool:
+    """Aplica el contrato de tabulaciones al CSV completo tras validar su MIME."""
+    try:
+        file.seek(0)
+        text = csv_sample_from_bytes(file.read(CSV_SAMPLE_BYTES))
+    except (OSError, UnicodeDecodeError):
+        return False
+    finally:
+        file.seek(0)
+    dialect = sniff_csv_dialect(text)
+    return not contains_unquoted_tab(text, dialect) and not _file_has_unquoted_tab(file, dialect)
+
+
+def _file_has_unquoted_tab(file: Any, dialect: Any) -> bool:
+    """Escanea el CSV completo con decodificación y saltos universales."""
+    text_stream = None
+    try:
+        file.seek(0)
+        text_stream = io.TextIOWrapper(file.stream, encoding="utf-8-sig", newline=None)
+        return contains_unquoted_tab_in_stream(text_stream, dialect)
+    except (OSError, UnicodeDecodeError):
+        return True
+    finally:
+        if text_stream is not None:
+            text_stream.detach()
+        file.seek(0)
 
 
 def _persist_uploaded_file(file: Any, batch_id: str, filename: str) -> str:
