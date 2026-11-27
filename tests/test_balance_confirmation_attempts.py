@@ -28,6 +28,7 @@ from cacao_accounting.contabilidad.balance_confirmation_bp import _claim_verific
 from cacao_accounting.contabilidad.balance_confirmation import compute_snapshot_hash
 from cacao_accounting.contabilidad import balance_confirmation_bp
 from cacao_accounting.database import (
+    AuditTrail,
     BalanceConfirmation,
     BalanceConfirmationInvitation,
     Currency,
@@ -724,3 +725,53 @@ def test_verificacion_exitosa_marca_sesion_del_mismo_cliente(confirmation_1839_s
 
     with client.session_transaction() as session:
         assert session.get(f"verified_confirmation_{confirmation_id}") == ids["invitation"]
+
+
+@pytest.mark.database
+def test_dos_respuestas_concurrentes_registran_una_sola(confirmation_1839_scenario):
+    """Solo la primera respuesta gana y deja una única auditoría terminal."""
+    app, ids = confirmation_1839_scenario
+    with app.app_context():
+        confirmation = database.session.get(BalanceConfirmation, ids["confirmation"])
+        snapshot = {"items": [], "totals": {}}
+        confirmation.snapshot_json = json.dumps(snapshot)
+        confirmation.snapshot_hash = compute_snapshot_hash(snapshot)
+        database.session.commit()
+        database.session.remove()
+    clients = [app.test_client(), app.test_client()]
+    for client in clients:
+        with client.session_transaction() as session:
+            session[f"verified_confirmation_{ids['confirmation']}"] = ids["invitation"]
+
+    barrier = Barrier(2, timeout=30)
+
+    def respond(client, response_type: str) -> int:
+        barrier.wait(timeout=10)
+        data = {"response_type": response_type}
+        if response_type == "disputed":
+            data["response_comment"] = "Diferencia detectada en la prueba concurrente"
+        return client.post(f"/confirm-balance/{ids['token']}/respond", data=data).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        statuses = list(workers.map(lambda args: respond(*args), ((clients[0], "confirmed"), (clients[1], "disputed"))))
+
+    assert all(status in {200, 302} for status in statuses), statuses
+    with app.app_context():
+        confirmation = database.session.get(BalanceConfirmation, ids["confirmation"])
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        assert confirmation is not None
+        assert confirmation.response_type in {"confirmed", "disputed"}
+        assert confirmation.responded_at is not None
+        assert invitation.status == "responded"
+        terminal_events = (
+            database.session.execute(
+                database.select(AuditTrail).where(
+                    AuditTrail.document_id == str(confirmation.id),
+                    AuditTrail.action.in_(("balance_confirmation_confirmed", "balance_confirmation_disputed")),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(terminal_events) == 1
+        database.session.remove()
