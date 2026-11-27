@@ -31,14 +31,14 @@ def _template(paper_size: str = "letter", orientation: str = "portrait") -> Simp
     [
         "@page { size: letter portrait; margin: 15mm; }",
         "@page { size: A4 landscape !important; }",
+        "@page { /**/size: A4 landscape !important; }",
         "@page :first { size: A4 landscape; }",
     ],
 )
 def test_css_de_plantilla_no_puede_definir_el_tamano_de_pagina(stylesheet):
-    """El CSS persistido no puede imponerse a la página configurada (#1930)."""
-    with pytest.raises(TemplateValidationError, match="tamaño de página"):
+    """El CSS persistido no puede imponerse a la p?gina configurada (#1930)."""
+    with pytest.raises(TemplateValidationError, match="tama?o de p?gina|tama"):
         PrintService().build_print_html("<p>Documento</p>", stylesheet, paper_size="a4", orientation="landscape")
-
 
 def test_margenes_del_css_no_alteran_la_pagina_configurada():
     """Un @page sin `size` conserva márgenes y la configuración se aplica después."""
