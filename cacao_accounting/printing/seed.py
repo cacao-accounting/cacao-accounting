@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import database
 from cacao_accounting.printing.models import PrintTemplate
@@ -407,12 +408,15 @@ def seed_print_templates() -> None:
 
     base_locale = _get_base_locale()
     try:
+        _begin_seed_transaction()
         from flask_babel import force_locale
 
         with force_locale(base_locale):
             _seed_print_templates_internal()
+            database.session.commit()
     except Exception:
-        _seed_print_templates_internal()
+        database.session.rollback()
+        raise
 
 
 def _seed_print_templates_internal() -> None:
@@ -420,10 +424,17 @@ def _seed_print_templates_internal() -> None:
         _ensure_system_template(document_type, definition["label"], definition["root_context_name"])
 
 
+def _begin_seed_transaction() -> None:
+    """Serializa escritores SQLite y mantiene los savepoints en la transacción."""
+    connection = database.session.connection()
+    if connection.dialect.name == "sqlite" and not connection.connection.driver_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
 def _ensure_system_template(document_type: str, label: LazyText | str, root_name: str) -> None:
     label_str = str(label)
     code = f"system_default_{document_type}"
-    existing = database.session.execute(select(PrintTemplate).filter_by(code=code, company_code=None)).scalars().first()
+    existing = _find_system_template(document_type, code)
     template_body = (
         JOURNAL_TEMPLATE
         if root_name == "journal_entry"
@@ -432,26 +443,44 @@ def _ensure_system_template(document_type: str, label: LazyText | str, root_name
         )
     )
     if existing is not None:
-        if (existing.version or 1) < SEED_TEMPLATE_VERSION:
-            existing.template_body = template_body
-            existing.stylesheet_body = BASE_CSS
-            existing.version = SEED_TEMPLATE_VERSION
-            database.session.commit()
+        _update_system_template(existing, template_body)
         return
-    database.session.add(
-        PrintTemplate(
-            company_code=None,
-            document_type=document_type,
-            code=code,
-            name=f"{label_str} basico",
-            template_body=template_body,
-            stylesheet_body=BASE_CSS,
-            paper_size="letter",
-            orientation="portrait",
-            is_system=True,
-            is_default=True,
-            status="published",
-            version=SEED_TEMPLATE_VERSION,
-        )
-    )
-    database.session.commit()
+    try:
+        with database.session.begin_nested():
+            template = PrintTemplate(
+                company_code=None,
+                document_type=document_type,
+                code=code,
+                name=f"{label_str} basico",
+                template_body=template_body,
+                stylesheet_body=BASE_CSS,
+                paper_size="letter",
+                orientation="portrait",
+                is_system=True,
+                is_default=True,
+                status="published",
+                version=SEED_TEMPLATE_VERSION,
+            )
+            database.session.add(template)
+            database.session.flush()
+    except IntegrityError:
+        existing = _find_system_template(document_type, code, for_update=True)
+        if existing is None:
+            raise
+        _update_system_template(existing, template_body)
+
+
+def _find_system_template(document_type: str, code: str, *, for_update: bool = False) -> PrintTemplate | None:
+    """Busca una plantilla global de sistema por tipo y código."""
+    query = select(PrintTemplate).filter_by(company_code=None, document_type=document_type, code=code)
+    if for_update:
+        query = query.with_for_update()
+    return database.session.execute(query).scalars().first()
+
+
+def _update_system_template(template: PrintTemplate, template_body: str) -> None:
+    """Actualiza solo las plantillas de sistema con una versión anterior."""
+    if (template.version or 1) < SEED_TEMPLATE_VERSION:
+        template.template_body = template_body
+        template.stylesheet_body = BASE_CSS
+        template.version = SEED_TEMPLATE_VERSION
