@@ -181,19 +181,35 @@ def _validate_item_amounts(items):
             raise ValueError(_("Los montos no pueden ser cero."))
 
 
-def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
-    """Valida que las lineas tengan almacen asignado."""
+def _stock_entry_required_warehouses(purpose: str | None) -> tuple[bool, bool]:
+    """Devuelve (requiere_origen, requiere_destino) para StockEntry."""
+    if purpose in {"material_receipt", "adjustment_positive"}:
+        return False, True
+    if purpose in {"material_issue", "adjustment_negative"}:
+        return True, False
+    if purpose == "material_transfer":
+        return True, True
+    # stock_reconciliation y propósitos desconocidos: fallback genérico.
+    return False, False
+
+
+def _validate_warehouse_assignments(items, warehouse_for_stock_items_only, purpose: str | None = None):
+    """Valida que las lineas tengan almacen asignado según propósito."""
+    requires_source, requires_target = _stock_entry_required_warehouses(purpose)
     for item in items:
         is_stock_item = getattr(item, "is_stock_item", True)
         if warehouse_for_stock_items_only and not is_stock_item:
             continue
-        wh = (
-            getattr(item, "warehouse", None)
-            or getattr(item, "source_warehouse", None)
-            or getattr(item, "target_warehouse", None)
-        )
-        if not wh:
-            item_code = getattr(item, "item_code", "desconocido")
+        item_code = getattr(item, "item_code", "desconocido")
+        source_wh = getattr(item, "source_warehouse", None) or getattr(item, "warehouse", None)
+        target_wh = getattr(item, "target_warehouse", None) or getattr(item, "warehouse", None)
+        if requires_source and not source_wh:
+            raise ValueError(_("La linea del artículo %(item)s requiere una bodega de origen asignada.") % {"item": item_code})
+        if requires_target and not target_wh:
+            raise ValueError(
+                _("La linea del artículo %(item)s requiere una bodega de destino asignada.") % {"item": item_code}
+            )
+        if not requires_source and not requires_target and not (source_wh or target_wh):
             raise ValueError(_("La linea del artículo %(item)s requiere un almacen asignado.") % {"item": item_code})
 
 
@@ -267,4 +283,5 @@ def validate_submit_prerequisites(
         if require_amount_nonzero:
             _validate_item_amounts(items)
     if require_warehouse and items:
-        _validate_warehouse_assignments(items, warehouse_for_stock_items_only)
+        purpose = getattr(registro, "purpose", None)
+        _validate_warehouse_assignments(items, warehouse_for_stock_items_only, purpose=purpose)
