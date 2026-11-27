@@ -8454,6 +8454,12 @@ msgstr "The target document belongs to another company."
 msgid "El documento destino no existe."
 msgstr "The target document does not exist."
 
+msgid "El impuesto no es aplicable al tipo de plantilla."
+msgstr "The tax is not applicable to this template type."
+
+msgid "Selecciona un impuesto activo."
+msgstr "Select an active tax."
+
 #: cacao_accounting/api/line_import.py:432
 msgid "La fecha de aplicación no es válida."
 msgstr "The allocation date is invalid."

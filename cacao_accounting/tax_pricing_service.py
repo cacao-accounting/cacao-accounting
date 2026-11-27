@@ -87,6 +87,16 @@ def _finite_tax_rate(tax: Tax) -> Decimal:
     return rate
 
 
+def validate_tax_template_applicability(template_type: str, tax_applies_to: str) -> None:
+    """Reject tax/template combinations outside the supported business flows."""
+    allowed_applicability = {
+        "buying": {"purchase", "both"},
+        "selling": {"sales", "both"},
+    }
+    if tax_applies_to not in allowed_applicability.get(template_type, set()):
+        raise TaxPricingError(_("El impuesto no es aplicable al tipo de plantilla."))
+
+
 def _calculate_template_item_tax(
     template_item,
     base_amount,
@@ -176,6 +186,10 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         .scalars()
         .all()
     )
+    for template_item in items:
+        tax = database.session.get(Tax, template_item.tax_id)
+        if tax and tax.is_active:
+            validate_tax_template_applicability(template.template_type, tax.applies_to)
     inclusive_rates_by_base, inclusive_fixed_by_base = _inclusive_tax_bases(items)
     for template_item in items:
         calculation_base = template_item.calculation_base or "net_document"

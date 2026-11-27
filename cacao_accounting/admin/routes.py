@@ -155,6 +155,7 @@ from cacao_accounting.contabilidad.ledger_mapping_service import (
 
 
 from cacao_accounting.i18n import _, _l
+from cacao_accounting.tax_pricing_service import TaxPricingError, validate_tax_template_applicability
 
 
 def _require_price_list_editor() -> None:
@@ -564,6 +565,15 @@ def items_plantilla_impuesto(template_id: str):
         except (TypeError, ValueError):
             flash(_("La secuencia debe ser un número entero."), "danger")
             return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+        tax = database.session.get(Tax, request.form.get("tax_id") or "")
+        if not tax or not tax.is_active:
+            flash(_("Selecciona un impuesto activo."), "danger")
+            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+        try:
+            validate_tax_template_applicability(template.template_type, tax.applies_to)
+        except TaxPricingError as exc:
+            flash(str(exc), "danger")
+            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         item = TaxTemplateItem(
             tax_template_id=template.id,
             tax_id=request.form.get("tax_id") or "",
@@ -589,7 +599,17 @@ def items_plantilla_impuesto(template_id: str):
         .scalars()
         .all()
     )
-    taxes = database.session.execute(database.select(Tax).filter_by(is_active=True).order_by(Tax.name)).scalars().all()
+    applicable_values = {
+        "buying": {"purchase", "both"},
+        "selling": {"sales", "both"},
+    }.get(template.template_type, set())
+    taxes = (
+        database.session.execute(
+            database.select(Tax).filter(Tax.is_active.is_(True), Tax.applies_to.in_(applicable_values)).order_by(Tax.name)
+        )
+        .scalars()
+        .all()
+    )
     tax_labels = {tax.id: tax.name for tax in taxes}
     referenced_tax_ids = {item.tax_id for item in items if item.tax_id}
     if referenced_tax_ids:
