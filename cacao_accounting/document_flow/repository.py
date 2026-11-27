@@ -15,7 +15,9 @@ def decimal_or_zero(value: Any) -> Decimal:
     """Convierte valores numericos de SQLAlchemy/formularios a Decimal."""
     if value is None or value == "":
         return Decimal("0")
-    return Decimal(str(value))
+    from cacao_accounting.numbers import coerce_decimal
+
+    return coerce_decimal(value, "amount")
 
 
 def get_document(doctype: str, document_id: str) -> Any | None:
