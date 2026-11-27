@@ -1302,6 +1302,23 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
         assert sum((Decimal(str(entry.debit)) for entry in gl_entries), Decimal("0")) == Decimal("10")
         assert sum((Decimal(str(entry.credit)) for entry in gl_entries), Decimal("0")) == Decimal("10")
 
+        journals = (
+            database.session.execute(
+                database.select(ComprobanteContable).filter_by(entity=ids["company"], voucher_type="journal_entry")
+            )
+            .scalars()
+            .all()
+        )
+        assert len(journals) == 1
+        all_gl = (
+            database.session.execute(database.select(GLEntry).filter_by(company=ids["company"], voucher_type="journal_entry"))
+            .scalars()
+            .all()
+        )
+        assert len(all_gl) == 2
+        assert sum((Decimal(str(entry.debit)) for entry in all_gl), Decimal("0")) == Decimal("10")
+        assert sum((Decimal(str(entry.credit)) for entry in all_gl), Decimal("0")) == Decimal("10")
+
 
 def test_missing_reconciliation_releases_sqlite_write_transaction(replenishment_app):
     """A failed reconciliation lock releases SQLite's writer reservation."""
