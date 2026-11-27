@@ -1868,18 +1868,25 @@ def nuevo_centro_costo():
                 entity_initial_label=entity_initial_label,
                 parent_initial_label=parent_initial_label,
             )
+        from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+
         DATA = CostCenter(
             entity=entity,
             code=request.form.get("id", None),
             name=request.form.get("nombre", None),
             active=bool(formulario.activo.data),
             enabled=bool(formulario.activo.data),
-            default=bool(formulario.predeterminado.data),
+            default=False,
             group=bool(formulario.grupo.data),
             parent=parent_code,
             status="activo",
         )
         database.session.add(DATA)
+        database.session.flush()
+        if bool(formulario.predeterminado.data):
+            _ensure_single_default_cost_center(entity, preferred_id=DATA.id)
+        else:
+            _ensure_single_default_cost_center(entity)
         database.session.commit()
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
@@ -1971,13 +1978,113 @@ def editar_centro_costo(id_cc):
             entity_initial_label=entity_initial_label,
             parent_initial_label=parent_initial_label,
         )
+    from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+
+    previous_entity = registro.entity
+    wants_default = bool(formulario.predeterminado.data)
+    will_be_active_postable = bool(formulario.activo.data) and not bool(formulario.grupo.data)
+
+    if wants_default and not will_be_active_postable:
+        flash_error(ValueError(_("El centro de costo predeterminado debe estar activo y no ser de grupo.")))
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+
+    if bool(registro.default) and previous_entity == entity and not wants_default:
+        flash_error(ValueError(_("La compa??a debe conservar un centro de costo predeterminado.")))
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+
+    if bool(registro.default) and previous_entity == entity and wants_default and not will_be_active_postable:
+        flash_error(ValueError(_("No se puede desactivar o convertir en grupo el ?nico centro de costo predeterminado.")))
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+
+    if bool(registro.default) and previous_entity != entity:
+        # Mover el ?nico predeterminado deja compa??a origen sin default.
+        from cacao_accounting.database import CostCenter
+
+        other = database.session.execute(
+            database.select(CostCenter.id)
+            .where(
+                CostCenter.entity == previous_entity,
+                CostCenter.id != registro.id,
+                CostCenter.active.is_(True),
+                CostCenter.enabled.is_(True),
+                CostCenter.group.is_(False),
+            )
+            .limit(1)
+        ).first()
+        if other is None:
+            flash_error(ValueError(_("No se puede mover el ?nico centro de costo predeterminado de la compa??a.")))
+            return render_template(
+                _TPL_CENTRO_COSTO_CREAR,
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_initial_label=parent_initial_label,
+            )
+
     registro.name = request.form.get("nombre", registro.name)
     registro.entity = entity
     registro.active = bool(formulario.activo.data)
     registro.enabled = bool(formulario.activo.data)
-    registro.default = bool(formulario.predeterminado.data)
     registro.group = bool(formulario.grupo.data)
     registro.parent = parent_code
+
+    if previous_entity == entity:
+        if wants_default:
+            registro.default = False
+            database.session.flush()
+            _ensure_single_default_cost_center(entity, preferred_id=registro.id)
+        else:
+            # No era default y no quiere serlo; normalizar empresa por datos hist?ricos.
+            database.session.flush()
+            _ensure_single_default_cost_center(entity)
+    else:
+        was_default = bool(registro.default)
+        registro.default = False
+        database.session.flush()
+        if was_default:
+            _ensure_single_default_cost_center(previous_entity)
+        if wants_default and will_be_active_postable:
+            _ensure_single_default_cost_center(entity, preferred_id=registro.id)
+        else:
+            # No asignar como predeterminado por normalizaci?n al mover entre compa??as.
+            from cacao_accounting.database import CostCenter
+
+            existing_target_default = database.session.execute(
+                database.select(CostCenter.id)
+                .where(
+                    CostCenter.entity == entity,
+                    CostCenter.default.is_(True),
+                    CostCenter.id != registro.id,
+                )
+                .limit(1)
+            ).first()
+            if existing_target_default is None:
+                _ensure_single_default_cost_center(entity)
+            else:
+                _ensure_single_default_cost_center(entity, preferred_id=str(existing_target_default[0]))
+
     database.session.commit()
     invalidate_cache("smart-select-master-data")
     return redirect(url_for("contabilidad.centro_costo", id_cc=registro.id))
@@ -2021,6 +2128,23 @@ def eliminar_centro_costo(id_cc):
         registro = _lock_cost_center(registro.entity, registro.code)
         if registro is None:
             abort(404)
+        if bool(registro.default):
+            from cacao_accounting.database import CostCenter
+
+            replacement = database.session.execute(
+                database.select(CostCenter.id)
+                .where(
+                    CostCenter.entity == registro.entity,
+                    CostCenter.id != registro.id,
+                    CostCenter.active.is_(True),
+                    CostCenter.enabled.is_(True),
+                    CostCenter.group.is_(False),
+                )
+                .limit(1)
+            ).first()
+            if replacement is None:
+                flash_error(ValueError(_("No se puede eliminar el ?nico centro de costo predeterminado de la compa??a.")))
+                return redirect(url_for(CONTABILIDAD_CCOSTOS))
         if _cost_center_has_children(registro.entity, registro.code):
             flash_error(ValueError(_("No se puede eliminar el centro de costos porque tiene centros hijos.")))
             return redirect(url_for(CONTABILIDAD_CCOSTOS))
@@ -2036,7 +2160,14 @@ def eliminar_centro_costo(id_cc):
             ],
         ):
             return redirect(url_for(CONTABILIDAD_CCOSTOS))
+        entity = registro.entity
+        was_default = bool(registro.default)
         database.session.delete(registro)
+        database.session.flush()
+        if was_default:
+            from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+
+            _ensure_single_default_cost_center(entity)
         database.session.commit()
         invalidate_cache("smart-select-master-data")
     return redirect(url_for(CONTABILIDAD_CCOSTOS))

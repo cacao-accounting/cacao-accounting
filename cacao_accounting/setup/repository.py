@@ -116,14 +116,17 @@ def create_default_book(entity: Entity) -> "Book":
 
 
 def create_default_cost_center(entity: Entity) -> "CostCenter":
-    """Create a default cost center for the entity."""
+    """Create or normalize the default cost center for the entity."""
+    from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
     from cacao_accounting.database import CostCenter
 
     existing_cost_center = database.session.execute(
         database.select(CostCenter).filter_by(entity=entity.code, code="MAIN")
     ).scalar_one_or_none()
     if existing_cost_center is not None:
-        return existing_cost_center
+        if not bool(existing_cost_center.default):
+            return _ensure_single_default_cost_center(entity.code, preferred_id=existing_cost_center.id)
+        return _ensure_single_default_cost_center(entity.code, preferred_id=existing_cost_center.id)
 
     cost_center = CostCenter(
         entity=entity.code,
@@ -133,9 +136,11 @@ def create_default_cost_center(entity: Entity) -> "CostCenter":
         enabled=True,
         default=True,
         group=False,
+        status="activo",
     )
     database.session.add(cost_center)
-    return cost_center
+    database.session.flush()
+    return _ensure_single_default_cost_center(entity.code, preferred_id=cost_center.id)
 
 
 def create_default_uoms(language: str | None = None) -> list[UOM]:

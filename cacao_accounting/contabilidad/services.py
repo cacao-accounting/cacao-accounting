@@ -469,6 +469,69 @@ def _cost_center_has_children(entity: str, center_code: str) -> bool:
     return child is not None
 
 
+def _ensure_single_default_cost_center(entity: str, *, preferred_id: str | None = None) -> Any:
+    """Garantiza exactamente un centro de costo predeterminado por compa??a."""
+    from cacao_accounting.database import CostCenter
+
+    _lock_cost_center_companies((entity,))
+    centers = (
+        database.session.execute(
+            database.select(CostCenter)
+            .where(CostCenter.entity == entity)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+            .order_by(CostCenter.code)
+        )
+        .scalars()
+        .all()
+    )
+
+    active_postable = [cc for cc in centers if bool(cc.active) and bool(cc.enabled) and not bool(cc.group)]
+    defaults = [cc for cc in centers if bool(cc.default)]
+
+    chosen = None
+    if preferred_id:
+        chosen = next((cc for cc in active_postable if cc.id == preferred_id), None)
+    if chosen is None and len(defaults) == 1 and defaults[0] in active_postable:
+        chosen = defaults[0]
+    if chosen is None:
+        for cc in active_postable:
+            if cc.code == "MAIN":
+                chosen = cc
+                break
+    if chosen is None and active_postable:
+        chosen = active_postable[0]
+    if chosen is None:
+        chosen = CostCenter(
+            entity=entity,
+            code="MAIN",
+            name="Principal",
+            active=True,
+            enabled=True,
+            default=True,
+            group=False,
+            status="activo",
+        )
+        database.session.add(chosen)
+        database.session.flush()
+        return chosen
+
+    for cc in centers:
+        desired = cc.id == chosen.id
+        if bool(cc.default) != desired:
+            cc.default = desired
+    if not bool(chosen.active) or not bool(chosen.enabled) or bool(chosen.group):
+        raise ValueError(_("El centro de costo predeterminado debe estar activo y no ser de grupo."))
+    return chosen
+
+
+def _set_company_default_cost_center(entity: str, target: Any) -> None:
+    """Marca target como ?nico predeterminado de la compa??a."""
+    if not bool(target.active) or not bool(target.enabled) or bool(target.group):
+        raise ValueError(_("El centro de costo predeterminado debe estar activo y no ser de grupo."))
+    _ensure_single_default_cost_center(entity, preferred_id=target.id)
+
+
 def _resolve_cost_center_parent(entity: str, parent_ref: str) -> tuple[str, str]:
     from cacao_accounting.database import CostCenter
 
