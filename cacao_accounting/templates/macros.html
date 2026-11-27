@@ -996,7 +996,7 @@
       {% if source_api_url %}
       <button type="button" class="btn btn-sm btn-outline-secondary"
               data-bs-toggle="modal" data-bs-target="#modalAutofill"
-              @click="fetchSource('{{ source_api_url }}')">
+              @click='fetchSource({{ (source_api_url or "") | tojson }})'>
         <i class="bi bi-arrow-repeat me-1"></i>{{ _('Actualizar Elementos') }}
       </button>
       {% endif %}

@@ -4,6 +4,7 @@
 """Modulo de Inventarios."""
 
 import logging
+import re
 import sqlite3
 
 from datetime import date
@@ -1030,14 +1031,20 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
         flash_error(exc)
 
 
+_SAFE_SOURCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def _source_context(source_type: str | None, source_id: str | None) -> tuple[str | None, str]:
     """Build the source document api context for pre-filling inventory lines."""
     if not source_type or not source_id:
         return None, _LABEL_DOCUMENTO_ORIGEN
+    # #1867: source_id is reflected into JS/HTML contexts; reject unsafe shapes.
+    if not _SAFE_SOURCE_ID_RE.fullmatch(source_id):
+        return None, _LABEL_DOCUMENTO_ORIGEN
     if source_type == "purchase_receipt":
-        return f"/api/buying/purchase-receipt/{source_id}/items", "recepción de compra"
+        return f"/api/buying/purchase-receipt/{source_id}/items", "recepci?n de compra"
     if source_type == "delivery_note":
-        return f"/api/sales/delivery-note/{source_id}/items", "remisión de mercadería vendida"
+        return f"/api/sales/delivery-note/{source_id}/items", "remisi?n de mercader?a vendida"
     if source_type == "stock_entry":
         return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
     return None, _LABEL_DOCUMENTO_ORIGEN

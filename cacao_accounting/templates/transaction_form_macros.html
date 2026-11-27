@@ -256,7 +256,7 @@
       <button class="btn btn-sm btn-outline-secondary" type="button"
               x-show="availableSourceTypes.length > 0"
               data-bs-toggle="modal" data-bs-target="#modalAutofill"
-              @click="fetchSource('{{ source_api_url or '' }}')">
+              @click='fetchSource({{ (source_api_url or "") | tojson }})'>
         <i class="bi bi-arrow-repeat"></i> {{ _('Actualizar Elementos') }}
       </button>
       <button class="btn btn-sm btn-outline-secondary" type="button" @click="addMultipleRows(5)">
