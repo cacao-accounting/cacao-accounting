@@ -666,11 +666,13 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
                 _("No se pudo convertir %(qty)s %(uom)s a %(default_uom)s para el item %(item_code)s.")
                 % {"qty": qty, "uom": uom, "default_uom": default_uom, "item_code": item_code}
             ) from exc
+    source_wh = request.form.get(f"source_warehouse_{index}", "").strip() or entry.from_warehouse
+    target_wh = request.form.get(f"target_warehouse_{index}", "").strip() or entry.to_warehouse
     line = StockEntryItem(
         stock_entry_id=entry.id,
         item_code=item_code,
-        source_warehouse=entry.from_warehouse,
-        target_warehouse=entry.to_warehouse,
+        source_warehouse=source_wh,
+        target_warehouse=target_wh,
         qty=qty,
         uom=uom,
         qty_in_base_uom=qty_in_base_uom,
@@ -1120,6 +1122,8 @@ def _submitted_stock_entry_lines() -> list[dict[str, str]]:
         ("amount", "amount"),
         ("batch_id", "batch_id"),
         ("serial_no", "serial_no"),
+        ("source_warehouse", "source_warehouse"),
+        ("target_warehouse", "target_warehouse"),
         ("source_type", "source_type"),
         ("source_id", "source_id"),
         ("source_item_id", "source_item_id"),
@@ -1434,6 +1438,8 @@ def _render_stock_entry_edit_form(
                 "amount": str(item.amount or 0),
                 "batch_id": item.batch_id or "",
                 "serial_no": item.serial_no or "",
+                "source_warehouse": item.source_warehouse or "",
+                "target_warehouse": item.target_warehouse or "",
             }
             for item in lineas
         ]

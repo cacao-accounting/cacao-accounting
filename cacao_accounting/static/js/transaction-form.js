@@ -175,12 +175,41 @@
   }
 
   function mapImportedRows(rawRows, schema) {
-    if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return [];
+    if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return { rows: [], errors: [] };
 
     const headers = (rawRows[0] || []).map((value) => normalizeImportHeader(value));
-    const matchedIndexes = schema.columns.map((col) => findImportColumnIndex(headers, col));
+    const errors = [];
+    const matchedIndexes = [];
+    const usedHeaderIndexes = new Set();
+    schema.columns.forEach((col) => {
+      const candidates = new Set([col.key, col.label, ...(Array.isArray(col.aliases) ? col.aliases : [])]
+        .map((value) => normalizeImportHeader(value))
+        .filter(Boolean));
+      const indexes = [];
+      headers.forEach((header, headerIndex) => {
+        if (candidates.has(header)) indexes.push(headerIndex);
+      });
+      if (indexes.length > 1) {
+        errors.push({
+          row: 1,
+          field: col.key,
+          message: `Encabezado duplicado para la columna ${col.label || col.key}.`,
+        });
+      }
+      const first = indexes.length ? indexes[0] : -1;
+      if (first >= 0 && usedHeaderIndexes.has(first)) {
+        errors.push({
+          row: 1,
+          field: col.key,
+          message: `Encabezado duplicado para la columna ${col.label || col.key}.`,
+        });
+      }
+      if (first >= 0) usedHeaderIndexes.add(first);
+      matchedIndexes.push(first);
+    });
+    if (errors.length) return { rows: [], errors };
     const hasHeaderMatches = matchedIndexes.some((index) => index >= 0);
-    return rawRows
+    const rows = rawRows
       .slice(1)
       .map((row) => {
         const obj = {};
@@ -201,6 +230,7 @@
         return obj;
       })
       .filter((row) => Object.values(row).some((val) => val !== null && val !== undefined && String(val).trim() !== ''));
+    return { rows, errors: [] };
   }
 
   function normalizeWorksheetValue(value) {
@@ -556,6 +586,7 @@
             uom: '',
             rate: 0,
             discount_percentage: 0,
+            discount_amount: 0,
             amount: 0,
             weight: '',
             weight_uom: '',
@@ -572,6 +603,8 @@
             unit: '',
             project: '',
             remarks: '',
+            source_warehouse: '',
+            target_warehouse: '',
             source_type: '',
             source_id: '',
             source_item_id: '',
@@ -841,7 +874,15 @@
             return;
           }
           const gross = toNumber(line.qty) * toNumber(line.rate);
-          line.amount = gross * (1 - (toNumber(line.discount_percentage) / 100));
+          const percentage = toNumber(line.discount_percentage);
+          const discountAmount = toNumber(line.discount_amount);
+          if (percentage > 0) {
+            line.amount = gross * (1 - (percentage / 100));
+          } else if (discountAmount > 0) {
+            line.amount = Math.max(gross - discountAmount, 0);
+          } else {
+            line.amount = gross;
+          }
           this.queueTaxPreview();
         },
 
@@ -910,12 +951,16 @@
             uom: line.uom || '',
             rate: toCurrencyString(line.rate),
             amount: toCurrencyString(line.amount),
+            discount_percentage: toCurrencyString(line.discount_percentage),
+            discount_amount: toCurrencyString(line.discount_amount),
             weight: line.weight === '' || line.weight === null || line.weight === undefined ? '' : toCurrencyString(line.weight),
             weight_uom: line.weight_uom || '',
             volume: line.volume === '' || line.volume === null || line.volume === undefined ? '' : toCurrencyString(line.volume),
             volume_uom: line.volume_uom || '',
             batch_id: line.batch_id || '',
             serial_no: line.serial_no || '',
+            source_warehouse: line.source_warehouse || '',
+            target_warehouse: line.target_warehouse || '',
           };
         },
 
@@ -1565,7 +1610,9 @@
 
           const lines = text.split(/\r?\n/);
           const rows = lines.map(splitTab);
-          this.importModal.parsedRows = mapImportedRows(rows, this.importModal.schema);
+          const mapped = mapImportedRows(rows, this.importModal.schema);
+          this.importModal.parsedRows = mapped.rows;
+          if (mapped.errors.length) this.importModal.errors = mapped.errors;
         },
 
         async validateImport() {
@@ -1680,6 +1727,20 @@
           if (row.quantity !== undefined) line.qty = toNumber(row.quantity);
           if (row.rate !== undefined) line.rate = toNumber(row.rate);
           if (row.account !== undefined) line.account = row.account;
+          if (row.discount !== undefined) {
+            line.discount_percentage = toNumber(row.discount);
+            line.discount_amount = 0;
+          }
+          if (row.discount_percentage !== undefined) {
+            line.discount_percentage = toNumber(row.discount_percentage);
+            line.discount_amount = 0;
+          }
+          if (row.discount_amount !== undefined) {
+            line.discount_amount = toNumber(row.discount_amount);
+            line.discount_percentage = 0;
+          }
+          if (row.source_warehouse !== undefined) line.source_warehouse = row.source_warehouse;
+          if (row.target_warehouse !== undefined) line.target_warehouse = row.target_warehouse;
 
           // Journal Entry specific mapping for debit/credit into value/rate
           if (this.importModal.doctype === "journal_entry") {
@@ -1758,7 +1819,9 @@
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(await file.arrayBuffer());
             if (requestId !== importFileRequestId) return;
-            this.importModal.parsedRows = mapImportedRows(worksheetToRows(workbook.worksheets[0]), this.importModal.schema);
+            const mapped = mapImportedRows(worksheetToRows(workbook.worksheets[0]), this.importModal.schema);
+            this.importModal.parsedRows = mapped.rows;
+            if (mapped.errors.length) this.importModal.errors = mapped.errors;
           } catch (err) {
             if (requestId !== importFileRequestId) return;
             console.error("Error processing XLSX:", err);

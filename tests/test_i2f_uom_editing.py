@@ -293,6 +293,8 @@ def test_stock_entry_edit_renderer_reuses_rejected_post_lines(app):
                 "amount": "22.5",
                 "batch_id": "",
                 "serial_no": "",
+                "source_warehouse": "",
+                "target_warehouse": "",
                 "source_type": "",
                 "source_id": "",
                 "source_item_id": "",
