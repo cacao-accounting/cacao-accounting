@@ -162,3 +162,18 @@ def test_fallo_del_posting_revierte_estado_y_limpia_el_allowance(app_controles, 
         monkeypatch.setattr(posting_service, "post_document_to_gl", _posting_writer)
         assert submit_document(entry) == []
         assert entry.docstatus == 1
+
+
+def test_allowance_no_sobrevive_al_retorno_del_posting(app_controles, monkeypatch):
+    """Fuera de `authorized_posting()` la l??nea queda protegida aunque la transacci??n siga abierta (#1877)."""
+    entry_id, item_id = _seed_draft(app_controles)
+    monkeypatch.setattr(posting_service, "post_document_to_gl", _posting_writer)
+
+    with app_controles.app_context():
+        entry = database.session.get(StockEntry, entry_id)
+        assert submit_document(entry) == []
+        item = database.session.get(StockEntryItem, item_id)
+        item.current_qty = Decimal("1")
+        with pytest.raises(ValueError, match="inmutables"):
+            database.session.flush()
+        database.session.rollback()

@@ -657,6 +657,11 @@ def authorized_posting() -> Iterator[None]:
         yield
     finally:
         _POSTING_AUTHORIZATION.reset(token)
+        # #1877: el permiso de líneas termina con el scope de posting, no con
+        # la transacción exterior; así no sobrevive a un flush externo antes
+        # del commit. Los scopes anidados no limpian el permiso del padre.
+        if not _POSTING_AUTHORIZATION.get():
+            database.session.info.pop(_POSTED_DOCUMENTS_IN_TRANSACTION, None)
 
 
 def _remember_document_posting_transition(mapper: Any, connection: Any, target: Any) -> None:
