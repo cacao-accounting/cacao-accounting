@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import aliased
 
-from cacao_accounting.database import Book, DocumentTransition, GLEntry, StockLedgerEntry, database
+from cacao_accounting.database import Book, DocumentTransition, StockLedgerEntry, database
 from cacao_accounting.i18n import _
 
 
@@ -43,8 +43,10 @@ def primary_ledger_id(company: str, requested: str | None = None) -> str:
 
 
 def exclude_cancelled_gl_entries(query: Any) -> Any:
-    """Excluye tanto originales anulados como sus reversas del mismo período."""
-    return query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
+    """Excluye anulaciones sin efecto y conserva las reversiones efectivas."""
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    return query.where(*effective_gl_scope())
 
 
 def exclude_cancelled_stock_entries(query: Any, as_of_date: date | None = None) -> Any:

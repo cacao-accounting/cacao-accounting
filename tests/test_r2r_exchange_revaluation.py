@@ -25,6 +25,12 @@ from cacao_accounting import create_app
 from cacao_accounting.audit_chain import verify_audit_trail_chain
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationError, ExchangeRevaluationService
+from cacao_accounting.contabilidad.fiscal_year_closing import (
+    FiscalYearClosingError,
+    _cross_year_reversal_pairs,
+    calculate_closing_balances,
+    create_fiscal_year_closing_voucher,
+)
 from cacao_accounting.document_identifiers import IdentifierConfigurationError
 from cacao_accounting.contabilidad.services import _resolve_period_from_date
 from cacao_accounting.database import (
@@ -844,6 +850,99 @@ def test_auto_reversal_fails_closed_when_run_period_is_unresolvable(business_app
             ExchangeRevaluationService()._void_outstanding_run(run, actor_id, run.run_date)
 
         assert run.status == "posted"
+
+
+def test_cierre_fiscal_incluye_reversa_fx_interperiodo_real(business_app):
+    """El cierre del año de reversión incluye FX y el año origen detecta el par futuro."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, year, _month, _prior_period_id, period_id, following_period_id, following_start = _seed_bank_exposure(
+            company
+        )
+        fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(entity=company)).scalar_one()
+        original_period = database.session.get(AccountingPeriod, period_id)
+        following_period = database.session.get(AccountingPeriod, following_period_id)
+        assert original_period is not None and following_period is not None
+        fiscal_year.year_end_date = original_period.end
+        following_year = FiscalYear(
+            entity=company,
+            name=f"{year}-following",
+            year_start_date=following_start,
+            year_end_date=following_period.end,
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(following_year)
+        database.session.flush()
+        following_period.fiscal_year_id = following_year.id
+        for code in ("4.01.01.001", "5.01.02.001"):
+            account = database.session.execute(database.select(Accounts).filter_by(entity=company, code=code)).scalar_one()
+            account.classification = "income" if code.startswith("4.") else "expense"
+        database.session.flush()
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        ledger_id = database.session.execute(database.select(Book.id).filter_by(entity=company)).scalar_one()
+        database.session.commit()
+
+        run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+        run_id = str(run.id)
+        originals = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_reversal=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert originals
+        assert any(entry.account_code in {"4.01.01.001", "5.01.02.001"} for entry in originals)
+
+        ExchangeRevaluationService().void(
+            run_id=run_id,
+            user_id=actor_id,
+            reason="Reversa entre ejercicios para el cierre fiscal",
+            reversal_date=following_start,
+        )
+        reversals = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_reversal=True,
+                    is_cancelled=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert reversals
+        assert all(entry.posting_date == following_start for entry in reversals)
+        assert all(entry.accounting_period_id == following_period_id for entry in reversals)
+
+        prior_balances = calculate_closing_balances(company, fiscal_year, ledger_id=ledger_id)
+        next_balances = calculate_closing_balances(company, following_year, ledger_id=ledger_id)
+        assert {entry.account_code for entry in originals if entry.account_code.startswith(("4.", "5."))} <= {
+            row["account_code"] for row in prior_balances
+        }
+        pnl_reversals = [entry for entry in reversals if entry.account_code.startswith(("4.", "5."))]
+        assert pnl_reversals
+        next_by_account = {row["account_code"]: row["balance"] for row in next_balances}
+        assert all(next_by_account.get(entry.account_code) == entry.debit - entry.credit for entry in pnl_reversals)
+
+        assert _cross_year_reversal_pairs(company, fiscal_year)
+        fiscal_year.is_closed = True
+        prior_periods = database.session.execute(
+            database.select(AccountingPeriod).filter_by(fiscal_year_id=fiscal_year.id)
+        ).scalars()
+        for period in prior_periods:
+            period.is_closed = True
+        database.session.commit()
+        with pytest.raises(FiscalYearClosingError, match="reversas publicadas posteriormente"):
+            create_fiscal_year_closing_voucher(company, fiscal_year.id, actor_id)
 
 
 def test_rerunning_the_same_period_leaves_one_active_adjustment(business_app):

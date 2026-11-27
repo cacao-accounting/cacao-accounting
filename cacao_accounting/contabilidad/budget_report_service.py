@@ -237,6 +237,8 @@ class BudgetReportService:
         account_to: Optional[str],
     ) -> List[Any]:
         """Query GL entries for actual amounts."""
+        from cacao_accounting.cancellation_scope import effective_gl_scope
+
         g_query = (
             database.session.query(
                 GLEntry.account_id,
@@ -255,8 +257,7 @@ class BudgetReportService:
                 GLEntry.company == company,
                 GLEntry.ledger_id == ledger_id,
                 GLEntry.accounting_period_id.in_(period_range_ids),
-                GLEntry.is_cancelled.is_(False),
-                GLEntry.is_reversal.is_(False),
+                *effective_gl_scope(),
                 GLEntry.is_fiscal_year_closing.is_(False),
             )
         )

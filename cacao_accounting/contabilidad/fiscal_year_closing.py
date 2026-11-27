@@ -50,7 +50,6 @@ def _cross_year_reversal_pairs(company: str, fiscal_year: FiscalYear) -> list[tu
             original.posting_date >= fiscal_year.year_start_date,
             original.posting_date <= fiscal_year.year_end_date,
             original.is_reversal.is_(False),
-            original.is_cancelled.is_(False),
             reversal.company == company,
             reversal.posting_date > fiscal_year.year_end_date,
             reversal.is_reversal.is_(True),
@@ -68,6 +67,8 @@ def calculate_closing_balances(
     ledger_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Calcula los saldos de cierre para cuentas de ingresos, costos y gastos."""
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     # Filtrar entradas por compañia y rango de fechas del año fiscal
     # Excluir registros de cierre previos si los hubiera (is_fiscal_year_closing=False)
     query = (
@@ -85,8 +86,7 @@ def calculate_closing_balances(
             GLEntry.posting_date >= fiscal_year.year_start_date,
             GLEntry.posting_date <= fiscal_year.year_end_date,
             GLEntry.is_fiscal_year_closing.is_(False),
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
+            *effective_gl_scope(fiscal_year.year_end_date),
             func.lower(Accounts.classification).in_(["ingreso", "costo", "gasto", "income", "cost", "expense"]),
         )
         .group_by(

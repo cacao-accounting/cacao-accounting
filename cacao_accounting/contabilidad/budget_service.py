@@ -484,6 +484,7 @@ class BudgetService:
     ) -> Decimal:
         """Calcula el monto comprometido a partir de asientos contables reales."""
         from cacao_accounting.database import Accounts, GLEntry
+        from cacao_accounting.cancellation_scope import effective_gl_scope
         from cacao_accounting.reportes.services import (
             account_classification_is_debit_positive,
             normalize_account_classification,
@@ -496,8 +497,7 @@ class BudgetService:
                 GLEntry.company == company,
                 GLEntry.accounting_period_id == period_id,
                 GLEntry.account_id == resolved_account_id,
-                GLEntry.is_cancelled.is_(False),
-                GLEntry.is_reversal.is_(False),
+                *effective_gl_scope(),
                 GLEntry.is_fiscal_year_closing.is_(False),
             )
         )

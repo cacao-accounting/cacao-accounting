@@ -9,8 +9,14 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
+from cacao_accounting.bancos.reconciliation_service import BankReconciliationError, _validate_gl_entry_eligibility
 from cacao_accounting.cancellation_scope import cancelled_originals_scope, effective_gl_scope, ordinary_gl_scope
+from cacao_accounting.contabilidad.budget_report_service import BudgetReportService
+from cacao_accounting.contabilidad.budget_service import BudgetService
 from cacao_accounting.database import AccountingPeriod, Accounts, Book, DocumentTransition, GLEntry, User, database
+from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries
 from cacao_accounting.reportes.analytics import _gl_totals
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
@@ -62,13 +68,27 @@ def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, ento
     with app.app_context():
         database.session.add(_periodo("P2026-11", date(2026, 11, 1), date(2026, 11, 30)))
         database.session.flush()
+        account = Accounts(
+            entity="cacao",
+            code="5396-1168",
+            name="Gasto con reversa interperíodo",
+            classification="expense",
+            account_type="expense",
+            group=False,
+            active=True,
+            enabled=True,
+        )
+        database.session.add(account)
+        database.session.flush()
 
-        original_oct = _entrada("P2026-05", date(2026, 5, 10), is_cancelled=True)
+        original_oct = _entrada("P2026-05", date(2026, 5, 10), is_cancelled=True, account_id=account.id)
         database.session.add(original_oct)
         database.session.flush()
 
         vigente = _entrada("P2026-05", date(2026, 5, 11))
-        contra_nov = _entrada("P2026-11", date(2026, 11, 1), is_reversal=True, reversal_of=original_oct.id)
+        contra_nov = _entrada(
+            "P2026-11", date(2026, 11, 1), is_reversal=True, reversal_of=original_oct.id, account_id=account.id
+        )
         anulada = _entrada("P2026-05", date(2026, 5, 12), is_cancelled=True)
         database.session.add_all([vigente, contra_nov, anulada])
         database.session.flush()
@@ -89,7 +109,32 @@ def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, ento
         # El alcance anterior (solo originales vivos) perdía la contrapartida
         # interperíodo: queda fijado como regresión del defecto.
         anteriores = set(database.session.execute(database.select(GLEntry.id).where(*ordinary_gl_scope())).scalars().all())
-        assert contra_nov.id not in anteriores
+        assert contra_nov.id in anteriores
+        assert original_oct.id in anteriores
+        dashboard = set(
+            database.session.execute(exclude_cancelled_gl_entries(database.select(GLEntry.id))).scalars().all()
+        )
+        assert contra_nov.id in dashboard
+        assert original_oct.id in dashboard
+        assert mismo_periodo.id not in dashboard
+
+        _validate_gl_entry_eligibility(contra_nov)
+        with pytest.raises(BankReconciliationError, match="cancelada o es una reversa"):
+            _validate_gl_entry_eligibility(original_oct)
+        with pytest.raises(BankReconciliationError, match="cancelada o es una reversa"):
+            _validate_gl_entry_eligibility(mismo_periodo)
+
+        ledger_id = _libro()
+        committed = BudgetService._compute_committed_amount(
+            "cacao", "P2026-11", account.id, ledger_id, cost_center_code=None
+        )
+        assert committed == Decimal("10")
+        budget_actuals = BudgetReportService()._get_actual_gl_entries(
+            "cacao", ledger_id, ["P2026-11"], account_from=None, account_to=None
+        )
+        assert len(budget_actuals) == 1
+        assert budget_actuals[0].debit == Decimal("10")
+        assert budget_actuals[0].credit == Decimal("0")
 
 
 def test_excluye_reversa_adelantada_en_ambos_lados(entorno_contable_aislado):

@@ -439,7 +439,12 @@ def _target_gl_amount(target_id: str, bank_currency: str | None, company_currenc
 
 def _validate_gl_entry_eligibility(entry: GLEntry) -> None:
     """Require an active entry from the primary ledger for bank matching."""
-    if getattr(entry, "is_cancelled", False) or getattr(entry, "is_reversal", False):
+    if not getattr(entry, "is_reversal", False) and getattr(entry, "is_cancelled", False):
+        raise BankReconciliationError(_("La entrada GL está cancelada o es una reversa."))
+    effective_entry_id = database.session.execute(
+        select(GLEntry.id).where(GLEntry.id == entry.id, *effective_gl_scope())
+    ).scalar_one_or_none()
+    if effective_entry_id is None:
         raise BankReconciliationError(_("La entrada GL está cancelada o es una reversa."))
     if hasattr(entry, "ledger_id"):
         primary_id = primary_ledger_id(str(entry.company))

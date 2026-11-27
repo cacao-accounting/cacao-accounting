@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""Predicados de alcance de anulación para consultas contables.
+"""Predicados de alcance de anulaciones y reversiones en consultas contables.
 
-``ordinary_gl_scope`` excluye los originales anulados y sus contrapartidas
-técnicas, mientras que ``cancelled_originals_scope`` devuelve solo los
-originales anulados para reconstruir la anulación completa.
+``ordinary_gl_scope`` conserva los efectos vigentes, incluidas las reversiones
+interperíodo. ``cancelled_originals_scope`` devuelve los originales anulados
+para reconstruir el efecto completo de la anulación.
 """
 
 from __future__ import annotations
@@ -14,11 +14,9 @@ from datetime import date
 from typing import Any
 
 
-def ordinary_gl_scope() -> tuple[Any, Any]:
-    """Restricciones GL para la vista ordinaria: excluye originales anulados y contrapartidas."""
-    from cacao_accounting.database import GLEntry
-
-    return (GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
+def ordinary_gl_scope() -> tuple[Any, ...]:
+    """Devuelve las líneas vigentes y las reversiones interperíodo efectivas."""
+    return effective_gl_scope()
 
 
 def cancelled_originals_scope(as_of_date: date | None = None) -> tuple[Any, ...]:
