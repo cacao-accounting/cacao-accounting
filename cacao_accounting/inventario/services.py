@@ -1404,6 +1404,63 @@ def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
         registro.total_amount = _save_stock_entry_items(registro)
 
 
+def _stock_entry_line_origins(entry: StockEntry) -> dict[str, dict[str, str]]:
+    """Origen documental persistido por línea para hidratar el editor (#1865).
+
+    La firma de origen compara cada línea con su ``DocumentRelation``; el
+    formulario debe publicar los mismos valores que la firma persistida o una
+    edición de solo cabecera se rechazaría como si el origen se hubiera
+    eliminado. Cuando una línea acumula varios vínculos se conserva el activo y,
+    en su defecto, el más antiguo, de forma determinista.
+    """
+    rows = database.session.execute(
+        database.select(
+            DocumentRelation.target_item_id,
+            DocumentRelation.source_type,
+            DocumentRelation.source_id,
+            DocumentRelation.source_item_id,
+            DocumentRelation.status,
+            DocumentRelation.id,
+        ).where(DocumentRelation.target_type == "stock_entry", DocumentRelation.target_id == entry.id)
+    ).all()
+    origins: dict[str, dict[str, str]] = {}
+    for target_item_id, source_type, source_id, source_item_id, _status, _relation_id in sorted(
+        rows, key=lambda row: (row.status != "active", row.id)
+    ):
+        if not target_item_id or target_item_id in origins:
+            continue
+        origins[target_item_id] = {
+            "source_type": str(source_type or ""),
+            "source_id": str(source_id or ""),
+            "source_item_id": str(source_item_id or ""),
+        }
+    return origins
+
+
+def _stock_entry_line_form_data(
+    item: StockEntryItem,
+    item_names: dict[str, str],
+    origins: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """Serializa una línea persistida, incluido su origen documental (#1865)."""
+    origin = origins.get(item.id, {})
+    return {
+        "item_code": item.item_code,
+        "item_name": item_names.get(item.item_code or "", ""),
+        "qty": str(item.qty),
+        "uom": item.uom or "",
+        "rate": str(item.basic_rate or 0),
+        "amount": str(item.amount or 0),
+        "batch_id": item.batch_id or "",
+        "serial_no": item.serial_no or "",
+        "source_warehouse": item.source_warehouse or "",
+        "target_warehouse": item.target_warehouse or "",
+        "source_type": origin.get("source_type", ""),
+        "source_id": origin.get("source_id", ""),
+        "source_item_id": origin.get("source_item_id", ""),
+    }
+
+
 def _render_stock_entry_edit_form(
     registro: StockEntry,
     items_disponibles: list,
@@ -1425,24 +1482,11 @@ def _render_stock_entry_edit_form(
                 database.select(Item.code, Item.name).where(Item.code.in_(item_codes))
             ).all()
         }
+    origins = {} if request.method == "POST" else _stock_entry_line_origins(registro)
     initial_lines = (
         _submitted_stock_entry_lines()
         if request.method == "POST"
-        else [
-            {
-                "item_code": item.item_code,
-                "item_name": item_names.get(item.item_code or "", ""),
-                "qty": str(item.qty),
-                "uom": item.uom or "",
-                "rate": str(item.basic_rate or 0),
-                "amount": str(item.amount or 0),
-                "batch_id": item.batch_id or "",
-                "serial_no": item.serial_no or "",
-                "source_warehouse": item.source_warehouse or "",
-                "target_warehouse": item.target_warehouse or "",
-            }
-            for item in lineas
-        ]
+        else [_stock_entry_line_form_data(item, item_names, origins) for item in lineas]
     )
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
