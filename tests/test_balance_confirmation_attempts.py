@@ -581,13 +581,34 @@ def confirmation_1839_scenario(tmp_path):
         )
         database.session.add(invitation)
         database.session.commit()
-        ids = {"invitation": invitation.id, "confirmation": confirmation.id, "token": token}
+        ids = {
+            "invitation": invitation.id,
+            "confirmation": confirmation.id,
+            "party": party.id,
+            "entity": company_code,
+            "token": token,
+        }
 
-    yield app, ids
-
-    with app.app_context():
-        database.session.remove()
-        database.engine.dispose()
+    try:
+        yield app, ids
+    finally:
+        with app.app_context():
+            try:
+                database.session.execute(
+                    database.delete(BalanceConfirmationInvitation).where(BalanceConfirmationInvitation.id == ids["invitation"])
+                )
+                database.session.execute(
+                    database.delete(BalanceConfirmation).where(BalanceConfirmation.id == ids["confirmation"])
+                )
+                database.session.execute(database.delete(Party).where(Party.id == ids["party"]))
+                database.session.commit()
+                database.session.execute(database.delete(Entity).where(Entity.code == ids["entity"]))
+                database.session.commit()
+            except Exception:
+                database.session.rollback()
+            finally:
+                database.session.remove()
+                database.engine.dispose()
 
 
 def _aplicar_estado_terminal(app, invitation_id: str, terminal_status: str) -> None:
@@ -616,9 +637,10 @@ def test_verificacion_concurrente_con_estado_terminal_no_otorga_acceso(
 ):
     """#1839: verificación pública no reabre invitación terminal en ambos órdenes."""
     app, ids = confirmation_1839_scenario
+    client = app.test_client()
     if order == "terminal_first":
         _aplicar_estado_terminal(app, ids["invitation"], terminal_status)
-        response = _post_verification(app, ids["token"], "123456")
+        response = _post_verification(app, ids["token"], "123456", client=client)
     else:
         original_claim = balance_confirmation_bp._claim_verification_attempt
         barrier = Barrier(2, timeout=30)
@@ -643,7 +665,7 @@ def test_verificacion_concurrente_con_estado_terminal_no_otorga_acceso(
             return claimed
 
         monkeypatch.setattr(balance_confirmation_bp, "_claim_verification_attempt", claim_then_race)
-        response = _post_verification(app, ids["token"], "123456")
+        response = _post_verification(app, ids["token"], "123456", client=client)
         assert not errors
 
     assert response.status_code == 302
@@ -659,5 +681,23 @@ def test_verificacion_concurrente_con_estado_terminal_no_otorga_acceso(
             assert confirmation.response_type == "confirmed"
         confirmation_id = confirmation.id
 
-    with app.test_client().session_transaction() as session:
+    with client.session_transaction() as session:
         assert f"verified_confirmation_{confirmation_id}" not in session
+
+
+@pytest.mark.database
+def test_verificacion_exitosa_marca_sesion_del_mismo_cliente(confirmation_1839_scenario):
+    """Control: el mismo cliente que verifica conserva la marca de sesi?n."""
+    app, ids = confirmation_1839_scenario
+    client = app.test_client()
+    response = _post_verification(app, ids["token"], "123456", client=client)
+
+    assert response.status_code == 302
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        assert invitation.status == "viewed"
+        confirmation_id = confirmation.id
+
+    with client.session_transaction() as session:
+        assert session.get(f"verified_confirmation_{confirmation_id}") == ids["invitation"]
