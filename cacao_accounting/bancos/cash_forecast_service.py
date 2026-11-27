@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     CashForecastEntry,
     Entity,
 )
+from cacao_accounting.cancellation_scope import effective_gl_scope
 from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 from cacao_accounting.document_flow.payment import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
@@ -173,8 +174,7 @@ def _compute_initial_balance(company: str, account_ids: list[str], first_start: 
         GLEntry.company == company,
         GLEntry.account_id.in_(account_ids),
         GLEntry.posting_date < first_start,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
+        *effective_gl_scope(),
     )
     ledger_id = primary_ledger_id(company)
     if ledger_id:
@@ -200,8 +200,7 @@ def _compute_real_movements(
         GLEntry.account_id.in_(account_ids),
         GLEntry.posting_date >= start_date,
         GLEntry.posting_date <= limit_end,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
+        *effective_gl_scope(),
     ]
     ledger_id = primary_ledger_id(company)
     if ledger_id:
@@ -213,8 +212,7 @@ def _compute_real_movements(
     voucher_keys = {(entry.voucher_type, entry.voucher_id) for entry in cash_entries}
     counterpart_filters = [
         GLEntry.company == company,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
+        *effective_gl_scope(),
         tuple_(GLEntry.voucher_type, GLEntry.voucher_id).in_(voucher_keys),
     ]
     if ledger_id:
