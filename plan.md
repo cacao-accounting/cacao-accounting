@@ -289,7 +289,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1022 | #1708 | ✅ `d41cb51a` + `1a5f44cc`; GitHub: open / fix-proposed | Notas aprobadas publican GL; doctype sin despacho falla sin dejar Approved/acción; 2 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1023 | #1707 | ✅ `2f2381f4` + `ec7a0c6c` + `134e9be6`; GitHub: open / fix-proposed | Snapshot acumula conceptos repetidos; compara cálculo con líneas canónicas persistidas (base 18, monto 1.80, total 119.80); 16 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1026 | #1707 | ✅ `6cf51175`; GitHub: open / fix-proposed | Ambos motores reconstruyen base neta para `net_document`, respetan secuencia `previous_total`, inclusivos múltiples, impuestos fijos y redondeo; 56 passed en SQLite; cobertura 92%/88%; sin migraciones; PostgreSQL pendiente por entorno |
-| #1027 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Retenciones: un certificado cancelado no se re-emite al re-publicar el pago y queda irrecuperable |
+| #1027 | #1708 | ✅ `277b005c`; GitHub: open / fix-proposed | Certificado no vigente rechaza reemisión y conserva evidencia; 4 tests passed en SQLite; Black/Ruff/Flake8/mypy/pylint/pydocstyle/complexipy OK; sin migraciones; PostgreSQL pendiente por entorno |
 | #1043 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Inventario: cancelar la origen queda bloqueado para siempre por capas de consumo ya revertidas |
 | #1078 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Comparar ofertas en moneda funcional al autorizar excepción |
 | #1082 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Autorizar transición al cerrar ajuste bancario |
