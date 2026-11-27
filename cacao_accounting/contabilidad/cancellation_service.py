@@ -22,6 +22,11 @@ from cacao_accounting.database import (
     LandedCostAllocation,
     PaymentEntry,
     PaymentReference,
+    PurchaseCreditNoteAllocation,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
     ReconciliationItem,
     StockValuationLayer,
     User,
@@ -258,8 +263,42 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
     if isinstance(document, ImportLandedCost):
         dependencies.extend(_landed_cost_consumption_dependencies(document, source_types, source_id))
 
+    if isinstance(document, PurchaseReceipt) and document.is_return:
+        dependencies.extend(_physical_return_credit_note_dependencies(document, source_id))
+
     dependencies.extend(_consumed_stock_dependencies(document, source_type, source_id))
     return dependencies
+
+
+def _physical_return_credit_note_dependencies(document: PurchaseReceipt, source_id: str) -> list[CancellationDependency]:
+    """Block return cancellation while an active physical credit note uses it."""
+    note_rows = database.session.execute(
+        select(PurchaseInvoice.id, PurchaseInvoice.document_no)
+        .join(PurchaseInvoiceItem, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
+        .join(
+            PurchaseCreditNoteAllocation,
+            PurchaseCreditNoteAllocation.credit_note_item_id == PurchaseInvoiceItem.id,
+        )
+        .join(PurchaseReceiptItem, PurchaseReceiptItem.id == PurchaseCreditNoteAllocation.return_receipt_item_id)
+        .where(
+            PurchaseReceiptItem.purchase_receipt_id == source_id,
+            PurchaseCreditNoteAllocation.company == document.company,
+            PurchaseCreditNoteAllocation.allocation_type == "physical_return",
+            PurchaseCreditNoteAllocation.status == "active",
+            PurchaseInvoice.document_type == "purchase_credit_note",
+            PurchaseInvoice.credit_note_type == "physical_return",
+            PurchaseInvoice.docstatus == 1,
+        )
+        .distinct()
+    ).all()
+    return [
+        CancellationDependency(
+            "nota de crédito física activa",
+            str(note_no or note_id),
+            _("nota de crédito física activa"),
+        )
+        for note_id, note_no in note_rows
+    ]
 
 
 def _relation_dependencies(relations: Any) -> list[CancellationDependency]:

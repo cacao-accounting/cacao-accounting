@@ -14905,6 +14905,9 @@ msgstr ""
 msgid "El documento ya tiene una anulación o una reversion registrada."
 msgstr "The document already has a cancellation or reversal recorded."
 
+msgid "nota de crédito física activa"
+msgstr "active physical credit note"
+
 #: cacao_accounting/contabilidad/cancellation_service.py:292
 #: cacao_accounting/contabilidad/posting_service.py:2285
 msgid "El documento no tiene fecha de contabilizacion definida."

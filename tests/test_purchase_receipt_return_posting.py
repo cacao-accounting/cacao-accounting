@@ -14,11 +14,20 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from cacao_accounting.approval_engine import approved_execution
 from cacao_accounting.contabilidad.cancellation_service import active_cancellation_dependencies
-from cacao_accounting.contabilidad.posting_service import cancel_document, post_delivery_note, post_purchase_receipt
+from cacao_accounting.contabilidad.posting_service import (
+    PostingError,
+    cancel_document,
+    post_delivery_note,
+    post_purchase_receipt,
+    submit_document,
+)
 from cacao_accounting.database import (
     Accounts,
+    ARAPLedgerEntry,
     Book,
     CompanyDefaultAccount,
     DeliveryNote,
@@ -27,6 +36,10 @@ from cacao_accounting.database import (
     GLEntry,
     Item,
     Party,
+    PurchaseCreditNoteAllocation,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
+    PurchaseMatchingConfig,
     PurchaseReceipt,
     PurchaseReceiptItem,
     StockLedgerBookEntry,
@@ -332,6 +345,167 @@ def test_cancelar_devolucion_fisica_libera_cancelacion_de_recepcion(entorno_cont
         database.session.commit()
 
         assert database.session.get(PurchaseReceipt, original.id).docstatus == 2
+
+
+def test_nota_fisica_activa_bloquea_anulacion_de_devolucion(entorno_contable_aislado):
+    """A posted physical credit note must be cancelled before its return receipt."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _seed_bridge_and_warehouse_account(entorno_contable_aislado)
+        matching = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+        ).scalar_one_or_none()
+        if matching is None:
+            matching = PurchaseMatchingConfig(company="cacao", require_purchase_order=False)
+            database.session.add(matching)
+        else:
+            matching.require_purchase_order = False
+        database.session.commit()
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        supplier = database.session.execute(database.select(Party).filter_by(code=SUPPLIER_CODE)).scalar_one()
+        item = database.session.execute(database.select(Item).filter_by(code=ITEM_CODE)).scalar_one()
+        uom = database.session.execute(database.select(UOM).filter_by(code=UOM_CODE)).scalar_one()
+        expense = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="5201")).scalar_one()
+
+        original_receipt = _receipt(is_return=False, reversal_of=None, qty="10", amount="100")
+        _post(original_receipt, actor)
+        source_invoice = PurchaseInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 10),
+            document_no=f"PI-RETURN-{uuid4().hex[:8]}",
+            document_type="purchase_invoice",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            purchase_receipt_id=original_receipt.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(source_invoice)
+        database.session.flush()
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=source_invoice.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("10"),
+                qty_in_base_uom=Decimal("10"),
+                uom=uom.code,
+                rate=Decimal("10"),
+                amount=Decimal("100"),
+                base_amount=Decimal("100"),
+                expense_account_id=expense.id,
+                warehouse=WAREHOUSE_CODE,
+            )
+        )
+        database.session.commit()
+        with audit_actor(actor.id, actor.name), approved_execution(source_invoice, actor.id):
+            submit_document(source_invoice)
+        database.session.commit()
+
+        returned = _receipt(is_return=True, reversal_of=original_receipt.id, qty="4", amount="40")
+        _post(returned, actor)
+        credit_note = PurchaseInvoice(
+            company="cacao",
+            posting_date=returned.posting_date,
+            document_no=f"CN-RETURN-{uuid4().hex[:8]}",
+            document_type="purchase_credit_note",
+            credit_note_type="physical_return",
+            is_return=True,
+            reversal_of=source_invoice.id,
+            purchase_receipt_id=returned.id,
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(credit_note)
+        database.session.flush()
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=credit_note.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("4"),
+                qty_in_base_uom=Decimal("4"),
+                uom=uom.code,
+                rate=Decimal("10"),
+                amount=Decimal("40"),
+                base_amount=Decimal("40"),
+                expense_account_id=expense.id,
+                warehouse=WAREHOUSE_CODE,
+            )
+        )
+        database.session.commit()
+        with audit_actor(actor.id, actor.name), approved_execution(credit_note, actor.id):
+            submit_document(credit_note)
+        database.session.commit()
+
+        allocation = database.session.execute(
+            database.select(PurchaseCreditNoteAllocation).filter_by(allocation_type="physical_return", status="active")
+        ).scalar_one()
+        ap_before = (
+            database.session.execute(database.select(ARAPLedgerEntry).where(ARAPLedgerEntry.document_id == credit_note.id))
+            .scalars()
+            .all()
+        )
+        gl_before = database.session.execute(database.select(GLEntry).filter_by(voucher_id=credit_note.id)).scalars().all()
+        assert ap_before and gl_before
+        dependencies = active_cancellation_dependencies(returned, "purchase_receipt", returned.id)
+        assert [(row.kind, row.identifier) for row in dependencies] == [
+            ("nota de crédito física activa", credit_note.document_no)
+        ]
+
+        with audit_actor(actor.id, actor.name), approved_execution(returned, actor.id):
+            with pytest.raises(PostingError, match="nota de crédito física activa"):
+                cancel_document(
+                    returned,
+                    reason="La nota de crédito sigue activa",
+                    actor_user_id=actor.id,
+                    cancellation_date=returned.posting_date,
+                )
+        database.session.rollback()
+        database.session.expire_all()
+        assert database.session.get(PurchaseReceipt, returned.id).docstatus == 1
+        assert database.session.get(PurchaseInvoice, credit_note.id).docstatus == 1
+        assert database.session.get(PurchaseCreditNoteAllocation, allocation.id).status == "active"
+        assert len(
+            database.session.execute(database.select(ARAPLedgerEntry).where(ARAPLedgerEntry.document_id == credit_note.id))
+            .scalars()
+            .all()
+        ) == len(ap_before)
+        unchanged_gl = database.session.execute(database.select(GLEntry).filter_by(voucher_id=credit_note.id)).scalars().all()
+        assert len(unchanged_gl) == len(gl_before)
+
+        with audit_actor(actor.id, actor.name), approved_execution(credit_note, actor.id):
+            cancel_document(
+                credit_note,
+                reason="Anular primero nota física",
+                actor_user_id=actor.id,
+                cancellation_date=credit_note.posting_date,
+            )
+        database.session.commit()
+        assert database.session.get(PurchaseInvoice, credit_note.id).docstatus == 2
+        assert database.session.get(PurchaseCreditNoteAllocation, allocation.id).status == "cancelled"
+        credit_note_ap_after = (
+            database.session.execute(database.select(ARAPLedgerEntry).where(ARAPLedgerEntry.document_id == credit_note.id))
+            .scalars()
+            .all()
+        )
+        assert len(credit_note_ap_after) > len(ap_before)
+        assert {row.posting_date for row in credit_note_ap_after} == {credit_note.posting_date}
+        assert sum((row.document_amount for row in credit_note_ap_after), Decimal("0")) == Decimal("0")
+
+        with audit_actor(actor.id, actor.name), approved_execution(returned, actor.id):
+            cancel_document(
+                returned,
+                reason="Anular devolución tras nota física",
+                actor_user_id=actor.id,
+                cancellation_date=returned.posting_date,
+            )
+        database.session.commit()
+        assert database.session.get(PurchaseReceipt, returned.id).docstatus == 2
 
 
 def test_cancelar_nota_de_entrega_libera_cancelacion_de_recepcion(entorno_contable_aislado):
