@@ -161,36 +161,49 @@ def test_rechazo_sigue_disponible_si_proveedor_se_desactiva(app, entorno_contabl
 
 def _purchase_order_http_context(app):
     """Crea proveedor, serie y datos mínimos para POST HTTP de OC."""
-    from cacao_accounting.database import NamingSeries
+    from decimal import Decimal
+
+    from cacao_accounting.database import Item, NamingSeries
     from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 
     suffix = uuid4().hex[:6]
+    item_code = f"IT{suffix}"
     with app.app_context():
         ensure_default_naming_series_for_company("cacao", ["purchase_order"])
         supplier = Party(code=f"SUP{suffix}", name=f"Proveedor {suffix}", is_supplier=True, is_active=True)
-        database.session.add(supplier)
+        item = Item(
+            code=item_code,
+            name=f"Artículo {suffix}",
+            item_type="service",
+            is_stock_item=False,
+            is_sale_item=True,
+            is_purchase_item=True,
+            default_uom="UND",
+            standard_rate=Decimal("10"),
+        )
+        database.session.add_all([supplier, item])
         database.session.flush()
         database.session.add(CompanyParty(company="cacao", party_id=supplier.id, is_active=True))
         series_id = database.session.execute(
             database.select(NamingSeries.id).filter_by(entity_type="purchase_order", company="cacao")
         ).scalar_one()
         database.session.commit()
-        return {"supplier_id": supplier.id, "series_id": series_id}
+        return {"supplier_id": supplier.id, "series_id": series_id, "item_code": item_code}
 
 
 @pytest.mark.parametrize(
-    ("mutate", "expected"),
+    ("mutate", "mensaje"),
     [
-        ("inactive_supplier", "habilitado como proveedor"),
-        ("inactive_membership", "habilitado para la compañía"),
-        ("not_supplier", "habilitado como proveedor"),
+        ("inactive_supplier", "no está habilitado como proveedor"),
+        ("inactive_membership", "no está habilitado para la compañía"),
+        ("not_supplier", "no está habilitado como proveedor"),
     ],
 )
-def test_purchase_order_new_post_rejects_invalid_supplier(app, authenticated_client, entorno_contable, mutate, expected):
-    """#1823: alta manual HTTP no crea OC con proveedor inválido o sin vínculo activo."""
+def test_purchase_order_new_post_rejects_invalid_supplier(app, authenticated_client, entorno_contable, mutate, mensaje):
+    """#1823: alta manual HTTP rechaza el proveedor inválido y explica la causa."""
     from cacao_accounting.database import PurchaseOrder
 
-    del entorno_contable, expected
+    del entorno_contable
     ctx = _purchase_order_http_context(app)
     with app.app_context():
         supplier = database.session.get(Party, ctx["supplier_id"])
@@ -215,78 +228,165 @@ def test_purchase_order_new_post_rejects_invalid_supplier(app, authenticated_cli
             "naming_series": ctx["series_id"],
             "transaction_currency": "NIO",
         },
+        follow_redirects=True,
     )
 
-    assert response.status_code in {200, 302}
+    assert response.status_code == 200
+    assert mensaje in response.get_data(as_text=True)
     with app.app_context():
         after = database.session.execute(database.select(database.func.count(PurchaseOrder.id))).scalar()
         assert after == before
 
 
-def test_purchase_order_edit_post_rejects_invalid_supplier(app, authenticated_client, entorno_contable):
-    """#1823: edición HTTP no muta OC con proveedor cuya membresía fue revocada."""
+def test_purchase_order_new_post_accepts_valid_supplier(app, authenticated_client, entorno_contable):
+    """Control positivo: el mismo POST con proveedor vigente sí crea la orden."""
+    from cacao_accounting.database import PurchaseOrder
+
+    ctx = _purchase_order_http_context(app)
+    with app.app_context():
+        before = database.session.execute(database.select(database.func.count(PurchaseOrder.id))).scalar()
+
+    response = authenticated_client("admin").post(
+        "/buying/purchase-order/new",
+        data={
+            "company": "cacao",
+            "supplier_id": ctx["supplier_id"],
+            "posting_date": "2026-05-15",
+            "naming_series": ctx["series_id"],
+            "transaction_currency": "NIO",
+            "item_code_0": ctx["item_code"],
+            "qty_0": "1",
+            "rate_0": "10",
+            "uom_0": "UND",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        after = database.session.execute(database.select(database.func.count(PurchaseOrder.id))).scalar()
+        assert after == before + 1
+
+
+def _orden_con_dos_proveedores(app):
+    """Prepara una orden en borrador con un proveedor válido y otro mutable."""
+    from datetime import date
     from decimal import Decimal
 
     from cacao_accounting.database import NamingSeries, PurchaseOrder
     from cacao_accounting.document_identifiers import assign_document_identifier, ensure_default_naming_series_for_company
 
-    del entorno_contable
     suffix = uuid4().hex[:6]
     with app.app_context():
         ensure_default_naming_series_for_company("cacao", ["purchase_order"])
-        valid = Party(code=f"V{suffix}", name="Proveedor valido", is_supplier=True, is_active=True)
-        invalid = Party(code=f"I{suffix}", name="Proveedor invalido", is_supplier=True, is_active=True)
-        database.session.add_all([valid, invalid])
+        valido = Party(code=f"V{suffix}", name="Proveedor valido", is_supplier=True, is_active=True)
+        mutable = Party(code=f"I{suffix}", name="Proveedor mutable", is_supplier=True, is_active=True)
+        database.session.add_all([valido, mutable])
         database.session.flush()
         database.session.add_all(
             [
-                CompanyParty(company="cacao", party_id=valid.id, is_active=True),
-                CompanyParty(company="cacao", party_id=invalid.id, is_active=True),
+                CompanyParty(company="cacao", party_id=valido.id, is_active=True),
+                CompanyParty(company="cacao", party_id=mutable.id, is_active=True),
             ]
         )
         series_id = database.session.execute(
             database.select(NamingSeries.id).filter_by(entity_type="purchase_order", company="cacao")
         ).scalar_one()
-        po = PurchaseOrder(
+        orden = PurchaseOrder(
             company="cacao",
-            supplier_id=valid.id,
+            supplier_id=valido.id,
             supplier_name="Proveedor valido",
-            posting_date=__import__("datetime").date(2026, 5, 15),
+            posting_date=date(2026, 5, 15),
             transaction_currency="NIO",
             base_currency="NIO",
             exchange_rate=Decimal("1"),
             docstatus=0,
         )
-        database.session.add(po)
+        database.session.add(orden)
         database.session.flush()
         assign_document_identifier(
-            document=po,
+            document=orden,
             entity_type="purchase_order",
-            posting_date_raw=po.posting_date,
+            posting_date_raw=orden.posting_date,
             naming_series_id=series_id,
         )
         database.session.commit()
-        po_id = po.id
-        invalid_id = invalid.id
-        membership = database.session.execute(
-            database.select(CompanyParty).filter_by(party_id=invalid.id, company="cacao")
-        ).scalar_one()
-        membership.is_active = False
+        return orden.id, valido.id, mutable.id, series_id
+
+
+@pytest.mark.parametrize(
+    ("invalidity", "mensaje"),
+    [
+        ("inactive_supplier", "no está habilitado como proveedor"),
+        ("not_supplier", "no está habilitado como proveedor"),
+        ("inactive_membership", "no está habilitado para la compañía"),
+    ],
+)
+def test_purchase_order_edit_post_rejects_invalid_supplier(app, authenticated_client, entorno_contable, invalidity, mensaje):
+    """#1823: la edición rechaza proveedor inactivo, sin rol o sin vínculo vigente."""
+    from cacao_accounting.database import PurchaseOrder
+
+    del entorno_contable
+    orden_id, valido_id, mutable_id, series_id = _orden_con_dos_proveedores(app)
+    with app.app_context():
+        proveedor = database.session.get(Party, mutable_id)
+        if invalidity == "inactive_supplier":
+            proveedor.is_active = False
+        elif invalidity == "not_supplier":
+            proveedor.is_supplier = False
+        else:
+            vinculo = database.session.execute(
+                database.select(CompanyParty).filter_by(party_id=mutable_id, company="cacao")
+            ).scalar_one()
+            vinculo.is_active = False
         database.session.commit()
 
     response = authenticated_client("admin").post(
-        f"/buying/purchase-order/{po_id}/edit",
+        f"/buying/purchase-order/{orden_id}/edit",
         data={
             "company": "cacao",
-            "supplier_id": invalid_id,
+            "supplier_id": mutable_id,
             "posting_date": "2026-05-15",
             "naming_series": series_id,
             "transaction_currency": "NIO",
         },
+        follow_redirects=True,
     )
 
-    assert response.status_code in {200, 302}
+    assert response.status_code == 200
+    assert mensaje in response.get_data(as_text=True)
     with app.app_context():
-        po = database.session.get(PurchaseOrder, po_id)
-        assert po is not None
-        assert po.supplier_id != invalid_id
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden is not None
+        assert orden.supplier_id == valido_id
+
+
+def test_purchase_order_edit_post_accepts_valid_supplier(app, authenticated_client, entorno_contable):
+    """Control positivo: la edición con proveedor vigente sí se persiste."""
+    from cacao_accounting.database import PurchaseOrder
+
+    ctx = _purchase_order_http_context(app)
+    orden_id, valido_id, _mutable_id, series_id = _orden_con_dos_proveedores(app)
+    with app.app_context():
+        database.session.get(PurchaseOrder, orden_id).supplier_id = None
+        database.session.commit()
+
+    response = authenticated_client("admin").post(
+        f"/buying/purchase-order/{orden_id}/edit",
+        data={
+            "company": "cacao",
+            "supplier_id": valido_id,
+            "posting_date": "2026-05-15",
+            "naming_series": series_id,
+            "transaction_currency": "NIO",
+            "item_code_0": ctx["item_code"],
+            "qty_0": "1",
+            "rate_0": "10",
+            "uom_0": "UND",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden is not None
+        assert orden.supplier_id == valido_id
