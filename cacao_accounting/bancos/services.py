@@ -426,12 +426,27 @@ def petty_cash_ledger_balance(petty_cash: PettyCashAccount, as_of_date: date | N
 
 
 def petty_cash_open_vouchers_total(petty_cash: PettyCashAccount, as_of_date=None) -> Decimal:
-    """Calcula el efectivo entregado en vales que aun no se han liquidado."""
-    query = database.select(database.func.coalesce(database.func.sum(PettyCashVoucher.amount), 0)).filter_by(
-        petty_cash_id=petty_cash.id, voucher_status="entregado"
+    """Calcula el efectivo comprometido en vales entregados al corte indicado."""
+    query = database.select(database.func.coalesce(database.func.sum(PettyCashVoucher.amount), 0)).where(
+        PettyCashVoucher.petty_cash_id == petty_cash.id
     )
     if as_of_date is not None:
-        query = query.filter(PettyCashVoucher.posting_date <= as_of_date)
+        settled_expense_after_cutoff = database.exists(
+            database.select(PettyCashExpense.id).where(
+                PettyCashExpense.id == PettyCashVoucher.expense_id,
+                PettyCashExpense.voucher_id == PettyCashVoucher.id,
+                PettyCashExpense.posting_date > as_of_date,
+            )
+        )
+        query = query.where(
+            PettyCashVoucher.posting_date <= as_of_date,
+            database.or_(
+                PettyCashVoucher.voucher_status == "entregado",
+                database.and_(PettyCashVoucher.voucher_status == "liquidado", settled_expense_after_cutoff),
+            ),
+        )
+    else:
+        query = query.where(PettyCashVoucher.voucher_status == "entregado")
     result = database.session.execute(query).scalar()
     return Decimal(str(result or 0))
 

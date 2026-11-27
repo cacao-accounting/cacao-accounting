@@ -19,6 +19,7 @@ from cacao_accounting.bancos.services import (
     cancel_petty_cash_expense,
     create_petty_cash_replenishment,
     petty_cash_expenses_available_for_replenishment,
+    petty_cash_open_vouchers_total,
     petty_cash_pending_replenishment_total,
     petty_cash_replenishment_expenses,
 )
@@ -32,6 +33,7 @@ from cacao_accounting.database import (
     PettyCashExpense,
     PettyCashReplenishment,
     PettyCashReplenishmentExpense,
+    PettyCashVoucher,
     database,
 )
 
@@ -417,6 +419,47 @@ def test_corte_anterior_conserva_el_gasto_como_pendiente(petty_cash_link_app):
         database.session.commit()
         derived = _petty_cash_reconciliation_derived_values(fund, date(2026, 10, 19))
         assert derived["pending_expenses"] == Decimal("85.00")
+
+
+def test_corte_anterior_a_liquidacion_conserva_el_vale_abierto(petty_cash_link_app):
+    """Liquidar un vale después del corte no cambia su saldo histórico abierto."""
+    application, ids = petty_cash_link_app
+    with application.app_context():
+        voucher = PettyCashVoucher(
+            company=ids["company"],
+            petty_cash_id=ids["fund_id"],
+            voucher_no=f"VALE-{uuid4().hex[:10]}",
+            voucher_status="entregado",
+            concept="Compra para rendir",
+            amount=Decimal("45.00"),
+            posting_date=date(2026, 10, 18),
+            docstatus=1,
+        )
+        database.session.add(voucher)
+        database.session.flush()
+        fund = database.session.get(PettyCashAccount, ids["fund_id"])
+        assert fund is not None
+        assert petty_cash_open_vouchers_total(fund, date(2026, 10, 19)) == Decimal("45.00")
+
+        expense = PettyCashExpense(
+            company=ids["company"],
+            petty_cash_id=ids["fund_id"],
+            voucher_id=voucher.id,
+            posting_date=date(2026, 10, 20),
+            amount=Decimal("45.00"),
+            concept="Compra para rendir",
+            expense_account_code="EXP-TEST",
+            docstatus=1,
+        )
+        database.session.add(expense)
+        database.session.flush()
+        voucher.expense_id = expense.id
+        voucher.voucher_status = "liquidado"
+        database.session.commit()
+
+        assert petty_cash_open_vouchers_total(fund, date(2026, 10, 19)) == Decimal("45.00")
+        assert petty_cash_open_vouchers_total(fund, date(2026, 10, 20)) == Decimal("0")
+        assert petty_cash_open_vouchers_total(fund) == Decimal("0")
 
 
 def test_reposicion_anterior_al_gasto_se_rechaza_sin_reserva(petty_cash_link_app):
