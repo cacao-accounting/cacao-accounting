@@ -510,18 +510,29 @@ def lista_impuestos():
         if tax_type not in TAX_TYPES:
             flash(_("El tipo de impuesto seleccionado no es válido."), "danger")
             return redirect(url_for("admin.lista_impuestos"))
+        account_id = (request.form.get("account_id") or "").strip() or None
+        if account_id:
+            account = database.session.get(Accounts, account_id)
+            if not account or not account.active:
+                flash(_("La cuenta contable seleccionada no es v?lida."), "danger")
+                return redirect(url_for("admin.lista_impuestos"))
         tax = Tax(
             name=request.form.get("name") or "",
             rate=rate,
             tax_type=tax_type,
             applies_to=request.form.get("applies_to") or "both",
-            account_id=request.form.get("account_id") or None,
+            account_id=account_id,
             is_charge=bool(request.form.get("is_charge")),
             is_capitalizable=bool(request.form.get("is_capitalizable")),
             is_active=request.form.get("is_active") is not None,
         )
         database.session.add(tax)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("No se pudo guardar el impuesto. Verifique las referencias seleccionadas."), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
         flash(_("Impuesto o cargo creado correctamente."), "success")
         return redirect(url_for("admin.lista_impuestos"))
     taxes = database.session.execute(database.select(Tax).order_by(Tax.name)).scalars().all()
@@ -535,15 +546,34 @@ def lista_plantillas_impuesto():
     """Administra plantillas de impuestos."""
     _require_system_admin()
     if request.method == "POST":
+        company = (request.form.get("company") or "").strip() or None
+        currency = (request.form.get("currency") or "").strip() or None
+        if company:
+            entity = database.session.get(Entity, company)
+            if not entity or getattr(entity, "status", "active") == "inactive":
+                flash(_("La compa??a seleccionada no es v?lida."), "danger")
+                return redirect(url_for("admin.lista_plantillas_impuesto"))
+        if currency:
+            currency_ok = database.session.execute(
+                database.select(Currency.id).filter_by(code=currency, active=True)
+            ).scalar_one_or_none()
+            if currency_ok is None:
+                flash(_("La moneda seleccionada no es v?lida."), "danger")
+                return redirect(url_for("admin.lista_plantillas_impuesto"))
         template = TaxTemplate(
             name=request.form.get("name") or "",
-            company=request.form.get("company") or None,
+            company=company,
             template_type=request.form.get("template_type") or "selling",
-            currency=request.form.get("currency") or None,
+            currency=currency,
             is_active=request.form.get("is_active") is not None,
         )
         database.session.add(template)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("No se pudo guardar la plantilla de impuestos. Verifique las referencias seleccionadas."), "danger")
+            return redirect(url_for("admin.lista_plantillas_impuesto"))
         flash(_("Plantilla de impuestos creada correctamente."), "success")
         return redirect(url_for("admin.lista_plantillas_impuesto"))
     templates = database.session.execute(database.select(TaxTemplate).order_by(TaxTemplate.name)).scalars().all()
@@ -565,7 +595,8 @@ def items_plantilla_impuesto(template_id: str):
         except (TypeError, ValueError):
             flash(_("La secuencia debe ser un número entero."), "danger")
             return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        tax = database.session.get(Tax, request.form.get("tax_id") or "")
+        tax_id = (request.form.get("tax_id") or "").strip()
+        tax = database.session.get(Tax, tax_id) if tax_id else None
         if not tax or not tax.is_active:
             flash(_("Selecciona un impuesto activo."), "danger")
             return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
@@ -576,20 +607,25 @@ def items_plantilla_impuesto(template_id: str):
             return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         item = TaxTemplateItem(
             tax_template_id=template.id,
-            tax_id=request.form.get("tax_id") or "",
+            tax_id=tax.id,
             sequence=sequence,
             calculation_base=request.form.get("calculation_base") or "net_document",
             behavior=request.form.get("behavior") or "additive",
             is_inclusive=bool(request.form.get("is_inclusive")),
         )
         if item.calculation_base not in {"net_document", "previous_total"}:
-            flash(_("La base de cálculo del impuesto no es válida."), "danger")
+            flash(_("La base de c?lculo del impuesto no es v?lida."), "danger")
             return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         if item.behavior not in {"additive", "deductive"}:
-            flash(_("El comportamiento del impuesto no es válido."), "danger")
+            flash(_("El comportamiento del impuesto no es v?lido."), "danger")
             return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         database.session.add(item)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("No se pudo agregar la l?nea de impuesto. Verifique las referencias seleccionadas."), "danger")
+            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         flash(_("Linea de impuesto agregada correctamente."), "success")
         return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
     items = (
@@ -824,13 +860,22 @@ def _create_dimension_type_from_request() -> Any:
 
 
 def _add_dimension_value_from_request() -> Any:
-    """Agrega un valor de dimensión y devuelve la redirección de resultado."""
-    dimension_type_id = request.form.get("dimension_type_id") or ""
+    """Agrega un valor de dimensi?n y devuelve la redirecci?n de resultado."""
+    dimension_type_id = (request.form.get("dimension_type_id") or "").strip()
     value = (request.form.get("value") or "").strip()
     company = (request.form.get("company") or "").strip() or None
     if not dimension_type_id or not value:
-        flash(_("Seleccione un tipo de dimensión y proporcione un valor."), "danger")
+        flash(_("Seleccione un tipo de dimensi?n y proporcione un valor."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    dimension_type = database.session.get(DimensionType, dimension_type_id)
+    if not dimension_type or not dimension_type.is_active:
+        flash(_("El tipo de dimensi?n seleccionado no es v?lido."), "danger")
+        return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    if company:
+        entity = database.session.get(Entity, company)
+        if not entity or getattr(entity, "status", "active") == "inactive":
+            flash(_("La compa??a seleccionada no es v?lida."), "danger")
+            return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     database.session.add(
         DimensionValue(
             dimension_type_id=dimension_type_id,
@@ -839,8 +884,13 @@ def _add_dimension_value_from_request() -> Any:
             is_active=True,
         )
     )
-    database.session.commit()
-    flash(_("Valor de dimensión agregado correctamente."), "success")
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se pudo agregar el valor de dimensi?n. Verifique las referencias seleccionadas."), "danger")
+        return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    flash(_("Valor de dimensi?n agregado correctamente."), "success")
     return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
 
 
