@@ -9,7 +9,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
-from threading import Barrier
+from threading import Barrier, Event, Lock
 from uuid import uuid4
 
 import pytest
@@ -38,6 +38,8 @@ from cacao_accounting.database import (
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 
 pytestmark = pytest.mark.database
+
+ES_SQLITE = str(configuracion["SQLALCHEMY_DATABASE_URI"]).startswith("sqlite")
 
 
 @pytest.fixture
@@ -260,7 +262,7 @@ def test_dos_solicitudes_concurrentes_reservan_una_vez(caja_chica_app):
         assert len(vinculos) == 1
 
 
-def _reembolsar(app, ids, barrera: Barrier) -> str:
+def _reembolsar(app, ids, barrera: Barrier | None) -> str:
     from flask_login import login_user
 
     from cacao_accounting.bancos.services import replenish_petty_cash
@@ -268,7 +270,8 @@ def _reembolsar(app, ids, barrera: Barrier) -> str:
     with app.test_request_context("/"):
         login_user(database.session.get(User, ids["user_id"]))
         try:
-            barrera.wait(timeout=10)
+            if barrera is not None:
+                barrera.wait(timeout=10)
             solicitud = database.session.get(PettyCashReplenishment, ids["replenishment_id"])
             replenish_petty_cash(solicitud, bank_account_id=ids["bank_id"])
             return "reembolsada"
@@ -277,6 +280,60 @@ def _reembolsar(app, ids, barrera: Barrier) -> str:
             return "rechazada"
         finally:
             database.session.remove()
+
+
+@pytest.mark.skipif(ES_SQLITE, reason="La exclusión FOR UPDATE se verifica en PostgreSQL/MySQL.")
+def test_el_segundo_reembolso_espera_mientras_el_primero_tiene_el_lock(caja_chica_app, monkeypatch):
+    """La segunda transacción no avanza hasta que la primera libera el lock."""
+    from cacao_accounting.bancos import services
+
+    app, ids = caja_chica_app
+    original = services._lock_row_for_transition
+    first_locked = Event()
+    second_started = Event()
+    release = Event()
+    calls: list[int] = []
+    calls_lock = Lock()
+
+    def lock_observable(model, record_id):
+        with calls_lock:
+            calls.append(1)
+            number = len(calls)
+        if number == 1:
+            locked = original(model, record_id)
+            first_locked.set()
+            assert release.wait(timeout=10)
+            return locked
+        second_started.set()
+        return original(model, record_id)
+
+    monkeypatch.setattr(services, "_lock_row_for_transition", lock_observable)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(_reembolsar, app, ids, None)
+        assert first_locked.wait(timeout=10)
+        second = pool.submit(_reembolsar, app, ids, None)
+        try:
+            assert second_started.wait(timeout=10)
+            assert second.done() is False, "El segundo reembolso no esperó el lock"
+        finally:
+            release.set()
+        resultados = [first.result(timeout=10), second.result(timeout=10)]
+
+    assert resultados.count("reembolsada") == 1, resultados
+    with app.app_context():
+        solicitud = database.session.get(PettyCashReplenishment, ids["replenishment_id"])
+        assert solicitud is not None
+        assert solicitud.status == "reembolsado"
+        assert solicitud.bank_debit_note_id
+        pagos = database.session.execute(database.select(PaymentEntry).filter_by(company=ids["company"])).scalars().all()
+        assert len(pagos) == 1
+        gl = (
+            database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=pagos[0].id))
+            .scalars()
+            .all()
+        )
+        assert gl
+        assert sum(fila.debit for fila in gl) == sum(fila.credit for fila in gl)
 
 
 def test_dos_reembolsos_concurrentes_crean_una_sola_nota(caja_chica_app):
