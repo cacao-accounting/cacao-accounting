@@ -5,6 +5,13 @@
 
 La carrera se ejerce en PostgreSQL (Tier 1) sobre una base desechable y en MySQL
 (Tier 2) sobre la base de pruebas configurada, con compañía y códigos únicos.
+
+Este módulo además expone los helpers de aislamiento y siembra que reutilizan los
+demás casos de lock sobre motor real (#2306, #2353, #2355): ``_isolated_url``
+crea la base PostgreSQL desechable, ``_seed`` deja la compañía con el plan
+contable completo y ``_drop`` la destruye. Cambiar sus firmas rompe la
+colección de esos módulos, por eso su contrato queda cubierto en
+``tests/test_concurrency_seed_contract.py``.
 """
 
 from __future__ import annotations
@@ -76,6 +83,17 @@ def _preparar(motor: str) -> tuple[object, str | None, str]:
     raise ValueError(f"Motor no soportado: {motor}")
 
 
+def _isolated_url():
+    """Devuelve la URI y el nombre de una base PostgreSQL desechable.
+
+    Los casos de lock de #2306, #2353 y #2355 compiten por filas reales, así
+    que cada uno necesita su propia base; se apoya en ``_preparar`` para no
+    duplicar las comprobaciones del motor.
+    """
+    url, name, _ = _preparar("postgresql")
+    return url, name
+
+
 def _drop(url, name: str) -> None:
     admin = create_engine(url.set(database="postgres"))
     try:
@@ -91,24 +109,76 @@ def _drop(url, name: str) -> None:
         admin.dispose()
 
 
-def _seed(app, sufijo: str) -> dict[str, str]:
-    """Siembra una compañía aislada con el plan contable completo del caso."""
-    company = f"R{sufijo}"
-    currency = f"C{sufijo}"
-    uom_code = f"U{sufijo}"
-    warehouse_code = f"W{sufijo}"
-    supplier_code = f"PRV{sufijo}"
-    user_id = f"adm-{sufijo}"
+def _identificadores(sufijo: str | None = None) -> dict[str, str]:
+    """Códigos de la compañía que siembra ``_seed``.
+
+    Con sufijo los códigos son exclusivos de la ejecución, requisito para
+    compartir la base de pruebas de MySQL, donde el usuario de CI no puede
+    crear esquemas. Sin sufijo se conservan los códigos históricos (compañía
+    ``cacao``, moneda NIO, libro FISCAL, almacén BOD01) que los casos de lock
+    de #2306, #2353 y #2355 dan por sentados; cada uno corre sobre su propia
+    base desechable, así que no necesita nombres únicos.
+    """
+    if sufijo is None:
+        return {
+            "company": "cacao",
+            "entity_name": "Cacao",
+            "company_name": "Cacao SA",
+            "tax_id": "J0001",
+            "currency": "NIO",
+            "currency_name": "Córdoba",
+            "book": "FISCAL",
+            "fiscal_year": "FY2026",
+            "period": "P2026-05",
+            "uom": "UND",
+            "warehouse": "BOD01",
+            "supplier": "PRV001",
+            "item": "ART01",
+            "user": "admin",
+            "user_id": "admin-2311",
+        }
+    return {
+        "company": f"R{sufijo}",
+        "entity_name": f"Cacao {sufijo}",
+        "company_name": f"Cacao {sufijo} SA",
+        "tax_id": f"J{sufijo}",
+        "currency": f"C{sufijo}",
+        "currency_name": f"Moneda {sufijo}",
+        "book": f"L{sufijo}",
+        "fiscal_year": f"FY{sufijo}",
+        "period": f"P{sufijo}",
+        "uom": f"U{sufijo}",
+        "warehouse": f"W{sufijo}",
+        "supplier": f"PRV{sufijo}",
+        "item": f"IT{sufijo}",
+        "user": f"admin-{sufijo}",
+        "user_id": f"adm-{sufijo}",
+    }
+
+
+def _seed(app, sufijo: str | None = None) -> dict[str, str]:
+    """Siembra la compañía del caso con el plan contable completo.
+
+    ``sufijo`` aísla los códigos cuando la base se comparte; sin él se siembra
+    el escenario histórico descrito en ``_identificadores``.
+    """
+    ids = _identificadores(sufijo)
+    company = ids["company"]
+    currency = ids["currency"]
+    uom_code = ids["uom"]
+    warehouse_code = ids["warehouse"]
+    supplier_code = ids["supplier"]
+    user_id = ids["user_id"]
     with app.app_context():
         database.create_all()
         database.session.add_all(
             [
-                Currency(code=currency, name=f"Moneda {sufijo}", decimals=2, active=True, default=True),
+                Currency(code=currency, name=ids["currency_name"], decimals=2, active=True, default=True),
                 Entity(
                     code=company,
-                    name=f"Cacao {sufijo}",
-                    company_name=f"Cacao {sufijo} SA",
-                    tax_id=f"J{sufijo}",
+                    name=ids["entity_name"],
+                    company_name=ids["company_name"],
+                    tax_id=ids["tax_id"],
                     currency=currency,
                     enabled=True,
                     status="default",
@@ -117,11 +187,18 @@ def _seed(app, sufijo: str) -> dict[str, str]:
         )
         database.session.flush()
         database.session.add(
-            Book(code=f"L{sufijo}", name="Fiscal", entity=company, currency=currency, status="activo", is_primary=True)
+            Book(
+                code=ids["book"],
+                name="Fiscal",
+                entity=company,
+                currency=currency,
+                status="activo",
+                is_primary=True,
+            )
         )
         database.session.add(
             FiscalYear(
-                id=f"FY{sufijo}",
+                id=ids["fiscal_year"],
                 entity=company,
                 name="2026",
                 year_start_date=date(2026, 1, 1),
@@ -132,9 +209,9 @@ def _seed(app, sufijo: str) -> dict[str, str]:
         database.session.flush()
         database.session.add(
             AccountingPeriod(
-                id=f"P{sufijo}",
+                id=ids["period"],
                 entity=company,
-                fiscal_year_id=f"FY{sufijo}",
+                fiscal_year_id=ids["fiscal_year"],
                 name="Mayo 2026",
                 start=date(2026, 5, 1),
                 end=date(2026, 5, 31),
@@ -185,7 +262,7 @@ def _seed(app, sufijo: str) -> dict[str, str]:
         supplier = Party(code=supplier_code, name="Proveedor", is_supplier=True, is_active=True)
         user = User(
             id=user_id,
-            user=f"admin-{sufijo}",
+            user=ids["user"],
             name="Admin",
             password=b"x",
             classification="admin",
@@ -195,7 +272,7 @@ def _seed(app, sufijo: str) -> dict[str, str]:
         database.session.add_all([uom, warehouse, supplier, user])
         database.session.flush()
         item = Item(
-            code=f"IT{sufijo}",
+            code=ids["item"],
             name="Artículo",
             item_type="goods",
             is_stock_item=True,
@@ -214,6 +291,7 @@ def _seed(app, sufijo: str) -> dict[str, str]:
         resultado = {
             "company": company,
             "currency": currency,
+            "book": ids["book"],
             "warehouse_code": warehouse_code,
             "warehouse_id": warehouse.id,
             "supplier_id": supplier.id,
