@@ -121,6 +121,9 @@ def test_downgrade_conserva_evidencia_heredada_en_postgresql():
             database.session.execute(AuditTrail.__table__.insert().values(**values))
             database.session.commit()
             assert verify_audit_trail_chain() == []
+            # El DDL de Alembic usa otra conexión: cerrar la transacción de
+            # lectura evita que el DROP COLUMN espere indefinidamente.
+            database.session.remove()
 
             alembic.downgrade("20260809_0001")
 
