@@ -5746,13 +5746,15 @@ def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
         refresh_source_caches_for_target("purchase_receipt", document.id)
         emit_goods_received_cancelled(voucher_id, company)
 
-    if isinstance(document, PurchaseInvoice) and (
-        getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None)
-    ):
+    if isinstance(document, PurchaseInvoice):
         from cacao_accounting.compras.purchase_reconciliation_service import (
+            cancel_purchase_credit_note_allocations,
             cancel_purchase_reconciliation,
             cancel_purchase_settlement_allocations,
         )
 
-        cancel_purchase_settlement_allocations(invoice_id=document.id)
-        cancel_purchase_reconciliation(document.id)
+        if getattr(document, "document_type", None) == "purchase_credit_note":
+            cancel_purchase_credit_note_allocations(document.id)
+        elif getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None):
+            cancel_purchase_settlement_allocations(invoice_id=document.id)
+            cancel_purchase_reconciliation(document.id)

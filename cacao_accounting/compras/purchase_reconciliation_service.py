@@ -794,6 +794,31 @@ def cancel_purchase_settlement_allocations(*, receipt_id: str | None = None, inv
         database.session.flush()
 
 
+def cancel_purchase_credit_note_allocations(credit_note_id: str) -> None:
+    """Cancel only line allocations owned by the cancelled credit note."""
+    note_item_ids = [item.id for item in _invoice_items(credit_note_id)]
+    if not note_item_ids:
+        return
+    allocations = (
+        database.session.execute(
+            select(PurchaseCreditNoteAllocation).where(
+                PurchaseCreditNoteAllocation.credit_note_item_id.in_(note_item_ids),
+                PurchaseCreditNoteAllocation.status == "active",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not allocations:
+        return
+    from cacao_accounting.internal_control_service import flow_evidence_transition
+
+    with flow_evidence_transition(*allocations):
+        for allocation in allocations:
+            allocation.status = "cancelled"
+        database.session.flush()
+
+
 def _matched_qty_for_order_item(order_item_id: str) -> Decimal:
     matched = database.session.execute(
         select(func.coalesce(func.sum(PurchaseReconciliationItem.matched_qty), 0))
