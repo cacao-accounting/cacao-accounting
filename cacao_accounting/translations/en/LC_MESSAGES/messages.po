@@ -15865,6 +15865,9 @@ msgstr "All lines must indicate a book when any line is assigned to a book."
 msgid "El comprobante contable no esta balanceado por libro."
 msgstr "The accounting entry is not balanced per book."
 
+msgid "El comprobante requiere monedas para validar su balance."
+msgstr "The journal entry requires currencies to validate its balance."
+
 #: cacao_accounting/contabilidad/journal_service.py:1064
 msgid "Las cuentas AP/AR requieren tercero del tipo correspondiente."
 msgstr "AP/AR accounts require a party of the corresponding type."

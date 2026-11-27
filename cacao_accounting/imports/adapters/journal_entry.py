@@ -122,7 +122,7 @@ class JournalEntryAdapter(BaseImportAdapter):
                 if not account.active or not account.enabled:
                     return [_("La cuenta contable debe estar activa y habilitada.")]
             data = _normalize_journal_payload(payload)
-            _validate_balanced_lines(company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
+            _validate_balanced_lines(data)
             _validate_line_books(company, data.books, data.lines)
             _validate_ar_ap_lines(company, data.lines)
         except RuntimeError as exc:

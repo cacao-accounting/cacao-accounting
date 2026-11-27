@@ -462,7 +462,7 @@ def _validate_complete_journal_import(
 ) -> None:
     """Validate imported lines together with the lines already in the voucher."""
     from cacao_accounting.contabilidad.journal_service import (
-        _normalize_line,
+        _normalize_journal_payload,
         _validate_ar_ap_lines,
         _validate_balanced_lines,
         _validate_line_books,
@@ -482,19 +482,19 @@ def _validate_complete_journal_import(
             if normalized.get("reference_document") and not normalized.get("reference_name"):
                 normalized["reference_name"] = normalized["reference_document"]
             normalized_rows.append(normalized)
-        lines = [_normalize_line(row, index + 1) for index, row in enumerate(normalized_rows)]
-        lines = [line for line in lines if line.account or line.debit or line.credit]
-        transaction_currency = str(context.get("transaction_currency") or "") or None
-        header_rate = context.get("exchange_rate")
-        _validate_balanced_lines(
-            company_id,
-            lines,
-            transaction_currency,
-            Decimal(str(header_rate)) if header_rate not in (None, "") else None,
-            context.get("books") or None,
+        data = _normalize_journal_payload(
+            {
+                "company": company_id,
+                "posting_date": context.get("posting_date"),
+                "books": context.get("books") or None,
+                "transaction_currency": context.get("transaction_currency"),
+                "exchange_rate": context.get("exchange_rate"),
+                "lines": normalized_rows,
+            }
         )
-        _validate_line_books(company_id, context.get("books") or None, lines)
-        _validate_ar_ap_lines(company_id, lines)
+        _validate_balanced_lines(data)
+        _validate_line_books(company_id, data.books, data.lines)
+        _validate_ar_ap_lines(company_id, data.lines)
     except (ValueError, InvalidOperation) as exc:
         errors.append({"row": None, "field": "voucher", "message": str(exc)})
 

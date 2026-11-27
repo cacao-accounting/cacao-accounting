@@ -21,7 +21,12 @@ from cacao_accounting.contabilidad.journal_repository import (
     replace_journal_lines,
 )
 from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_comprobante_contable
+from cacao_accounting.contabilidad.posting import (
+    PostingError,
+    _lookup_exchange_rate,
+    cancel_document,
+    post_comprobante_contable,
+)
 from cacao_accounting.audit_trail_service import (
     log_cancel,
     log_comment,
@@ -166,14 +171,7 @@ def create_journal_draft(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "crear"),
     )
-    _validate_balanced_lines(
-        data.company,
-        data.lines,
-        data.transaction_currency,
-        data.exchange_rate,
-        data.books,
-        allow_inactive_accounts=source_economic_line_ids is not None,
-    )
+    _validate_balanced_lines(data, allow_inactive_accounts=source_economic_line_ids is not None)
     _validate_line_books(data.company, data.books, data.lines)
     _validate_ar_ap_lines(data.company, data.lines, validate_references=source_economic_line_ids is None)
     primary_book = data.books[0] if data.books else None
@@ -720,14 +718,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
     )
-    _validate_balanced_lines(
-        data.company,
-        data.lines,
-        data.transaction_currency,
-        data.exchange_rate,
-        data.books,
-        allow_inactive_accounts=bool(journal.reversal_of),
-    )
+    _validate_balanced_lines(data, allow_inactive_accounts=bool(journal.reversal_of))
     _validate_line_books(data.company, data.books, data.lines)
     _validate_ar_ap_lines(data.company, data.lines, validate_references=not bool(journal.reversal_of))
     primary_book = data.books[0] if data.books else None
@@ -1024,34 +1015,52 @@ def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> N
             raise JournalValidationError(_("El proyecto no existe o no pertenece a la compañía del comprobante."))
 
 
-def _validate_balanced_lines(
-    company: str,
-    lines: list[JournalLineInput],
-    transaction_currency: str | None = None,
-    header_exchange_rate: Decimal | None = None,
-    books: list[str] | None = None,
-    *,
-    allow_inactive_accounts: bool = False,
-) -> None:
+def _validate_balanced_lines(data: JournalDraftInput, *, allow_inactive_accounts: bool = False) -> None:
+    """Validate a journal with the same historical rates used by posting."""
     account_cache: dict[str, Accounts | None] = {}
     totals: dict[str | None, tuple[Decimal, Decimal]] = {}
-    explicit_books = {line.book for line in lines if line.book}
-    if explicit_books and any(not line.book for line in lines):
+    explicit_books = {line.book for line in data.lines if line.book}
+    if explicit_books and any(not line.book for line in data.lines):
         raise JournalValidationError(_("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro."))
-    company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
-    for line in lines:
-        _validate_journal_line(company, line, account_cache, allow_inactive_account=allow_inactive_accounts)
-        line_currency = line.currency or transaction_currency or company_currency
-        rate = line.exchange_rate
-        if rate is None and line_currency != company_currency:
-            rate = header_exchange_rate if line_currency == transaction_currency else None
-        # Un borrador puede conservar moneda extranjera sin tasa; el posting
-        # exige resolverla (por línea, cabecera o tabla histórica) antes de GL.
-        effective_rate = rate or Decimal("1")
+    company_currency = database.session.execute(
+        select(Entity.currency).where(Entity.code == data.company)
+    ).scalar_one_or_none()
+    for line in data.lines:
+        _validate_journal_line(data.company, line, account_cache, allow_inactive_account=allow_inactive_accounts)
+        effective_rate = _journal_line_company_rate(line, data, company_currency)
         debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
         totals[line.book] = debit + line.debit * effective_rate, credit + line.credit * effective_rate
     if any(debit != credit for debit, credit in totals.values()):
         raise JournalValidationError(_("El comprobante contable no esta balanceado por libro."))
+
+
+def _journal_line_company_rate(line: JournalLineInput, data: JournalDraftInput, company_currency: str | None) -> Decimal:
+    """Resolve the journal line rate into the company's functional currency."""
+    line_currency = line.currency or data.transaction_currency or data.base_currency
+    transaction_currency = data.transaction_currency
+    if line_currency == company_currency:
+        return Decimal("1")
+    if not line_currency or not transaction_currency or not company_currency:
+        raise JournalValidationError(_("El comprobante requiere monedas para validar su balance."))
+
+    try:
+        if line_currency == transaction_currency:
+            line_to_transaction_rate = Decimal("1")
+        elif line.exchange_rate is not None:
+            line_to_transaction_rate = line.exchange_rate
+        else:
+            line_to_transaction_rate = _lookup_exchange_rate(line_currency, transaction_currency, data.posting_date)
+
+        if transaction_currency == company_currency:
+            transaction_to_company_rate = Decimal("1")
+        elif data.exchange_rate is not None:
+            transaction_to_company_rate = data.exchange_rate
+        else:
+            transaction_to_company_rate = _lookup_exchange_rate(transaction_currency, company_currency, data.posting_date)
+    except PostingError as exc:
+        raise JournalValidationError(str(exc)) from exc
+
+    return line_to_transaction_rate * transaction_to_company_rate
 
 
 def _normalize_party_type(value: str | None) -> str | None:
