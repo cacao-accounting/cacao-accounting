@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 import calendar
@@ -24,6 +25,7 @@ from cacao_accounting import create_app
 from cacao_accounting.audit_chain import verify_audit_trail_chain
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationError, ExchangeRevaluationService
+from cacao_accounting.document_identifiers import IdentifierConfigurationError
 from cacao_accounting.contabilidad.services import _resolve_period_from_date
 from cacao_accounting.database import (
     Accounts,
@@ -822,6 +824,26 @@ def test_historical_rerun_respects_scope_and_closed_periods(business_app):
         assert any(not entry.is_cancelled for entry in entries if entry.voucher_id == prior_run_id)
         assert all(entry.is_cancelled for entry in entries if entry.voucher_id == later_run_id and not entry.is_reversal)
         assert any(entry.is_reversal and not entry.is_cancelled for entry in entries if entry.voucher_id == later_run_id)
+
+
+def test_auto_reversal_fails_closed_when_run_period_is_unresolvable(business_app, monkeypatch):
+    """No se anula evidencia si la fecha no resuelve un periodo contable único."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, _year, _month, period_id, _following_id, _next_id, _next_start = _seed_bank_exposure(company)
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+
+        def unresolved_period(_company: str, _run_date: date) -> AccountingPeriod:
+            raise IdentifierConfigurationError("La fecha corresponde a más de un periodo contable.")
+
+        revaluation_module = importlib.import_module("cacao_accounting.contabilidad.exchange_revaluation_service")
+        monkeypatch.setattr(revaluation_module, "resolve_accounting_period", unresolved_period)
+
+        with pytest.raises(ExchangeRevaluationError, match="más de un periodo"):
+            ExchangeRevaluationService()._void_outstanding_run(run, actor_id, run.run_date)
+
+        assert run.status == "posted"
 
 
 def test_rerunning_the_same_period_leaves_one_active_adjustment(business_app):

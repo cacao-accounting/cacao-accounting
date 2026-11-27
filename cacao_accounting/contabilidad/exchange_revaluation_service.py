@@ -501,13 +501,18 @@ class ExchangeRevaluationService:
         run_date = prior_run.run_date or prior_run.posting_date or reversal_floor
         if not self._period_is_open_for_run(str(prior_run.company), run_date):
             return
+        reversal_date = max(reversal_floor, run_date)
+        # The first lookup decides whether a closed historical period should
+        # be preserved. Lock and revalidate before changing any evidence so a
+        # concurrent close cannot race the automatic cancellation.
+        self._ensure_period_open(str(prior_run.company), reversal_date)
         try:
             self.void(
                 run_id=str(prior_run.id),
                 user_id=user_id,
                 reason="Reversa automática por una nueva corrida de revaluación",
                 commit=False,
-                reversal_date=max(reversal_floor, run_date),
+                reversal_date=reversal_date,
                 _period_locked=True,
                 _known_run=prior_run,
             )
@@ -524,10 +529,10 @@ class ExchangeRevaluationService:
         """Indica si la corrida cae en un periodo resoluble, habilitado y abierto."""
         try:
             run_period = resolve_accounting_period(company, run_date)
-        except IdentifierConfigurationError:
-            # Sin periodo resoluble no hay cierre que respetar; las corridas
-            # historicas sin periodo solo existen en escenarios de prueba.
-            return True
+        except IdentifierConfigurationError as exc:
+            # No se puede asumir que una fecha sin periodo está abierta: la
+            # reversa debe detenerse antes de alterar evidencia contable.
+            raise ExchangeRevaluationError(str(exc)) from exc
         return bool(run_period.enabled) and not bool(run_period.is_closed)
 
     def list_runs(self) -> list[ExchangeRevaluation]:
