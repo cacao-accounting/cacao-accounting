@@ -275,7 +275,7 @@ def resolve_item_price_record(
     candidates = [price for price in database.session.execute(query).scalars().all() if _is_valid_item_price(price)]
     if not candidates:
         return None
-    return min(candidates, key=_item_price_sort_key)
+    return min(candidates, key=lambda price: _item_price_sort_key(price, uom))
 
 
 def _is_valid_item_price(price: ItemPrice) -> bool:
@@ -287,10 +287,16 @@ def _is_valid_item_price(price: ItemPrice) -> bool:
     return True
 
 
-def _item_price_sort_key(price: ItemPrice) -> tuple:
-    """Orden determinista para empates de criterios efectivos."""
+def _item_price_sort_key(price: ItemPrice, requested_uom: str | None = None) -> tuple:
+    """Orden determinista para empates de criterios efectivos.
+
+    La UOM específica solicitada siempre prevalece sobre una tarifa genérica,
+    igual que en el ``ORDER BY`` SQL. Sin este primer criterio el ``min`` de
+    Python podía elegir la tarifa genérica aunque existiera una exacta.
+    """
+    uom_missing = not (requested_uom and price.uom == requested_uom)
     min_qty_missing = price.min_qty is None
     min_qty = -Decimal(str(price.min_qty or 0))
     valid_from_missing = price.valid_from is None
     valid_from = -(price.valid_from.toordinal() if price.valid_from else 0)
-    return (min_qty_missing, min_qty, valid_from_missing, valid_from, str(price.id or ""))
+    return (uom_missing, min_qty_missing, min_qty, valid_from_missing, valid_from, str(price.id or ""))
