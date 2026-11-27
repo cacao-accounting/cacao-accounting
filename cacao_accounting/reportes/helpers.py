@@ -972,10 +972,36 @@ def _bool_arg(name: str) -> bool:
     return request.args.get(name, "").lower() in {"1", "true", "yes", "on"}
 
 
+def _validate_requested_period(company_code: str, period_value: str) -> None:
+    """Rechaza un período explícito inexistente o de otra compañía (#1248).
+
+    Sin esta guarda el selector conservaba el valor solicitado, ``_period_bounds``
+    devolvía límites nulos y el reporte terminaba mostrando todo el historial,
+    indistinguible de una consulta sin filtro temporal.
+    """
+    exists_for_company = database.session.execute(
+        database.select(AccountingPeriod.id)
+        .where(AccountingPeriod.entity == company_code)
+        .where((AccountingPeriod.id == period_value) | (AccountingPeriod.name == period_value))
+    ).first()
+    if exists_for_company is not None:
+        return
+    exists_elsewhere = database.session.execute(
+        database.select(AccountingPeriod.id).where(
+            (AccountingPeriod.id == period_value) | (AccountingPeriod.name == period_value)
+        )
+    ).first()
+    if exists_elsewhere is not None:
+        abort(400, description=_("El periodo contable no pertenece a la compañía seleccionada."))
+    abort(400, description=_("No existe el periodo contable seleccionado."))
+
+
 def _financial_period_filters(company_code: str) -> tuple[str | None, str | None, str | None]:
     """Resolve the selected accounting period and its report date bounds."""
     period_from, period_to = _period_params()
     requested_period = request.args.get("accounting_period")
+    if requested_period is not None:
+        _validate_requested_period(company_code, requested_period)
     accounting_period = requested_period or _default_period_for_company(company_code)
     if requested_period is None and not (period_from or period_to):
         from cacao_accounting.reportes.periods import resolve_period_range
