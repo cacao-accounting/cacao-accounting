@@ -4190,6 +4190,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
             voucher_id=movement.voucher_id,
             posting_date=posting_date,
             source_layer_id=(_restored_source_layer_id(movement) if qty_change > 0 else _reversed_stock_layer_id(movement)),
+            batch_id=movement.batch_id,
         )
     )
     if movement.serial_no:
@@ -4221,14 +4222,13 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
 
 
 def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
-    """Reject reversals that leave a bin with forbidden negative stock.
+    """Reject reversals that leave a bin or batch with forbidden negative stock.
 
-    Valida el resultado final por art?culo y bodega: un prefijo intermedio
-    negativo puede ser restaurado por movimientos posteriores del mismo
-    documento (#1857). Bloquea el bin para serializar con otras reversas
-    concurrentes (#1868).
+    Valida el resultado final por art?culo/bodega y por lote cuando aplica.
+    Bloquea el bin para serializar con otras reversas concurrentes (#1868).
     """
     projected: dict[tuple[str, str, str], Decimal] = {}
+    batch_projected: dict[tuple[str, str, str, str], Decimal] = {}
     items: dict[tuple[str, str, str], Any] = {}
     for movement in movements:
         key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
@@ -4242,6 +4242,16 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
                 raise PostingError(_("El art?culo %(item_code)s no existe.") % {"item_code": movement.item_code})
             items[key] = item
         projected[key] -= _decimal_value(movement.qty_change)
+
+        batch_id = getattr(movement, "batch_id", None)
+        if batch_id:
+            bkey = (*key, str(batch_id))
+            if bkey not in batch_projected:
+                from cacao_accounting.inventario.service import get_batch_qty
+
+                batch_projected[bkey] = _decimal_value(get_batch_qty(str(batch_id), key[2], company=key[0]))
+            batch_projected[bkey] -= _decimal_value(movement.qty_change)
+
     for key, value in projected.items():
         item = items[key]
         if value < 0 and not item.allow_negative_stock:
@@ -4251,6 +4261,18 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
                     "la bodega %(warehouse)s quedar?a con stock negativo."
                 )
                 % {"item_name": item.name, "warehouse": key[2]}
+            )
+
+    for bkey, value in batch_projected.items():
+        company, item_code, warehouse, batch_id = bkey
+        item = items[(company, item_code, warehouse)]
+        if value < 0 and not item.allow_negative_stock:
+            raise PostingError(
+                _(
+                    "No se puede cancelar el movimiento de %(item_name)s: "
+                    "el lote %(batch)s en la bodega %(warehouse)s quedar?a con stock negativo."
+                )
+                % {"item_name": item.name, "batch": batch_id, "warehouse": warehouse}
             )
 
 

@@ -312,13 +312,14 @@ def _period_for_date(company: str, posting_date: date) -> AccountingPeriod:
 
 
 def _consumed_stock_dependencies(document: Any, source_type: str, source_id: str) -> list[CancellationDependency]:
-    """Detecta consumo posterior de capas generadas por el documento."""
+    """Detecta consumo posterior de capas o lotes generados por el documento."""
     if not hasattr(document, "__tablename__") or str(document.__tablename__) not in {
         "stock_entry",
         "purchase_receipt",
         "delivery_note",
     }:
         return []
+
     layer_ids = (
         database.session.execute(
             select(StockValuationLayer.id).where(
@@ -330,20 +331,59 @@ def _consumed_stock_dependencies(document: Any, source_type: str, source_id: str
         .scalars()
         .all()
     )
-    if not layer_ids:
-        return []
-    consumed = database.session.execute(
-        select(StockValuationLayer).where(
-            StockValuationLayer.source_layer_id.in_(layer_ids),
-            StockValuationLayer.qty < 0,
-            StockValuationLayer.voucher_id != source_id,
+    dependencies: list[CancellationDependency] = []
+    seen: set[tuple[str, str]] = set()
+    if layer_ids:
+        consumed = database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.source_layer_id.in_(layer_ids),
+                StockValuationLayer.qty < 0,
+                StockValuationLayer.voucher_id != source_id,
+            )
+        ).scalars()
+        for row in consumed:
+            key = (str(row.voucher_type), str(row.voucher_id))
+            if key in seen or not _stock_consumption_is_active(row.voucher_type, row.voucher_id):
+                continue
+            seen.add(key)
+            dependencies.append(CancellationDependency("consumo de inventario", key[1], key[0]))
+
+    from cacao_accounting.database import StockLedgerEntry
+
+    inbound_batches = database.session.execute(
+        select(
+            StockLedgerEntry.company,
+            StockLedgerEntry.item_code,
+            StockLedgerEntry.warehouse,
+            StockLedgerEntry.batch_id,
+        ).where(
+            StockLedgerEntry.voucher_type == source_type,
+            StockLedgerEntry.voucher_id == source_id,
+            StockLedgerEntry.is_cancelled.is_(False),
+            StockLedgerEntry.qty_change > 0,
+            StockLedgerEntry.batch_id.is_not(None),
         )
-    ).scalars()
-    return [
-        CancellationDependency("consumo de inventario", str(row.voucher_id), str(row.voucher_type))
-        for row in consumed
-        if _stock_consumption_is_active(row.voucher_type, row.voucher_id)
-    ]
+    ).all()
+    for company, item_code, warehouse, batch_id in inbound_batches:
+        consumed_rows = database.session.execute(
+            select(StockLedgerEntry.voucher_type, StockLedgerEntry.voucher_id).where(
+                StockLedgerEntry.company == company,
+                StockLedgerEntry.item_code == item_code,
+                StockLedgerEntry.warehouse == warehouse,
+                StockLedgerEntry.batch_id == batch_id,
+                StockLedgerEntry.is_cancelled.is_(False),
+                StockLedgerEntry.qty_change < 0,
+                StockLedgerEntry.voucher_id != source_id,
+            )
+        ).all()
+        for voucher_type, voucher_id in consumed_rows:
+            key = (str(voucher_type), str(voucher_id))
+            if key in seen or not _stock_consumption_is_active(key[0], key[1]):
+                continue
+            seen.add(key)
+            dependencies.append(CancellationDependency("consumo de inventario por lote", key[1], key[0]))
+
+    return dependencies
 
 
 def _stock_consumption_is_active(voucher_type: str, voucher_id: str) -> bool:

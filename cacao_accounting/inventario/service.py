@@ -232,12 +232,7 @@ def create_batch(params: BatchParams) -> Batch:
 
 
 def batch_balance_rows(batch_id: str, companies: list[str] | None = None) -> list[dict[str, Any]]:
-    """Devuelve el saldo de un lote por bodega desde el ledger físico.
-
-    Usa el predicado compartido que excluye los pares de anulación del mismo
-    período, de modo que el saldo mostrado coincida con el validado por
-    :func:`_validate_batch` al emitir salidas por lote.
-    """
+    """Devuelve el saldo de un lote por bodega desde el ledger f?sico."""
     from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
 
     query = select(
@@ -252,6 +247,19 @@ def batch_balance_rows(batch_id: str, companies: list[str] | None = None) -> lis
         {"warehouse": warehouse, "balance_qty": _decimal_value(qty), "stock_value": _decimal_value(value)}
         for warehouse, qty, value in rows
     ]
+
+
+def get_batch_qty(batch_id: str, warehouse: str, company: str | None = None) -> Decimal:
+    """Saldo de lote en bodega desde SLE activo (excluye anulaciones)."""
+    from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
+
+    query = select(func.coalesce(func.sum(StockLedgerEntry.qty_change), 0)).where(
+        StockLedgerEntry.batch_id == batch_id,
+        StockLedgerEntry.warehouse == warehouse,
+    )
+    if company:
+        query = query.where(StockLedgerEntry.company == company)
+    return _decimal_value(database.session.execute(exclude_cancelled_stock_entries(query)).scalar_one())
 
 
 def _factor_conversion_uom(factor: Decimal) -> Decimal:
