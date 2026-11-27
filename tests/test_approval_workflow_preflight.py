@@ -252,6 +252,53 @@ def _create_fiscal_year_closing_case(company: str) -> dict[str, str]:
     return {"company": company, "fiscal_year_id": fiscal_year.id, "requester_id": requester_id, "approver_id": approver_id}
 
 
+def _create_manual_approval_case(company: str) -> tuple[dict[str, str], ComprobanteContable]:
+    """Create an open-period manual journal governed by an independent approver."""
+    case = _create_fiscal_year_closing_case(company)
+    fiscal_year = database.session.get(FiscalYear, case["fiscal_year_id"])
+    period = database.session.execute(
+        database.select(AccountingPeriod).where(AccountingPeriod.fiscal_year_id == case["fiscal_year_id"])
+    ).scalar_one()
+    assert fiscal_year is not None
+    fiscal_year.is_closed = False
+    period.is_closed = False
+    book = database.session.execute(database.select(Book).filter_by(entity=company)).scalar_one()
+    income = database.session.execute(database.select(Accounts).filter_by(code=f"INC-{company}")).scalar_one()
+    retained_earnings = database.session.execute(database.select(Accounts).filter_by(code=f"RET-{company}")).scalar_one()
+    currency = f"N{company[1:]}"
+    journal = create_journal_draft(
+        {
+            "company": company,
+            "posting_date": "2025-12-31",
+            "books": [book.code],
+            "reference": f"APPROVAL-{uuid4().hex[:8]}",
+            "transaction_currency": currency,
+            "base_currency": currency,
+            "exchange_rate": "1",
+            "lines": [
+                {"order": 1, "account": retained_earnings.code, "debit": "100", "credit": ""},
+                {"order": 2, "account": income.code, "debit": "", "credit": "100"},
+            ],
+        },
+        user_id=case["requester_id"],
+    )
+    database.session.commit()
+    return case, journal
+
+
+def _request_manual_journal_approval(case: dict[str, str], journal: ComprobanteContable) -> ApprovalRequest:
+    """Create the pending request and set the status assigned by the submit route."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    requester = database.session.get(User, case["requester_id"])
+    assert requester is not None
+    journal.status = "Pending Approval"
+    approval_request = ApprovalEngine.request_approval(journal, actor=requester)
+    assert approval_request is not None
+    database.session.commit()
+    return approval_request
+
+
 def test_independent_approval_rejects_unsupported_postings_before_draft(cloud_app):
     """Petty cash still blocks before creating evidence when its flow is unsupported."""
     company = f"E{uuid4().hex[:8]}"
@@ -319,6 +366,70 @@ def test_fiscal_year_close_waits_for_independent_approval_and_posts_once(cloud_a
         assert fiscal_year.financial_closed is True
         assert fiscal_year.closing_voucher_id == journal.id
         assert database.session.execute(database.select(GLEntry.id).where(GLEntry.voucher_id == journal.id)).scalars().all()
+
+
+def test_pending_manual_journal_posts_only_after_independent_approval(request):
+    """An approved pending journal posts in the approval transaction."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    with request.getfixturevalue("cloud_app").app_context():
+        case, journal = _create_manual_approval_case(f"E{uuid4().hex[:8]}")
+        approval_request = _request_manual_journal_approval(case, journal)
+        requester = database.session.get(User, case["requester_id"])
+        approver = database.session.get(User, case["approver_id"])
+        assert requester is not None and approver is not None
+
+        with pytest.raises(JournalValidationError, match="Solo se puede contabilizar"):
+            submit_journal(journal.id, user_id=case["requester_id"])
+        database.session.rollback()
+        journal = database.session.get(ComprobanteContable, journal.id)
+        approval_request = database.session.get(ApprovalRequest, approval_request.id)
+        assert journal is not None and approval_request is not None
+        assert journal.status == "Pending Approval"
+        assert approval_request.status == "Pending Approval"
+
+        assert ApprovalEngine.approve(journal, approver, "Aprobación independiente", request=approval_request) is True
+        database.session.commit()
+
+        database.session.refresh(journal)
+        database.session.refresh(approval_request)
+        entries = database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id == journal.id)).scalars().all()
+        assert journal.status == "submitted"
+        assert approval_request.status == "Approved"
+        assert len(entries) == 2
+        assert sum((entry.debit for entry in entries), Decimal("0")) == Decimal("100.0000")
+        assert sum((entry.credit for entry in entries), Decimal("0")) == Decimal("100.0000")
+
+
+def test_rejected_pending_manual_journal_returns_to_editable_draft(request):
+    """Rejecting a pending manual journal unlocks correction and a new request."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    with request.getfixturevalue("cloud_app").app_context():
+        case, journal = _create_manual_approval_case(f"E{uuid4().hex[:8]}")
+        original_request = _request_manual_journal_approval(case, journal)
+        approver = database.session.get(User, case["approver_id"])
+        assert approver is not None
+
+        ApprovalEngine.reject(journal, approver, "Corregir detalle", request=original_request)
+        database.session.commit()
+
+        database.session.refresh(journal)
+        database.session.refresh(original_request)
+        assert original_request.status == "Rejected"
+        assert journal.status == "draft"
+        assert database.session.execute(database.select(GLEntry.id).where(GLEntry.voucher_id == journal.id)).first() is None
+
+        edited_payload = serialize_journal_for_form(journal)
+        edited_payload["memo"] = "Detalle corregido"
+        update_journal_draft(journal.id, edited_payload, case["requester_id"])
+        revised_request = ApprovalEngine.request_approval(
+            journal,
+            actor=database.session.get(User, case["requester_id"]),
+        )
+        assert revised_request is not None
+        assert revised_request.id != original_request.id
+        assert revised_request.status == "Pending Approval"
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="La prueba de concurrencia no es fiable en Windows.")

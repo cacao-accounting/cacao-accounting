@@ -1234,6 +1234,15 @@ class ApprovalEngine:
             if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
                 raise ValueError(_("La solicitud de aprobación no está pendiente."))
             req.status = "Rejected"
+            if (
+                req.document_type == doctype == "journal_entry"
+                and getattr(document, "status", None) == PENDING_APPROVAL_STATUS
+            ):
+                document.status = "draft"
+                database.session.add(document)
+                from cacao_accounting.audit_trail_service import log_reject
+
+                log_reject(document)
             database.session.flush()
         if req.document_type == doctype:
             from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target

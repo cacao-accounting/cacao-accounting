@@ -3952,8 +3952,10 @@ def contabilizar_comprobante(identifier: str):
 
     try:
         if ApprovalEngine.is_enabled(journal.entity):
+            journal.status = "Pending Approval"
             approval_request = ApprovalEngine.request_approval(journal, actor=current_user)
             if approval_request is None:
+                journal.status = "draft"
                 flash(
                     _("No existe una regla de aprobación que cubra este monto. El documento permanece en borrador."),
                     "warning",

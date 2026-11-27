@@ -296,17 +296,21 @@ def _process_recurrent_application(journal: ComprobanteContable, commit: bool) -
 
 
 def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = None) -> list[Any]:
-    """Contabiliza un comprobante manual en borrador."""
+    """Contabiliza un comprobante en borrador o tras su aprobación independiente."""
     journal = get_journal(journal_id)
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
-    if journal.status != JOURNAL_STATUS_DRAFT:
-        raise JournalValidationError(_("Solo se puede contabilizar un comprobante en borrador."))
 
     from cacao_accounting.internal_control_service import audit_actor, current_audit_actor
 
     actor_id = user_id or current_audit_actor()[0]
-    from cacao_accounting.approval_engine import assert_execution_authorized
+    from cacao_accounting.approval_engine import PENDING_APPROVAL_STATUS, assert_execution_authorized, execution_actor
+
+    approved_pending_submission = journal.status == PENDING_APPROVAL_STATUS and execution_actor(str(journal.id)) == str(
+        actor_id
+    )
+    if journal.status != JOURNAL_STATUS_DRAFT and not approved_pending_submission:
+        raise JournalValidationError(_("Solo se puede contabilizar un comprobante en borrador."))
 
     assert_execution_authorized(journal, actor_id=actor_id)
     if not actor_id:
