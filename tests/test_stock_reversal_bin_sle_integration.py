@@ -170,7 +170,7 @@ def test_reversa_revalida_bin_refrescado_bajo_lock(app):
 
         token = _LEDGER_CANCELLATION_ACTIVE.set(("Stock Entry", se.id))
         try:
-            with pytest.raises(PostingError):
+            with pytest.raises(PostingError, match="stock negativo"):
                 with authorized_posting():
                     _cancel_stock_movements_if_needed(se, "cacao", "Stock Entry", se.id, sle.posting_date)
             database.session.rollback()
@@ -181,3 +181,13 @@ def test_reversa_revalida_bin_refrescado_bajo_lock(app):
             database.select(StockBin).filter_by(company="cacao", item_code="ART-1868R", warehouse="BOD-1868R")
         ).scalar_one()
         assert Decimal(str(bin_row.actual_qty)) == Decimal("2")
+
+
+def test_mensaje_de_reversa_tiene_traduccion_inglesa():
+    """#1868: el mensaje de reversa conserva español correcto y traducción."""
+    from pathlib import Path as FilePath
+
+    catalogo = FilePath(__file__).parents[1] / "cacao_accounting/translations/en/LC_MESSAGES/messages.po"
+    contenido = catalogo.read_text(encoding="utf-8")
+    assert "La reversa de stock dejaría el bin con cantidad negativa" in contenido
+    assert "Reversing the stock movement would leave the bin with a negative quantity" in contenido

@@ -4346,7 +4346,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
         allow_negative = bool(getattr(item, "allow_negative_stock", False)) if item else False
         if not allow_negative and current_qty + qty_change < 0:
             raise PostingError(
-                _("La reversa de stock dejar?a el bin con cantidad negativa para %(item)s en %(wh)s.")
+                _("La reversa de stock dejaría el bin con cantidad negativa para %(item)s en %(wh)s.")
                 % {"item": movement.item_code, "wh": movement.warehouse}
             )
     qty_after, stock_value_after = _upsert_stock_bin(
@@ -4459,7 +4459,7 @@ def _reject_negative_stock(projected: dict[tuple[str, str, str], Decimal], items
             raise PostingError(
                 _(
                     "No se puede cancelar el movimiento de %(item_name)s: "
-                    "la bodega %(warehouse)s quedar?a con stock negativo."
+                    "la bodega %(warehouse)s quedaría con stock negativo."
                 )
                 % {"item_name": item.name, "warehouse": key[2]}
             )
