@@ -126,3 +126,31 @@ def test_relacion_activa_es_la_unica_que_descuenta(entorno_contable_aislado):
 
         assert compute_outstanding_amount(invoice, as_of_date=FECHA) == Decimal("60")
         assert compute_payment_unallocated_amount(payment) == Decimal("0")
+
+
+def test_relacion_con_otro_pago_destino_no_descuenta(entorno_contable_aislado):
+    """El ítem referenciado no basta si el endpoint documental es otro pago."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        invoice_id = _invoice()
+        reference = _reference(invoice_id)
+        database.session.add(
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=invoice_id,
+                target_type="payment_entry",
+                target_id="OTRO-PAGO",
+                target_item_id=str(reference.id),
+                company="cacao",
+                qty=Decimal("40"),
+                amount=Decimal("40"),
+                relation_type="payment_allocation",
+                status="active",
+            )
+        )
+        database.session.commit()
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        payment = database.session.get(PaymentEntry, reference.payment_id)
+
+        assert compute_outstanding_amount(invoice, as_of_date=FECHA) == Decimal("100")
+        assert compute_payment_unallocated_amount(payment) == Decimal("40")

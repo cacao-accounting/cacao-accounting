@@ -332,7 +332,7 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
         select(PaymentReference)
         .join(
             DocumentRelation,
-            DocumentRelation.target_item_id == PaymentReference.id,
+            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_id == PaymentEntry.id),
         )
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
