@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cacao_accounting.database import Book, Currency, Entity, database
+from cacao_accounting.default_scope import lock_default_scope
 
 
 from cacao_accounting.i18n import _
@@ -62,7 +63,7 @@ class CurrencyGuard:
     def _clear_other_defaults(self, code: str) -> None:
         """Retira el indicador predeterminado de las demás monedas."""
         current_defaults = database.session.execute(
-            database.select(Currency).filter(Currency.code != code, Currency.default.is_(True))
+            database.select(Currency).filter(Currency.code != code, Currency.default.is_(True)).with_for_update()
         ).scalars()
         for current_default in current_defaults:
             current_default.default = False
@@ -72,6 +73,7 @@ class CurrencyGuard:
         if default and not active:
             raise CurrencyGuardError(_("La moneda predeterminada del sistema debe permanecer activa."))
         if default:
+            lock_default_scope("currency_default")
             self._clear_other_defaults(currency.code)
         currency.active = active
         currency.default = default
@@ -83,6 +85,7 @@ class CurrencyGuard:
         if not active:
             self.assert_can_deactivate(currency)
         if default:
+            lock_default_scope("currency_default")
             self._clear_other_defaults(currency.code)
         currency.active = active
         currency.default = default

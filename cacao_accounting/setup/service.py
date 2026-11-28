@@ -26,6 +26,7 @@ from cacao_accounting.contabilidad.ctas import (
     cargar_catalogos,
 )
 from cacao_accounting.database import CacaoConfig, Entity, database
+from cacao_accounting.default_scope import lock_default_scope
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.setup.catalogs import normalize_language
@@ -241,7 +242,8 @@ def _activate_and_set_default_currency(currency_code: str) -> None:
     if not currency_code:
         return
 
-    currencies = list(database.session.execute(database.select(Currency)).scalars().all())
+    lock_default_scope("currency_default")
+    currencies = list(database.session.execute(database.select(Currency).with_for_update()).scalars().all())
     selected_currency = next((currency for currency in currencies if currency.code == currency_code), None)
     if selected_currency is None:
         selected_currency = Currency(code=currency_code, name=currency_code, decimals=2, active=True, default=True)
