@@ -2416,8 +2416,11 @@ def _prepare_sales_invoice_creation() -> dict[str, Any]:
 def _build_sales_invoice_from_context(context: dict[str, Any]) -> SalesInvoice:
     """Construye el documento de venta con los valores normalizados del formulario."""
     document_type = context["document_type"]
+    customer_id = request.form.get("customer_id") or None
+    customer = _validated_customer(customer_id, request.form.get("company") or None)
     return SalesInvoice(
-        customer_id=request.form.get("customer_id") or None,
+        customer_id=customer_id,
+        customer_name=customer.name if customer else None,
         company=request.form.get("company") or None,
         posting_date=context["posting_date"],
         document_type=document_type,
@@ -2567,7 +2570,7 @@ def _handle_sales_invoice_edit_post(registro):
     inmutables despues de la creacion; se preservan del registro existente.
     """
     try:
-        _validated_customer(request.form.get("customer_id") or None, registro.company)
+        customer = _validated_customer(request.form.get("customer_id") or None, registro.company)
         requested_company = request.form.get("company") or registro.company
         if requested_company != registro.company:
             flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
@@ -2576,6 +2579,7 @@ def _handle_sales_invoice_edit_post(registro):
         revert_relations_for_target("sales_invoice", registro.id, reason="draft_edited")
         refresh_source_caches_for_target("sales_invoice", registro.id)
         registro.customer_id = request.form.get("customer_id") or None
+        registro.customer_name = customer.name if customer else None
         registro.company = requested_company
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
