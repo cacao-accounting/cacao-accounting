@@ -3144,6 +3144,55 @@ def compras_recepcion_cancel(receipt_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
 
+def _note_source_invoices(company: str | None, companies: list[str] | None = None) -> list[dict[str, str]]:
+    """Facturas aprobadas que pueden originar una nota de crédito o débito (#1795)."""
+    consulta = database.select(PurchaseInvoice).where(
+        PurchaseInvoice.docstatus == 1,
+        PurchaseInvoice.document_type == PURCHASE_INVOICE,
+        PurchaseInvoice.is_return.is_(False),
+    )
+    if company:
+        consulta = consulta.where(PurchaseInvoice.company == company)
+    elif companies:
+        consulta = consulta.where(PurchaseInvoice.company.in_(companies))
+    else:
+        return []
+    facturas = (
+        database.session.execute(consulta.order_by(PurchaseInvoice.posting_date.desc(), PurchaseInvoice.document_no).limit(50))
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": factura.id,
+            "label": " — ".join(
+                filter(
+                    None,
+                    [
+                        factura.document_no or factura.id,
+                        factura.supplier_name or "",
+                        str(factura.posting_date or ""),
+                    ],
+                )
+            ),
+        }
+        for factura in facturas
+    ]
+
+
+def _note_source_invoices_for_form(
+    document_type: str,
+    from_invoice_id: str | None,
+    company_id: str | None,
+    company_choices: list[tuple[str, str]],
+) -> list[dict[str, str]]:
+    """Candidatas para el selector de factura origen de una nota (#1795)."""
+    if document_type not in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE} or from_invoice_id:
+        return []
+    authorized_companies = [code for code, _label in company_choices if code]
+    return _note_source_invoices(company_id or None, authorized_companies)
+
+
 @compras.route("/purchase-invoice/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -3182,6 +3231,9 @@ def compras_factura_compra_nuevo():
         uoms=uoms_disponibles,
         company_id=company_id,
     )
+    note_source_invoices = _note_source_invoices_for_form(
+        document_type, from_invoice_id, company_id, formulario.company.choices
+    )
     if from_order_id or from_receipt_id or from_invoice_id:
         initial_source_type = "purchase_invoice"
         if from_order_id:
@@ -3217,6 +3269,7 @@ def compras_factura_compra_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        note_source_invoices=note_source_invoices,
     )
 
 

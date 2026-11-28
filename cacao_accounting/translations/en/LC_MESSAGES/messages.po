@@ -28603,3 +28603,15 @@ msgstr "The inventory account is required for the warehouse configuration."
 
 msgid "Este tipo de documento no admite descripción por línea."
 msgstr "This document type does not accept a line description."
+
+msgid "Factura de compra origen"
+msgstr "Source purchase invoice"
+
+msgid "Seleccione una factura aprobada"
+msgstr "Select an approved invoice"
+
+msgid "Cargar factura"
+msgstr "Load invoice"
+
+msgid "No hay facturas de compra aprobadas para la compañía seleccionada."
+msgstr "There are no approved purchase invoices for the selected company."

@@ -22,6 +22,31 @@
   </ol>
 </nav>
 
+{% if document_type in ('purchase_credit_note', 'purchase_debit_note') and not from_invoice_id and not edit %}
+<div class="ca-card p-3 mb-3">
+  <form method="get" class="row g-2 align-items-end">
+    <input type="hidden" name="document_type" value="{{ document_type }}">
+    <div class="col-md-9">
+      <label class="form-label" for="note_source_invoice">{{ _('Factura de compra origen') }}</label>
+      <select class="form-select" id="note_source_invoice" name="from_invoice" required>
+        <option value="">{{ _('Seleccione una factura aprobada') }}</option>
+        {% for invoice in note_source_invoices %}
+        <option value="{{ invoice.id }}">{{ invoice.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <button class="btn btn-primary w-100" type="submit">{{ _('Cargar factura') }}</button>
+    </div>
+  </form>
+  {% if not note_source_invoices %}
+  <div class="alert alert-warning mt-2 mb-0" role="alert">
+    {{ _('No hay facturas de compra aprobadas para la compañía seleccionada.') }}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
