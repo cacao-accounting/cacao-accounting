@@ -138,3 +138,96 @@ def test_non_admin_cannot_change_company_assignments(cloud_admin_access_app):
     with app.app_context():
         rows = database.session.execute(select(UserCompanyAccess.company_code).filter_by(user_id=target)).scalars().all()
         assert company in rows
+
+
+def test_revocaciones_concurrentes_conservan_un_admin_recuperable(tmp_path, monkeypatch):
+    """#2321: dos admins no pueden revocar a la vez el último acceso de la compañía."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, BrokenBarrierError
+
+    from cacao_accounting import create_app
+    from cacao_accounting.admin import services as admin_services
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.database import Currency
+
+    database_uri = f"sqlite:///{tmp_path / 'admin-access-2321.sqlite'}"
+    settings = {
+        **configuracion,
+        "SQLALCHEMY_DATABASE_URI": database_uri,
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "TESTING": True,
+        "MODO_ESCRITORIO": False,
+    }
+    writer = create_app(settings)
+    reader = create_app(settings)
+    company = f"A{uuid4().hex[:7].upper()}"
+    admin_ids = [f"adm2321-a-{uuid4().hex[:6]}", f"adm2321-b-{uuid4().hex[:6]}"]
+    with writer.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code=company,
+                name=company,
+                company_name=company,
+                tax_id=f"T{company}",
+                currency="NIO",
+                enabled=True,
+                status="activo",
+            )
+        )
+        admin_role = Roles(name="admin", note="Administrador")
+        database.session.add(admin_role)
+        database.session.flush()
+        for uid in admin_ids:
+            user = User(id=uid, user=uid, name="Admin", active=True, classification="admin")
+            user.password = proteger_passwd("Admin123!Test")
+            database.session.add(user)
+            database.session.flush()
+            database.session.add(RolesUser(user_id=uid, role_id=admin_role.id, active=True))
+            database.session.add(UserCompanyAccess(user_id=uid, company_code=company))
+        database.session.commit()
+
+    barrier = Barrier(2)
+    choose_barrier = Barrier(2)
+    original_check = admin_services._company_has_recoverable_admin
+
+    def _synchronized_check(company_code: str, *, exclude_user_id: str | None = None) -> bool:
+        try:
+            choose_barrier.wait(timeout=0.2)
+        except BrokenBarrierError:
+            pass
+        return original_check(company_code, exclude_user_id=exclude_user_id)
+
+    monkeypatch.setattr(admin_services, "_company_has_recoverable_admin", _synchronized_check)
+
+    def _revoke(app, user_id: str) -> str:
+        with app.app_context():
+            barrier.wait(timeout=10)
+            try:
+                admin_services.replace_user_company_access(user_id, set())
+            except ValueError:
+                database.session.rollback()
+                return "rejected"
+            return "revoked"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(_revoke, writer, admin_ids[0]),
+            executor.submit(_revoke, reader, admin_ids[1]),
+        ]
+        results = [future.result(timeout=30) for future in futures]
+
+    assert sorted(results) == ["rejected", "revoked"]
+    with writer.app_context():
+        database.session.expire_all()
+        remaining = database.session.execute(select(UserCompanyAccess.user_id).filter_by(company_code=company)).scalars().all()
+        assert len(remaining) == 1
+        assert remaining[0] in admin_ids
+        database.session.remove()
+        database.engine.dispose()
+    with reader.app_context():
+        database.session.remove()
+        database.engine.dispose()

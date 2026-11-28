@@ -110,10 +110,17 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
     removed = [assignment for code, assignment in existing.items() if code not in company_codes]
     added = company_codes.difference(existing)
 
-    # #2321: en Cloud, no dejar una compa??a sin admin autorizado para recuperar acceso.
+    # #2321: en Cloud, no dejar una compañía sin admin autorizado para recuperar acceso.
     if removed and _is_admin_state(
         target, active=bool(target.active), classification=target.classification, role_ids=_user_role_ids(target)
     ):
+        from cacao_accounting.default_scope import lock_default_scopes
+
+        # #2321: las filas de usuario no serializan revocaciones de admins
+        # distintos sobre la misma compañía. El lock de ámbito se toma antes
+        # de comprobar recuperadores y de borrar asignaciones; en SQLite usa
+        # BEGIN IMMEDIATE y en PostgreSQL una fila bloqueada por compañía.
+        lock_default_scopes("company_admin_access", [(assignment.company_code,) for assignment in removed])
         for assignment in removed:
             if not _company_has_recoverable_admin(assignment.company_code, exclude_user_id=user_id):
                 raise ValueError(
