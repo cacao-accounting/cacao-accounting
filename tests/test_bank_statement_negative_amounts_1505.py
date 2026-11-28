@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pytest
+from flask_babel import force_locale
 
 from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
 
@@ -46,3 +47,19 @@ def test_build_document_rejects_negative_amounts_no_partial_import(app):
                 ],
                 {"company_id": "E1"},
             )
+
+
+@pytest.mark.parametrize("field", ["deposit", "withdrawal"])
+def test_build_document_persists_translated_negative_amount_error(app, field: str):
+    """El error de construcción conserva el msgid traducido y no importa la fila."""
+    row = {
+        "bank_account_id": "ba1",
+        "posting_date": "2026-11-01",
+        "deposit": "100.00",
+        "withdrawal": "50.00",
+    }
+    row[field] = "-1.00"
+    with app.app_context(), force_locale("en"):
+        with pytest.raises(ValueError) as error:
+            BankStatementAdapter().build_document([row], {"company_id": "E1"})
+    assert str(error.value) == f"The bank amount in column '{field}' cannot be negative."

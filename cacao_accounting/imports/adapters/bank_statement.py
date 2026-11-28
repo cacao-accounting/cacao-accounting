@@ -203,8 +203,9 @@ class BankStatementAdapter(BaseImportAdapter):
                 raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
             deposit = self._optional_amount(row.get("deposit"))
             withdrawal = self._optional_amount(row.get("withdrawal"))
-            if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
-                raise ValueError(_("El monto bancario en columnas 'deposit'/'withdrawal' no puede ser negativo."))
+            for field, amount in (("deposit", deposit), ("withdrawal", withdrawal)):
+                if amount is not None and amount < 0:
+                    raise ValueError(_("El monto bancario en columna '%(field)s' no puede ser negativo.") % {"field": field})
             reference_number = _text(row.get("reference_number") or row.get("reference"))
             if not reference_number and not fingerprint:
                 raise ValueError(
