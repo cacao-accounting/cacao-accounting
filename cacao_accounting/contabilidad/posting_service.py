@@ -5252,9 +5252,19 @@ def _get_stock_entry_line_amount(document: StockEntry, line: StockEntryItem, pur
     return Decimal("0")
 
 
+def _inventory_warehouse_for_purpose(document: StockEntry, line: StockEntryItem, purpose: str) -> str | None:
+    """Resuelve la bodega efectiva del movimiento para la cuenta de inventario."""
+    if purpose in {"material_issue", "adjustment_negative"}:
+        return line.source_warehouse or document.from_warehouse
+    if purpose in {"material_receipt", "adjustment_positive"}:
+        return line.target_warehouse or document.to_warehouse
+    return line.warehouse or line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
+
+
 def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
     """Get the inventory account for a stock entry line."""
-    account = _warehouse_inventory_account_id(document, line, company)
+    warehouse = _inventory_warehouse_for_purpose(document, line, purpose)
+    account = warehouse_inventory_account_id(warehouse, company)
     return _require_account(account, "Falta la cuenta de inventario para la linea de stock.")
 
 
