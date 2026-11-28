@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Currency, DeliveryNote, Party, SalesInvoice, SalesOrder, database
+from cacao_accounting.database import Currency, DeliveryNote, DocumentRelation, Party, SalesInvoice, SalesOrder, database
 from cacao_accounting.ventas import services
 
 
@@ -81,7 +81,18 @@ def sales_note_sources(entorno_contable_aislado, monkeypatch):
             transaction_currency="EUR",
             base_currency="NIO",
         )
-        database.session.add_all([source_delivery, unrelated_usd_delivery, unrelated_eur_delivery])
+        sibling_delivery = DeliveryNote(
+            company="cacao",
+            posting_date=date(2026, 5, 7),
+            docstatus=1,
+            document_no=f"DN-SIBLING-{suffix}",
+            customer_id=customer.id,
+            customer_name=customer.name,
+            sales_order_id=source_order.id,
+            transaction_currency="USD",
+            base_currency="NIO",
+        )
+        database.session.add_all([source_delivery, unrelated_usd_delivery, unrelated_eur_delivery, sibling_delivery])
         database.session.flush()
         source_invoice = SalesInvoice(
             company="cacao",
@@ -108,6 +119,7 @@ def sales_note_sources(entorno_contable_aislado, monkeypatch):
             "order_id": str(source_order.id),
             "unrelated_order_id": str(unrelated_order.id),
             "delivery_id": str(source_delivery.id),
+            "sibling_delivery_id": str(sibling_delivery.id),
             "unrelated_usd_delivery_id": str(unrelated_usd_delivery.id),
             "unrelated_eur_delivery_id": str(unrelated_eur_delivery.id),
         }
@@ -211,3 +223,78 @@ def test_rejects_note_currency_that_differs_from_reversal_invoice(sales_note_sou
         )
         with pytest.raises(ValueError, match="deben usar la misma moneda"):
             services._validate_sales_reversal_document(note)
+
+
+def test_rejects_sibling_delivery_that_only_shares_the_order(sales_note_sources):
+    """#2354: una entrega parcial B de la misma orden no pertenece a la factura A."""
+    sources = sales_note_sources
+    app = sources["app"]
+    with (
+        app.app_context(),
+        app.test_request_context(
+            "/sales/sales-invoice/new",
+            method="POST",
+            data=_credit_note_form(sources, from_note=sources["sibling_delivery_id"]),
+        ),
+    ):
+        before = database.session.execute(database.select(SalesInvoice.id)).scalars().all()
+        with pytest.raises(ValueError, match="no pertenece al flujo de la factura origen"):
+            services._prepare_sales_invoice_creation()
+        after = database.session.execute(database.select(SalesInvoice.id)).scalars().all()
+
+    assert after == before
+
+
+def test_submit_rejects_sibling_delivery_without_partial_write(sales_note_sources):
+    """La validación de envío aplica el mismo criterio y no persiste la nota."""
+    sources = sales_note_sources
+    app = sources["app"]
+    with app.app_context():
+        invoice = database.session.get(SalesInvoice, sources["invoice_id"])
+        assert invoice is not None
+        note = SalesInvoice(
+            company="cacao",
+            customer_id=sources["customer_id"],
+            document_type="sales_credit_note",
+            transaction_currency="USD",
+            reversal_of=invoice.id,
+            sales_order_id=sources["order_id"],
+            delivery_note_id=sources["sibling_delivery_id"],
+        )
+        before = database.session.execute(database.select(SalesInvoice.id)).scalars().all()
+        with pytest.raises(ValueError, match="no pertenece al flujo de la factura origen"):
+            services._validate_sales_reversal_document(note)
+        after = database.session.execute(database.select(SalesInvoice.id)).scalars().all()
+
+    assert after == before
+
+
+def test_delivery_relation_to_the_invoice_keeps_partial_notes_valid(sales_note_sources):
+    """Una entrega parcial vinculada por DocumentRelation sigue siendo un origen válido."""
+    sources = sales_note_sources
+    app = sources["app"]
+    with app.app_context():
+        invoice = database.session.get(SalesInvoice, sources["invoice_id"])
+        assert invoice is not None
+        database.session.add(
+            DocumentRelation(
+                source_type="delivery_note",
+                source_id=sources["sibling_delivery_id"],
+                target_type="sales_invoice",
+                target_id=invoice.id,
+                company="cacao",
+                qty=Decimal("1"),
+                amount=Decimal("10"),
+                relation_type="billing",
+                status="active",
+            )
+        )
+        database.session.commit()
+
+        services._validate_sales_reversal_source_links(
+            invoice,
+            sources["order_id"],
+            sources["sibling_delivery_id"],
+        )
+
+        assert services._sales_invoice_has_source_flow(invoice, "delivery_note", sources["sibling_delivery_id"])

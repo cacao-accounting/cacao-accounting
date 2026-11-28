@@ -2308,9 +2308,9 @@ def _sales_invoice_has_source_flow(invoice: SalesInvoice, source_type: str, sour
     elif source_type == "delivery_note":
         if invoice.delivery_note_id == source_id:
             return True
-        delivery = database.session.get(DeliveryNote, source_id)
-        if delivery is not None and invoice.sales_order_id and delivery.sales_order_id == invoice.sales_order_id:
-            return True
+        # #2354: compartir la orden no vincula la entrega con esta factura.
+        # Solo la entrega de cabecera o una relación documental activa cuentan;
+        # las entregas parciales legítimas se registran como DocumentRelation.
     else:
         return False
 
