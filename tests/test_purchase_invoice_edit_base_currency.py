@@ -18,19 +18,22 @@ from cacao_accounting.database import (
     Accounts,
     Book,
     CompanyParty,
+    Currency,
     GLEntry,
     Party,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseMatchingConfig,
+    User,
     database,
 )
 from cacao_accounting.fiscal_persistence_service import load_document_fiscal_lines
 
 
 @pytest.fixture
-def factura_con_base_obsoleta(app, entorno_contable):
-    """Factura borrador cuya base monetaria quedó desalineada de la compañía."""
+def factura_con_base_obsoleta(entorno_contable_aislado):
+    """Factura borrador aislada cuya base monetaria quedó desalineada de la compañía."""
+    app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:8]
     with app.app_context():
         configuracion = database.session.execute(
@@ -98,27 +101,46 @@ def factura_con_base_obsoleta(app, entorno_contable):
     yield ids
 
 
-def test_editar_factura_refresca_base_currency_desde_la_compania(app, authenticated_client, factura_con_base_obsoleta):
+def _cliente(app):
+    """Autentica al administrador de la aplicación aislada."""
+    with app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        admin_id, auth_version = admin.id, admin.auth_version
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = admin_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+    return client
+
+
+def _form(ids, currency: str) -> dict[str, str]:
+    """Payload HTTP completo para editar la factura borrador."""
+    return {
+        "version": str(ids["version"]),
+        "supplier_id": ids["proveedor"],
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "transaction_currency": currency,
+        "supplier_invoice_no": f"FAC-{ids['sufijo']}",
+        "item_code_0": "ART01",
+        "item_name_0": "Articulo Comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
+    }
+
+
+def test_editar_factura_refresca_base_currency_desde_la_compania(entorno_contable_aislado, factura_con_base_obsoleta):
     """Un snapshot de base monetaria obsoleto no sobrevive a la edición."""
     ids = factura_con_base_obsoleta
-    cliente = authenticated_client("admin")
+    app = entorno_contable_aislado.app
+    cliente = _cliente(app)
 
     respuesta = cliente.post(
         f"/buying/purchase-invoice/{ids['factura']}/edit",
-        data={
-            "version": str(ids["version"]),
-            "supplier_id": ids["proveedor"],
-            "company": "cacao",
-            "posting_date": "2026-05-15",
-            "transaction_currency": "NIO",
-            "supplier_invoice_no": f"FAC-{ids['sufijo']}",
-            "item_code_0": "ART01",
-            "item_name_0": "Articulo Comercial",
-            "qty_0": "2",
-            "uom_0": "UND",
-            "rate_0": "10",
-            "amount_0": "20",
-        },
+        data=_form(ids, "NIO"),
         follow_redirects=True,
     )
 
@@ -130,15 +152,11 @@ def test_editar_factura_refresca_base_currency_desde_la_compania(app, authentica
         assert factura.base_grand_total == factura.grand_total
 
 
-def test_impuesto_manual_en_compra_reconcilia_total_ap_y_gl(
-    app,
-    authenticated_client,
-    factura_con_base_obsoleta,
-    entorno_contable,
-):
+def test_impuesto_manual_en_compra_reconcilia_total_ap_y_gl(entorno_contable_aislado, factura_con_base_obsoleta):
     """Las rutas de crear y editar mantienen manual tax lines in AP and GL totals."""
     ids = factura_con_base_obsoleta
-    client = authenticated_client("admin")
+    app = entorno_contable_aislado.app
+    client = _cliente(app)
     with app.app_context():
         tax_account_id = database.session.execute(
             database.select(Accounts.id).where(Accounts.entity == "cacao", Accounts.code == "2105")
@@ -229,3 +247,85 @@ def test_impuesto_manual_en_compra_reconcilia_total_ap_y_gl(
             assert gl_entry.account_code == "2101"
             assert ap_book_entry.credit == Decimal("140.0000")
             assert gl_entry.credit == ap_book_entry.credit
+
+
+def test_editar_factura_acepta_moneda_activa_y_recalcula_base(entorno_contable_aislado, factura_con_base_obsoleta):
+    """Cambiar a una moneda activa persiste la moneda y su tasa histórica."""
+    ids = factura_con_base_obsoleta
+    app = entorno_contable_aislado.app
+    response = _cliente(app).post(
+        f"/buying/purchase-invoice/{ids['factura']}/edit",
+        data=_form(ids, "USD"),
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "Factura de compra actualizada correctamente." in response.get_data(as_text=True)
+    with app.app_context():
+        invoice = database.session.get(PurchaseInvoice, ids["factura"])
+        assert invoice.transaction_currency == "USD"
+        assert invoice.base_currency == "NIO"
+        assert invoice.exchange_rate == Decimal("36.5")
+        assert invoice.base_grand_total == invoice.grand_total * invoice.exchange_rate
+
+
+def test_editar_factura_rechaza_moneda_inactiva_sin_mutar(entorno_contable_aislado, factura_con_base_obsoleta):
+    """Una moneda inactiva no reemplaza el snapshot ni las líneas del borrador."""
+    ids = factura_con_base_obsoleta
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        database.session.add(Currency(code="OFF1822", name="Inactiva 1822", decimals=2, active=False, default=False))
+        database.session.commit()
+
+    response = _cliente(app).post(
+        f"/buying/purchase-invoice/{ids['factura']}/edit",
+        data=_form(ids, "OFF1822"),
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "La moneda seleccionada no existe o no está activa." in response.get_data(as_text=True)
+    with app.app_context():
+        invoice = database.session.get(PurchaseInvoice, ids["factura"])
+        assert invoice.transaction_currency == "NIO"
+        assert invoice.base_currency == "USD"
+        assert invoice.version == 1
+        active_items = (
+            database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(active_items) == 1
+
+
+def test_editar_factura_sin_tasa_revierte_cambio(entorno_contable_aislado, factura_con_base_obsoleta):
+    """La falta de tasa bloquea la edición y restaura cabecera y líneas."""
+    ids = factura_con_base_obsoleta
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        database.session.add(Currency(code="NEW1822", name="Sin tasa 1822", decimals=2, active=True, default=False))
+        database.session.commit()
+
+    response = _cliente(app).post(
+        f"/buying/purchase-invoice/{ids['factura']}/edit",
+        data=_form(ids, "NEW1822"),
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "No existe tipo de cambio" in response.get_data(as_text=True)
+    with app.app_context():
+        invoice = database.session.get(PurchaseInvoice, ids["factura"])
+        assert invoice.transaction_currency == "NIO"
+        assert invoice.base_currency == "USD"
+        assert invoice.version == 1
+        active_items = (
+            database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(active_items) == 1

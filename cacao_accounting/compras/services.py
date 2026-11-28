@@ -3646,6 +3646,19 @@ def _create_purchase_invoice_from_request():
     return None
 
 
+def _validated_purchase_invoice_currency(current_currency: str | None) -> str | None:
+    """Valida la moneda enviada o conservada antes de editar una factura."""
+    requested_currency = request.form.get("transaction_currency") or request.form.get("currency") or current_currency
+    currency = (
+        database.session.execute(database.select(Currency).filter_by(code=requested_currency)).scalar_one_or_none()
+        if requested_currency
+        else None
+    )
+    if requested_currency and (currency is None or currency.active is not True):
+        raise ValueError(_("La moneda seleccionada no existe o no está activa."))
+    return requested_currency
+
+
 def _handle_purchase_invoice_edit_post(registro):
     if _check_optimistic_version(registro):
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
@@ -3685,9 +3698,7 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no") or registro.supplier_invoice_no
         if "tax_template_id" in request.form:
             registro.tax_template_id = request.form.get("tax_template_id") or None
-        registro.transaction_currency = (
-            request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
-        )
+        registro.transaction_currency = _validated_purchase_invoice_currency(registro.transaction_currency)
         if registro.document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
             _validate_purchase_reversal_of(
                 registro.reversal_of or "",
