@@ -713,6 +713,28 @@ def build_sales_invoice_sample_context(user: Any = None, company: Any = None) ->
     return context
 
 
+def build_purchase_invoice_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample purchase invoice context."""
+    context = _sample_common_context()
+    context["invoice"] = {
+        "number": "PI-2026-00001",
+        "date": "2026-05-26",
+        "due_date": "2026-06-25",
+        "status": "posted",
+        "currency": "NIO",
+        "supplier": _sample_party("supplier"),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "discount": 0.0,
+        "taxes": 150.0,
+        "other_charges": 0.0,
+        "grand_total": 1150.0,
+        "amount_in_words": "One thousand one hundred fifty cordobas",
+        "notes": "Thank you for your purchase.",
+    }
+    return context
+
+
 def build_purchase_order_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
     """Build a sample purchase order context."""
     context = _sample_common_context()
@@ -721,7 +743,7 @@ def build_purchase_order_sample_context(user: Any = None, company: Any = None) -
         "date": "2026-05-26",
         "status": "posted",
         "currency": "NIO",
-        "supplier": _sample_party(),
+        "supplier": _sample_party("supplier"),
         "items": [_sample_line()],
         "subtotal": 1000.0,
         "taxes": 150.0,
@@ -789,7 +811,7 @@ def build_purchase_request_sample_context(user: Any = None, company: Any = None)
         "date": "2026-05-26",
         "status": "posted",
         "currency": "NIO",
-        "supplier": _sample_party(),
+        "supplier": _sample_party("supplier"),
         "items": [_sample_line()],
         "subtotal": 1000.0,
         "taxes": 150.0,
@@ -806,7 +828,7 @@ def build_supplier_quotation_sample_context(user: Any = None, company: Any = Non
         "date": "2026-05-26",
         "status": "posted",
         "currency": "NIO",
-        "supplier": _sample_party(),
+        "supplier": _sample_party("supplier"),
         "items": [_sample_line()],
         "subtotal": 1000.0,
         "taxes": 150.0,
@@ -823,7 +845,7 @@ def build_request_for_quotation_sample_context(user: Any = None, company: Any = 
         "date": "2026-05-26",
         "status": "posted",
         "currency": "NIO",
-        "supplier": _sample_party(),
+        "supplier": _sample_party("supplier"),
         "items": [_sample_line()],
         "subtotal": 1000.0,
         "taxes": 150.0,
@@ -840,7 +862,7 @@ def build_purchase_receipt_sample_context(user: Any = None, company: Any = None)
         "date": "2026-05-26",
         "status": "posted",
         "currency": "NIO",
-        "supplier": _sample_party(),
+        "supplier": _sample_party("supplier"),
         "items": [_sample_line()],
         "subtotal": 1000.0,
         "taxes": 150.0,
@@ -1048,7 +1070,17 @@ def _sample_common_context() -> dict[str, Any]:
     }
 
 
-def _sample_party() -> dict[str, str]:
+def _sample_party(party_type: str = "customer") -> dict[str, str]:
+    if party_type == "supplier":
+        return {
+            "code": "SUPP-001",
+            "legal_name": "Example Supplier S.A.",
+            "commercial_name": "Example Supplier",
+            "tax_id": "J0310000000003",
+            "address": "Managua, Nicaragua",
+            "phone": "+505 7777 0000",
+            "email": "supplier@example.com",
+        }
     return {
         "code": "CUST-001",
         "legal_name": "Example Customer S.A.",
