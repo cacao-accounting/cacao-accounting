@@ -6,13 +6,15 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from threading import Barrier
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import or_, update
+from sqlalchemy import create_engine, or_, text, update
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -163,6 +165,80 @@ def test_expiracion_gana_y_respuesta_no_sobrescribe(tmp_path):
             confirmation = database.session.get(BalanceConfirmation, confirmation_id)
             assert confirmation.status == "expired"
             assert filas == 0
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def _postgresql_uri() -> str:
+    """Devuelve la URI Tier 1 configurada o salta el caso fuera de CI."""
+    uri = str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
+    if not uri.startswith("postgresql"):
+        pytest.skip("La carrera expiración/respuesta se valida en PostgreSQL Tier 1.")
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+    return uri
+
+
+def _postgresql_app(uri: str):
+    """Crea la app en un esquema PostgreSQL aislado por ejecución."""
+    schema_name = f"bc_race_{uuid4().hex[:12]}"
+    bootstrap_engine = create_engine(uri)
+    with bootstrap_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
+    bootstrap_engine.dispose()
+    engine_options: Any = {
+        "pool_size": 4,
+        "max_overflow": 0,
+        "connect_args": {"options": f"-csearch_path={schema_name}"},
+    }
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_ENGINE_OPTIONS": cast(Any, engine_options),
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+            "SECRET_KEY": "isolated-balance-race-test",
+        }
+    )
+    with application.app_context():
+        database.create_all()
+    return application
+
+
+def test_carrera_expiracion_y_respuesta_en_postgresql():
+    """QA2 H1: la respuesta gana y el UPDATE condicional no la degrada en Tier 1."""
+    application = _postgresql_app(_postgresql_uri())
+    confirmation_id = _confirmacion(application, expira_en=timedelta(hours=1))
+    try:
+        filas, _ = _carrera(application, confirmation_id)
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert filas == 1
+            assert confirmation.status == "confirmed"
+            assert confirmation.response_type == "confirmed"
+            assert confirmation.responded_at is not None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_carrera_expiracion_gana_en_postgresql():
+    """QA2 H1: con la solicitud vencida la respuesta CAS no la reabre."""
+    application = _postgresql_app(_postgresql_uri())
+    confirmation_id = _confirmacion(application, expira_en=timedelta(seconds=-1))
+    try:
+        filas, _ = _carrera(application, confirmation_id)
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert filas == 0
+            assert confirmation.status == "expired"
+            assert confirmation.response_type is None
     finally:
         with application.app_context():
             database.session.remove()

@@ -17,6 +17,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     BalanceConfirmation,
     BalanceConfirmationInvitation,
+    CacaoConfig,
     Currency,
     Entity,
     Modules,
@@ -151,3 +152,20 @@ def test_enlace_vencido_sin_respuesta_marca_expirada(public_confirmation_scene):
     assert "ha expirado y ya no se permiten respuestas" in cuerpo
     with app.app_context():
         assert database.session.get(BalanceConfirmation, ids["confirmation"]).status == "expired"
+
+
+def test_la_vista_terminal_se_traduce_al_ingles(public_confirmation_scene):
+    """QA2 H4: el cierre de una respuesta terminal usa el catálogo inglés."""
+    app, ids = public_confirmation_scene
+    _responder(app, ids, "confirmed")
+    _vencer(app, ids["confirmation"])
+    with app.app_context():
+        database.session.add(CacaoConfig(key="SETUP_LANGUAGE", value="en"))
+        database.session.commit()
+
+    response = app.test_client().get(f"/confirm-balance/{ids['token']}")
+
+    cuerpo = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "This request was already answered on" in cuerpo
+    assert "and is closed." in cuerpo
