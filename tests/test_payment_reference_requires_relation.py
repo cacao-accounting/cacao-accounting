@@ -20,7 +20,7 @@ from cacao_accounting.database import (
     SalesInvoice,
     database,
 )
-from cacao_accounting.document_flow.payment import compute_outstanding_amount
+from cacao_accounting.document_flow.payment import compute_outstanding_amount, compute_payment_unallocated_amount
 
 FECHA = date(2026, 5, 15)
 
@@ -91,11 +91,13 @@ def test_referencia_huerfana_no_reduce_el_saldo(entorno_contable_aislado):
     app = entorno_contable_aislado.app
     with app.app_context():
         invoice_id = _invoice()
-        _reference(invoice_id)
+        reference = _reference(invoice_id)
         database.session.commit()
         invoice = database.session.get(SalesInvoice, invoice_id)
+        payment = database.session.get(PaymentEntry, reference.payment_id)
 
         assert compute_outstanding_amount(invoice, as_of_date=FECHA) == Decimal("100")
+        assert compute_payment_unallocated_amount(payment) == Decimal("40")
 
 
 def test_relacion_activa_es_la_unica_que_descuenta(entorno_contable_aislado):
@@ -120,5 +122,7 @@ def test_relacion_activa_es_la_unica_que_descuenta(entorno_contable_aislado):
         )
         database.session.commit()
         invoice = database.session.get(SalesInvoice, invoice_id)
+        payment = database.session.get(PaymentEntry, reference.payment_id)
 
         assert compute_outstanding_amount(invoice, as_of_date=FECHA) == Decimal("60")
+        assert compute_payment_unallocated_amount(payment) == Decimal("0")

@@ -15,8 +15,10 @@ import pytest
 from sqlalchemy import select
 
 from cacao_accounting.database import (
+    DocumentRelation,
     Party,
     PaymentEntry,
+    PaymentReference,
     PurchaseInvoice,
     SalesInvoice,
     database,
@@ -171,3 +173,70 @@ def test_carga_de_anticipo_rechaza_notas_del_modelo(entorno_contable_aislado):
 
         with pytest.raises(DocumentFlowError, match="subtipo"):
             _load_advance_invoice(note.id)
+
+
+def test_anticipo_ignora_referencia_huérfana_al_medir_remanente(entorno_contable_aislado):
+    """Una referencia sin relación no reduce la capacidad disponible del anticipo."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        customer_id, _supplier_id = _parties()
+        invoice = _sales_invoice(customer_id)
+        payment = _payment("receive", "customer", customer_id)
+        database.session.add(
+            PaymentReference(
+                payment_id=payment.id,
+                reference_type="sales_invoice",
+                reference_id=invoice.id,
+                allocated_amount=Decimal("80"),
+                payment_amount=Decimal("80"),
+                party_type="customer",
+                party_id=customer_id,
+                company="cacao",
+                currency="NIO",
+            )
+        )
+        database.session.flush()
+
+        outstanding, after, rate = _validate_advance_allocation(payment, invoice, customer_id, Decimal("25"), FECHA)
+
+        assert (outstanding, after, rate) == (Decimal("100"), Decimal("75"), Decimal("1"))
+
+
+def test_anticipo_descuenta_referencia_con_relacion_activa(entorno_contable_aislado):
+    """La capacidad solo se reduce cuando existe la relación canónica activa."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        customer_id, _supplier_id = _parties()
+        invoice = _sales_invoice(customer_id)
+        payment = _payment("receive", "customer", customer_id)
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            allocated_amount=Decimal("80"),
+            payment_amount=Decimal("80"),
+            party_type="customer",
+            party_id=customer_id,
+            company="cacao",
+            currency="NIO",
+        )
+        database.session.add(reference)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=invoice.id,
+                target_type="payment_entry",
+                target_id=str(payment.id),
+                target_item_id=str(reference.id),
+                company="cacao",
+                qty=Decimal("80"),
+                amount=Decimal("80"),
+                relation_type="payment_allocation",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        with pytest.raises(DocumentFlowError, match="remanente del anticipo"):
+            _validate_advance_allocation(payment, invoice, customer_id, Decimal("25"), FECHA)

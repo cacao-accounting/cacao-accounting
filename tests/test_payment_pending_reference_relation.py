@@ -119,12 +119,12 @@ def test_referencia_activa_consume_el_pago(entorno_contable_aislado):
         assert compute_payment_unallocated_amount(payment) == Decimal("70")
 
 
-def test_referencia_legacy_sin_relacion_conserva_su_consumo(entorno_contable_aislado):
-    """Una fila previa sin DocumentRelation mantiene el contrato anterior."""
+def test_referencia_legacy_sin_relacion_no_consume_el_pago(entorno_contable_aislado):
+    """Una fila huérfana no representa una aplicación efectiva del subledger."""
     app = entorno_contable_aislado.app
     with app.app_context():
         payment_id, customer_id = _payment()
         _reference(payment_id, customer_id, None)
         payment = database.session.get(PaymentEntry, payment_id)
 
-        assert compute_payment_unallocated_amount(payment) == Decimal("70")
+        assert compute_payment_unallocated_amount(payment) == Decimal("100")

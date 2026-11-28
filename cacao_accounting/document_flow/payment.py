@@ -576,11 +576,17 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
             PaymentReference.payment_amount,
             DocumentRelation.status,
         )
-        .outerjoin(
+        .join(
             DocumentRelation,
-            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == payment.id),
         )
-        .where(PaymentReference.payment_id == payment.id)
+        .where(
+            PaymentReference.payment_id == payment.id,
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == payment.company),
+        )
     ).all()
     if not reference_rows:
         return payment_total
@@ -606,11 +612,10 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
 
 
 def _pending_payment_reference_amount(payment: PaymentEntry, represented_reference_ids: set[Any]) -> Decimal:
-    """Suma referencias AR/AP pendientes cuya relación no fue revertida.
+    """Suma referencias AR/AP pendientes con relación canónica activa.
 
-    Una referencia revertida o cancelada no consume efectivo del pago aunque
-    todavía no tenga un evento ``allocation`` en AR/AP (#1404). Las referencias
-    legacy sin relación conservan el comportamiento previo.
+    Una referencia revertida, cancelada o huérfana no consume efectivo del pago
+    aunque todavía no tenga un evento ``allocation`` en AR/AP (#1304, #1404).
     """
     pending_reference_rows = database.session.execute(
         select(
@@ -619,31 +624,25 @@ def _pending_payment_reference_amount(payment: PaymentEntry, represented_referen
             PaymentReference.reference_type,
             PaymentReference.payment_amount,
             PaymentReference.allocated_amount,
-            DocumentRelation.status,
         )
-        .outerjoin(
+        .join(
             DocumentRelation,
-            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == payment.id),
         )
         .where(
             PaymentReference.payment_id == payment.id,
             ~PaymentReference.reference_id.in_(represented_reference_ids or {"__none__"}),
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == payment.company),
         )
     ).all()
-    amounts: dict[str, Decimal] = {}
-    statuses: dict[str, set[str]] = {}
-    for row in pending_reference_rows:
-        if not payment_reference_affects_arap(row.flow_source_type, row.reference_type):
-            continue
-        reference_key = str(row.id)
-        amounts[reference_key] = decimal_or_zero(row.payment_amount or row.allocated_amount)
-        if row.status:
-            statuses.setdefault(reference_key, set()).add(str(row.status))
     return sum(
         (
-            amount
-            for reference_key, amount in amounts.items()
-            if not statuses.get(reference_key) or "active" in statuses[reference_key]
+            decimal_or_zero(row.payment_amount or row.allocated_amount)
+            for row in pending_reference_rows
+            if payment_reference_affects_arap(row.flow_source_type, row.reference_type)
         ),
         Decimal("0"),
     )
@@ -1509,13 +1508,19 @@ def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoi
 
 
 def _advance_allocated_amount(payment_id: str) -> Decimal:
-    """Sum active advance applications, excluding reverted document relations."""
+    """Suma aplicaciones de anticipo con relación documental activa."""
     allocated = database.session.execute(
         select(func.coalesce(func.sum(func.coalesce(PaymentReference.payment_amount, PaymentReference.allocated_amount)), 0))
-        .outerjoin(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == payment_id),
+        )
         .where(
             PaymentReference.payment_id == payment_id,
-            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == PaymentReference.company),
         )
     ).scalar_one()
     return decimal_or_zero(allocated)

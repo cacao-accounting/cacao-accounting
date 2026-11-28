@@ -17,6 +17,7 @@ from sqlalchemy import select
 from cacao_accounting.contabilidad.arap_allocation import list_open_items
 from cacao_accounting.database import (
     ARAPLedgerEntry,
+    DocumentRelation,
     Party,
     PaymentEntry,
     PaymentReference,
@@ -99,18 +100,32 @@ def test_reembolso_descuenta_referencias_pendientes(entorno_contable_aislado):
     app = entorno_contable_aislado.app
     with app.app_context():
         payment = _payment("receive", "supplier", Decimal("100"))
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_credit_note",
+            reference_id="CN-1143",
+            allocated_amount=Decimal("40"),
+            payment_amount=Decimal("40"),
+            party_type="supplier",
+            party_id=payment.party_id,
+            company="cacao",
+        )
+        database.session.add(reference)
+        database.session.flush()
         database.session.add(
-            PaymentReference(
-                payment_id=payment.id,
-                reference_type="purchase_credit_note",
-                reference_id="CN-1143",
-                allocated_amount=Decimal("40"),
-                payment_amount=Decimal("40"),
-                party_type="supplier",
-                party_id=payment.party_id,
+            DocumentRelation(
+                source_type="purchase_credit_note",
+                source_id="CN-1143",
+                target_type="payment_entry",
+                target_id=str(payment.id),
+                target_item_id=str(reference.id),
+                company="cacao",
+                qty=Decimal("40"),
+                amount=Decimal("40"),
+                relation_type="payment_allocation",
+                status="active",
             )
         )
-        database.session.flush()
 
         assert compute_payment_unallocated_amount(payment) == Decimal("60")
 
