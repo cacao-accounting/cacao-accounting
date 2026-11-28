@@ -37,6 +37,7 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     TaxTemplate,
     UOM,
+    User,
     database,
 )
 from cacao_accounting.document_flow import create_document_relation
@@ -810,8 +811,13 @@ def test_edicion_factura_registra_cambio_de_origen_por_linea(app, authenticated_
 
 
 @pytest.fixture
-def factura_origen_uom(app, entorno_contable):
-    """Factura vinculada a una orden en BOX y otra orden en UND para probar la base."""
+def factura_origen_uom(entorno_contable_aislado):
+    """Factura vinculada a una orden en BOX y otra orden en UND para probar la base.
+
+    Usa la base SQLite aislada del escenario para no borrar filas append-only
+    de relaciones al terminar (#2296).
+    """
+    app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:10]
     box = f"BOX{sufijo[:6]}".upper()
     with app.app_context():
@@ -930,32 +936,20 @@ def factura_origen_uom(app, entorno_contable):
             "item_code": item_code,
         }
     yield ids
-    with app.app_context():
-        database.session.execute(database.delete(AuditTrail).where(AuditTrail.document_id == ids["factura"]))
-        database.session.execute(
-            database.delete(DocumentRelation).where(
-                DocumentRelation.target_type == "purchase_invoice",
-                DocumentRelation.target_id == ids["factura"],
-            )
-        )
-        database.session.execute(
-            database.delete(PurchaseInvoiceItem).where(PurchaseInvoiceItem.purchase_invoice_id == ids["factura"])
-        )
-        database.session.execute(database.delete(PurchaseInvoice).where(PurchaseInvoice.id == ids["factura"]))
-        for order_id in (ids["orden_a"], ids["orden_b"]):
-            database.session.execute(database.delete(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == order_id))
-            database.session.execute(database.delete(PurchaseOrder).where(PurchaseOrder.id == order_id))
-        database.session.execute(database.delete(CompanyParty).where(CompanyParty.party_id == ids["proveedor"]))
-        database.session.execute(database.delete(Party).where(Party.id == ids["proveedor"]))
-        database.session.execute(database.delete(ItemUOMConversion).where(ItemUOMConversion.item_code == ids["item_code"]))
-        database.session.execute(database.delete(Item).where(Item.code == ids["item_code"]))
-        database.session.execute(database.delete(UOM).where(UOM.code == box))
-        database.session.commit()
 
 
-def test_cambio_de_origen_con_conversion_uom_conserva_cantidad_base(app, authenticated_client, factura_origen_uom):
-    """#2296: el snapshot distingue la cantidad base antes y después del cambio."""
+def test_cambio_de_origen_con_conversion_uom_conserva_cantidad_base(entorno_contable_aislado, factura_origen_uom):
+    """#2296: el snapshot distingue relación, revisión, tipo y cantidad base."""
     ids = factura_origen_uom
+    app = entorno_contable_aislado.app
+    client = app.test_client()
+    with app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        admin_id, auth_version = admin.id, admin.auth_version
+    with client.session_transaction() as session:
+        session["_user_id"] = admin_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
     datos = {
         "supplier_id": ids["proveedor"],
         "company": "cacao",
@@ -973,7 +967,7 @@ def test_cambio_de_origen_con_conversion_uom_conserva_cantidad_base(app, authent
         "source_id_0": ids["orden_b"],
         "source_item_id_0": ids["linea_b"],
     }
-    respuesta = authenticated_client("admin").post(
+    respuesta = client.post(
         f"/buying/purchase-invoice/{ids['factura']}/edit",
         data=datos,
         follow_redirects=True,
@@ -981,7 +975,35 @@ def test_cambio_de_origen_con_conversion_uom_conserva_cantidad_base(app, authent
 
     assert respuesta.status_code == 200
     _cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
-    assert antes["source_relations"][0]["qty_in_base_uom"] == "12.000000000"
-    assert despues["source_relations"][0]["qty_in_base_uom"] == "2.000000000"
-    assert antes["source_relations"][0]["source_id"] == ids["orden_a"]
-    assert despues["source_relations"][0]["source_id"] == ids["orden_b"]
+    relacion_antes = antes["source_relations"][0]
+    relacion_despues = despues["source_relations"][0]
+    assert relacion_antes["id"] != relacion_despues["id"]
+    assert relacion_antes["revision"] == 1
+    assert relacion_despues["revision"] == 1
+    assert relacion_antes["relation_type"] == relacion_despues["relation_type"]
+    assert relacion_antes["qty_in_base_uom"] == "12.000000000"
+    assert relacion_despues["qty_in_base_uom"] == "2.000000000"
+    assert relacion_antes["source_id"] == ids["orden_a"]
+    assert relacion_despues["source_id"] == ids["orden_b"]
+
+    with app.app_context():
+        filas = (
+            database.session.execute(
+                database.select(DocumentRelation)
+                .filter_by(target_type="purchase_invoice", target_id=ids["factura"])
+                .order_by(DocumentRelation.created)
+            )
+            .scalars()
+            .all()
+        )
+        por_id = {fila.id: fila for fila in filas}
+        anterior = por_id[relacion_antes["id"]]
+        nueva = por_id[relacion_despues["id"]]
+        assert anterior.status == "reverted"
+        assert anterior.reversed_at is not None
+        assert anterior.reversal_reason == "draft_edited"
+        assert anterior.revision == relacion_antes["revision"]
+        assert anterior.relation_type == relacion_antes["relation_type"]
+        assert nueva.status == "active"
+        assert nueva.revision == relacion_despues["revision"]
+        assert nueva.relation_type == relacion_despues["relation_type"]
