@@ -15,14 +15,28 @@ from cacao_accounting.database import Accounts, Book, Modules, PettyCashAccount,
 
 @pytest.fixture
 def cash_module(app):
+    """Activa el módulo de caja y restaura su estado original al finalizar."""
     with app.app_context():
         row = database.session.execute(select(Modules).filter_by(module="cash")).scalar_one_or_none()
         if row is None:
             database.session.add(Modules(module="cash", default=False, enabled=True))
+            database.session.commit()
+            creado = True
+            anterior = None
         else:
+            creado = False
+            anterior = bool(row.enabled)
             row.enabled = True
-        database.session.commit()
+            database.session.commit()
     yield app
+    with app.app_context():
+        row = database.session.execute(select(Modules).filter_by(module="cash")).scalar_one_or_none()
+        if row is not None:
+            if creado:
+                database.session.delete(row)
+            else:
+                row.enabled = anterior
+            database.session.commit()
 
 
 @pytest.fixture
@@ -180,3 +194,26 @@ def test_editar_conciliacion_sin_libro_activo_rechaza_controlado(app, authentica
         saved = database.session.get(PettyCashReconciliation, rec_id)
         assert saved is not None
         assert Decimal(str(saved.counted_cash)) == Decimal("100.00")
+
+
+def test_cash_module_restaura_modulo_previamente_deshabilitado(app, request):
+    """El fixture no deja el módulo de caja activo en la base compartida."""
+    with app.app_context():
+        row = database.session.execute(select(Modules).filter_by(module="cash")).scalar_one()
+        original = bool(row.enabled)
+        row.enabled = False
+        database.session.commit()
+
+    def _verificar_restauracion() -> None:
+        with app.app_context():
+            row = database.session.execute(select(Modules).filter_by(module="cash")).scalar_one()
+            assert bool(row.enabled) is False, "El fixture debe restaurar el valor previo"
+            row.enabled = original
+            database.session.commit()
+
+    # El finalizador agregado antes corre después del teardown del fixture.
+    request.addfinalizer(_verificar_restauracion)
+    request.getfixturevalue("cash_module")
+    with app.app_context():
+        row = database.session.execute(select(Modules).filter_by(module="cash")).scalar_one()
+        assert bool(row.enabled) is True
