@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""#1860: render_tree debe tolerar ciclos y mostrar hu?rfanos sin 500."""
+"""#1860: render_tree debe tolerar ciclos y mostrar huérfanos sin 500."""
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ def _render(app, roots, all_nodes):
 
 
 def test_render_tree_detects_cycle_without_500(app):
-    """Un ciclo A->B->A no debe romper el render y debe mostrar diagn?stico."""
+    """Un ciclo A->B->A no debe romper el render y debe mostrar diagnóstico."""
     a = {"id": "A", "code": "A", "name": "Nodo A", "parent": "B", "url": "/a", "badges": []}
     b = {"id": "B", "code": "B", "name": "Nodo B", "parent": "A", "url": "/b", "badges": []}
     html = _render(app, roots=[], all_nodes=[a, b])
     assert "Nodo A" in html or "Nodo B" in html
-    assert "Ciclo jer?rquico" in html
+    assert "Ciclo jerárquico" in html
     assert "RecursionError" not in html
 
 
@@ -30,22 +30,22 @@ def test_render_tree_shows_orphan_with_warning(app):
     orphan = {
         "id": "O1",
         "code": "O1",
-        "name": "Nodo hu?rfano",
+        "name": "Nodo huérfano",
         "parent": "MISSING",
         "url": "/o1",
         "badges": [],
     }
     html = _render(app, roots=[], all_nodes=[orphan])
-    assert "Nodo hu?rfano" in html
+    assert "Nodo huérfano" in html
     assert "Padre no encontrado" in html
 
 
 def test_render_tree_preserves_valid_hierarchy(app):
-    """?rbol v?lido conserva jerarqu?a y no muestra diagn?sticos falsos."""
-    root = {"id": "R", "code": "R", "name": "Ra?z", "parent": None, "url": "/r", "badges": []}
+    """árbol válido conserva jerarquía y no muestra diagnósticos falsos."""
+    root = {"id": "R", "code": "R", "name": "Raíz", "parent": None, "url": "/r", "badges": []}
     child = {"id": "C", "code": "C", "name": "Hijo", "parent": "R", "url": "/c", "badges": []}
     html = _render(app, roots=[root], all_nodes=[root, child])
-    assert "Ra?z" in html
+    assert "Raíz" in html
     assert "Hijo" in html
-    assert "Ciclo jer?rquico" not in html
+    assert "Ciclo jerárquico" not in html
     assert "Padre no encontrado" not in html

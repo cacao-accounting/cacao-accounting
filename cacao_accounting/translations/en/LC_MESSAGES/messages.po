@@ -27856,16 +27856,16 @@ msgstr "Equivalent"
 msgid "TC"
 msgstr "ER"
 
-msgid "Ciclo jer?rquico detectado en"
+msgid "Ciclo jerárquico detectado en"
 msgstr "Hierarchical cycle detected at"
 
-msgid "Revise la configuraci?n de la jerarqu?a."
+msgid "Revise la configuración de la jerarquía."
 msgstr "Review the hierarchy configuration."
 
 msgid "Padre no encontrado"
 msgstr "Parent not found"
 
-msgid "Ciclo jer?rquico"
+msgid "Ciclo jerárquico"
 msgstr "Hierarchical cycle"
 
 msgid ""
