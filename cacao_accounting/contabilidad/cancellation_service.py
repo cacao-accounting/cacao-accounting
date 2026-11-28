@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -520,6 +521,24 @@ def _landed_cost_consumption_dependencies(
             key = (str(layer.voucher_type), str(layer.voucher_id))
             if key in seen or not _stock_consumption_is_active(*key):
                 continue
+            if _landed_cost_movement_is_attributed(layer):
+                # La salida registró su share del costo capitalizado; la
+                # reversión puede separar inventario remanente de costo consumido.
+                continue
             seen.add(key)
             dependencies.append(CancellationDependency("consumo de inventario", key[1], key[0]))
     return dependencies
+
+
+def _landed_cost_movement_is_attributed(layer: StockValuationLayer) -> bool:
+    """Indica si una salida publicó evidencia de atribución del costo capitalizado."""
+    raw = getattr(layer, "consumed_layers", None)
+    if not raw:
+        return False
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(payload, list) or not payload:
+        return False
+    return all(isinstance(entry, dict) and entry.get("landed_attributed") for entry in payload)

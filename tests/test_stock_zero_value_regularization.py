@@ -19,7 +19,6 @@ from cacao_accounting.contabilidad.posting_service import (
     cancel_document,
     post_stock_entry,
 )
-from cacao_accounting.contabilidad.cancellation_service import active_cancellation_dependencies
 from cacao_accounting.approval_engine import approved_execution
 from cacao_accounting.internal_control_service import audit_actor
 from cacao_accounting.database import (
@@ -461,14 +460,14 @@ def test_reversion_de_documento_regularizado_no_falla(entorno_contable_aislado):
     ("consumed_qty", "expected_qty", "expected_value"),
     [("40", Decimal("60"), Decimal("8160")), ("100", Decimal("0"), Decimal("0"))],
 )
-def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
+def test_cancelar_landed_cost_consumido_reparte_por_libro(
     entorno_contable_aislado,
     valuation_method,
     consumed_qty,
     expected_qty,
     expected_value,
 ):
-    """Un consumo posterior bloquea la cancelación si no se puede repartir el costo por libro."""
+    """Con atribución forward-only, la cancelación separa inventario remanente de costo consumido."""
     app = entorno_contable_aislado.app
     books = _preparar_libros_multimoneda(app)
     with app.app_context():
@@ -483,7 +482,6 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
     for stock_key in (clean_bin, consumed_bin):
         _registrar_stock_ledger_inicial(app, *stock_key, books)
     landed_cost_id = _crear_landed_cost_capitalizado(app, *clean_bin, books, second_bin=consumed_bin)
-    item_codes = [clean_bin[0], consumed_bin[0]]
 
     with app.app_context():
         landed_cost = database.session.get(ImportLandedCost, landed_cost_id)
@@ -502,124 +500,72 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         ).scalar_one()
         assert item_bin.actual_qty == expected_qty
         assert item_bin.stock_value == expected_value
-        dependencies = active_cancellation_dependencies(landed_cost, "import_landed_cost", landed_cost.id)
-        assert [(dependency.kind, dependency.identifier) for dependency in dependencies] == [
-            ("consumo de inventario", entry.id)
-        ]
 
-        layer_ids_before = set(
-            database.session.execute(
-                database.select(StockValuationLayer.id).filter(
-                    StockValuationLayer.company == "cacao",
-                    StockValuationLayer.item_code.in_(item_codes),
+        def _account_nets() -> dict[tuple[str, str], Decimal]:
+            rows = database.session.execute(
+                database.select(GLEntry).where(
+                    GLEntry.company == "cacao",
+                    GLEntry.account_code.in_(("1109", "5201")),
                 )
+            ).scalars()
+            nets: dict[tuple[str, str], list[Decimal]] = {}
+            for row in rows:
+                bucket = nets.setdefault((str(row.ledger_id), str(row.account_code)), [Decimal("0"), Decimal("0")])
+                bucket[0] += Decimal(row.debit)
+                bucket[1] += Decimal(row.credit)
+            return {key: debit - credit for key, (debit, credit) in nets.items()}
+
+        nets_before = _account_nets()
+        original_by_ledger: dict[str, Decimal] = {}
+        for row in database.session.execute(
+            database.select(GLEntry).where(
+                GLEntry.voucher_type == "import_landed_cost",
+                GLEntry.voucher_id == landed_cost_id,
+                GLEntry.account_code == "1109",
+                GLEntry.debit > 0,
             )
-            .scalars()
-            .all()
-        )
-        movement_ids_before = set(
-            database.session.execute(
-                database.select(StockLedgerEntry.id).filter(
-                    StockLedgerEntry.company == "cacao",
-                    StockLedgerEntry.item_code.in_(item_codes),
-                )
+        ).scalars():
+            original_by_ledger[str(row.ledger_id)] = original_by_ledger.get(str(row.ledger_id), Decimal("0")) + Decimal(
+                row.debit
             )
-            .scalars()
-            .all()
-        )
-        book_entry_ids_before = set(
-            database.session.execute(
-                database.select(StockLedgerBookEntry.id)
-                .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
-                .filter(
-                    StockLedgerEntry.company == "cacao",
-                    StockLedgerEntry.item_code.in_(item_codes),
-                )
-            )
-            .scalars()
-            .all()
-        )
-        original_gl_ids = set(
-            database.session.execute(
-                database.select(GLEntry.id).filter_by(voucher_type="import_landed_cost", voucher_id=landed_cost_id)
-            )
-            .scalars()
-            .all()
-        )
         actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
 
         with audit_actor(actor.id, actor.name), approved_execution(landed_cost, actor.id):
-            with pytest.raises(PostingError, match="efectos activos"):
-                cancel_document(
-                    landed_cost,
-                    reason="No se puede distribuir costo consumido por libro",
-                    actor_user_id=actor.id,
-                    cancellation_date=FECHA,
-                )
+            cancel_document(
+                landed_cost,
+                reason="Costo capitalizado consumido con atribución",
+                actor_user_id=actor.id,
+                cancellation_date=FECHA,
+            )
         database.session.expire_all()
 
         cancelled_document = database.session.get(ImportLandedCost, landed_cost_id)
         assert cancelled_document is not None
-        assert cancelled_document.docstatus == 1
+        assert cancelled_document.docstatus == 2
+        consumed_decimal = Decimal(consumed_qty)
+        remaining_ratio = (Decimal("100") - consumed_decimal) / Decimal("100")
         clean_bin_after = database.session.execute(
             database.select(StockBin).filter_by(company="cacao", item_code=clean_bin[0], warehouse=clean_bin[1])
         ).scalar_one()
-        assert (clean_bin_after.actual_qty, clean_bin_after.stock_value) == (Decimal("100"), Decimal("13600"))
+        assert (clean_bin_after.actual_qty, clean_bin_after.stock_value) == (Decimal("100"), Decimal("10000"))
         consumed_bin_after = database.session.execute(
             database.select(StockBin).filter_by(company="cacao", item_code=consumed_bin[0], warehouse=consumed_bin[1])
         ).scalar_one()
-        assert (consumed_bin_after.actual_qty, consumed_bin_after.stock_value) == (expected_qty, expected_value)
-        assert (
-            set(
-                database.session.execute(
-                    database.select(StockValuationLayer.id).filter(
-                        StockValuationLayer.company == "cacao",
-                        StockValuationLayer.item_code.in_(item_codes),
-                    )
-                )
-                .scalars()
-                .all()
+        remaining_functional = Decimal("3600") * remaining_ratio
+        assert consumed_bin_after.actual_qty == expected_qty
+        assert consumed_bin_after.stock_value == expected_value - remaining_functional
+
+        nets_after = _account_nets()
+        total_remaining_fraction = (Decimal("1") + remaining_ratio) / Decimal("2")
+        for ledger_id, book_amount in original_by_ledger.items():
+            remaining_book = book_amount * total_remaining_fraction
+            assert nets_after[(ledger_id, "1109")] == nets_before[(ledger_id, "1109")] - remaining_book
+            assert nets_after[(ledger_id, "5201")] == nets_before[(ledger_id, "5201")] + remaining_book
+        for ledger_id in {row.ledger_id for row in database.session.execute(database.select(GLEntry)).scalars()}:
+            rows = database.session.execute(database.select(GLEntry).filter_by(ledger_id=ledger_id)).scalars().all()
+            assert sum((Decimal(row.debit) for row in rows), Decimal("0")) == sum(
+                (Decimal(row.credit) for row in rows), Decimal("0")
             )
-            == layer_ids_before
-        )
-        assert (
-            set(
-                database.session.execute(
-                    database.select(StockLedgerEntry.id).filter(
-                        StockLedgerEntry.company == "cacao",
-                        StockLedgerEntry.item_code.in_(item_codes),
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            == movement_ids_before
-        )
-        assert (
-            set(
-                database.session.execute(
-                    database.select(StockLedgerBookEntry.id)
-                    .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
-                    .filter(
-                        StockLedgerEntry.company == "cacao",
-                        StockLedgerEntry.item_code.in_(item_codes),
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            == book_entry_ids_before
-        )
-        landed_cost_gl = (
-            database.session.execute(
-                database.select(GLEntry).filter_by(voucher_type="import_landed_cost", voucher_id=landed_cost_id)
-            )
-            .scalars()
-            .all()
-        )
-        assert {entry.id for entry in landed_cost_gl if not entry.is_reversal} == original_gl_ids
-        assert all(not entry.is_cancelled for entry in landed_cost_gl)
-        assert all(not entry.is_reversal for entry in landed_cost_gl)
         database.session.rollback()
 
 

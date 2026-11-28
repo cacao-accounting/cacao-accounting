@@ -2435,7 +2435,7 @@ def _layer_batch_id(
 
 def _moving_average_valuation(
     available: list, total_available: Decimal, quantity: Decimal
-) -> tuple[Decimal, Decimal, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, list[dict[str, Any]]]:
     total_value = sum((entry[1] * entry[2] for entry in available), Decimal("0"))
     average_rate = total_value / total_available
     landed_totals: dict[str, Decimal] = {}
@@ -2443,7 +2443,7 @@ def _moving_average_valuation(
         attribution = entry[3] if len(entry) > 3 else {}
         for layer_id, amount in attribution.items():
             landed_totals[layer_id] = landed_totals.get(layer_id, Decimal("0")) + amount
-    consumed_layers: list[dict[str, str]] = []
+    consumed_layers: list[dict[str, Any]] = []
     if landed_totals and total_available > 0:
         share = quantity / total_available
         consumed_layers.append(
@@ -2451,19 +2451,20 @@ def _moving_average_valuation(
                 "layer_id": "",
                 "qty": str(quantity),
                 "rate": str(average_rate),
+                "landed_attributed": True,
                 "landed_costs": {layer_id: str(amount * share) for layer_id, amount in landed_totals.items()},
             }
         )
     return quantity * average_rate, average_rate, consumed_layers
 
 
-def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Consume FIFO y reporta la capa origen predominante del consumo y la composición por capa."""
     total_cost = Decimal("0")
     remaining = quantity
     queue = [list(entry) for entry in available]
     consumed_by_layer: dict[str, Decimal] = {}
-    consumed_layers: list[dict[str, str]] = []
+    consumed_layers: list[dict[str, Any]] = []
     while remaining > 0 and queue:
         entry = queue[0]
         consume_qty = min(entry[1], remaining)
@@ -2478,6 +2479,7 @@ def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decima
                 "layer_id": layer_id,
                 "qty": str(consume_qty),
                 "rate": str(entry[2]),
+                "landed_attributed": True,
             }
             if landed_costs:
                 composition["landed_costs"] = {key: str(value) for key, value in landed_costs.items()}
@@ -2502,7 +2504,7 @@ def _consume_stock_valuation_layers(
     warehouse: str,
     quantity: Decimal,
     batch_id: str | None = None,
-) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Consume capas y retorna ``(costo, tasa, capa_origen_predominante, composicion_capas)``."""
     if quantity <= 0:
         raise PostingError(
@@ -2536,9 +2538,7 @@ def _consume_stock_valuation_layers(
             return cost_amount, average_rate, None, consumed_layers
         if bin_qty >= quantity and bin_qty > 0:
             average_rate = bin_value / bin_qty
-            _ignored_cost, _ignored_rate, consumed_layers = _moving_average_valuation(
-                available, total_available, quantity
-            )
+            _ignored_cost, _ignored_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
             return quantity * average_rate, average_rate, None, consumed_layers
         cost_amount, average_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
         return cost_amount, average_rate, None, consumed_layers
@@ -3457,7 +3457,7 @@ def _consume_outflow_stock_valuation(
     line: Any,
     source_warehouse: str,
     qty: Decimal,
-) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Calculate valuation cost and rate for stock outflows using valuation layers."""
     item = _stock_item_for(line)
     fallback_rate = _decimal_value(getattr(line, "valuation_rate", None) or getattr(line, "basic_rate", None))
@@ -4029,7 +4029,7 @@ def _required_stock_warehouse(document: Any, line: Any, warehouse: str | None) -
 
 def _outgoing_stock_values(
     document: Any, line: Any, warehouse: str, qty_change: Decimal, item: Any
-) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Valida una salida y obtiene su costo desde las capas de valoración."""
     from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
 
@@ -5670,7 +5670,9 @@ def _cancel_document(
                 document, original_entries, voucher_type, voucher_id, cancellation_context.effective_date
             )
 
-            _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id, cancellation_context.effective_date)
+            stock_adjustments = _cancel_stock_movements_if_needed(
+                document, company, voucher_type, voucher_id, cancellation_context.effective_date
+            )
             _emit_cancel_events(document, voucher_id, company)
             if isinstance(document, PaymentEntry):
                 from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
@@ -5678,6 +5680,8 @@ def _cancel_document(
                 _apply_payment_cancellation_hooks(document)
 
             result = _add_entries(reversals)
+            if stock_adjustments:
+                result = [*result, *_add_entries(stock_adjustments)]
             from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
 
             cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
@@ -5906,13 +5910,12 @@ def _reversal_order(movements: list[StockLedgerEntry]) -> list[StockLedgerEntry]
 
 def _cancel_stock_movements_if_needed(
     document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any
-) -> None:
+) -> list[GLEntry]:
     """Cancela movimientos de inventario si el documento tiene stock."""
     if isinstance(document, (PurchaseInvoice, ImportLandedCost)):
-        _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id, cancellation_date)
-        return
+        return _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id, cancellation_date)
     if not isinstance(document, (StockEntry, PurchaseReceipt, DeliveryNote)):
-        return
+        return []
 
     original_movements = (
         database.session.execute(
@@ -5939,11 +5942,12 @@ def _cancel_stock_movements_if_needed(
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
     _persist_stock_book_reversals(original_movements, stock_reversals)
+    return []
 
 
 def _cancel_landed_cost_valuations(
     document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any = None
-) -> None:
+) -> list[GLEntry]:
     """Revierte ajustes de valoración capitalizados por una factura o landed cost."""
     cancellation_date = cancellation_date or _posting_date_for(document)
     allocations = (
@@ -5958,14 +5962,16 @@ def _cancel_landed_cost_valuations(
         .all()
     )
     prepared = _prepare_landed_cost_valuation_reversals(allocations, voucher_type, voucher_id)
-    for allocation, bin_row, functional_amount in prepared:
+    for allocation, _layer, bin_row, remaining, _consumed, _consumers in prepared:
+        if remaining <= 0:
+            continue
         _upsert_stock_bin(
             company=company,
             item_code=allocation.item_code,
             warehouse=allocation.warehouse,
             qty_change=Decimal("0"),
             valuation_rate=_decimal_value(bin_row.valuation_rate),
-            value_change=-functional_amount,
+            value_change=-remaining,
             reject_negative_stock_value=True,
         )
         database.session.flush()
@@ -5977,7 +5983,7 @@ def _cancel_landed_cost_valuations(
                 company=company,
                 qty=Decimal("0"),
                 rate=_decimal_value(updated_bin.valuation_rate) if updated_bin else Decimal("0"),
-                stock_value_difference=-functional_amount,
+                stock_value_difference=-remaining,
                 remaining_qty=max(_decimal_value(updated_bin.actual_qty) if updated_bin else Decimal("0"), Decimal("0")),
                 remaining_stock_value=max(
                     _decimal_value(updated_bin.stock_value) if updated_bin else Decimal("0"), Decimal("0")
@@ -5987,13 +5993,22 @@ def _cancel_landed_cost_valuations(
                 posting_date=cancellation_date,
             )
         )
+    return _post_landed_cost_consumed_adjustments(
+        prepared,
+        company=company,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_date=cancellation_date,
+    )
 
 
 def _prepare_landed_cost_valuation_reversals(
     allocations: Sequence[LandedCostAllocation], voucher_type: str, voucher_id: str
-) -> list[tuple[LandedCostAllocation, StockBin, Decimal]]:
-    """Validate and aggregate landed-cost reversals before changing stock values."""
-    prepared: list[tuple[LandedCostAllocation, StockBin, Decimal]] = []
+) -> list[tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]]:
+    """Validate consumed attribution and remaining stock before changing values."""
+    prepared: list[tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]] = (
+        []
+    )
     value_by_bin: dict[tuple[str, str, str], Decimal] = {}
     ordered_allocations = sorted(
         allocations,
@@ -6005,32 +6020,75 @@ def _prepare_landed_cost_valuation_reversals(
         layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
         if layer is None:
             raise PostingError(_("El costo capitalizable no tiene capa de valoración para reversar."))
+        if not _landed_cost_layer_matches_allocation(allocation, layer, voucher_type, voucher_id):
+            raise _landed_cost_reversal_not_reconstructible()
+        original = _decimal_value(layer.stock_value_difference)
+        if original <= 0:
+            raise _landed_cost_reversal_not_reconstructible()
+        consumed, consumers = _landed_cost_consumption(layer)
+        remaining = original - consumed
         bin_row = _stock_bin_for(allocation.company, allocation.item_code, allocation.warehouse, lock=True)
-        functional_amount = _decimal_value(layer.stock_value_difference)
-        if not _can_reconstruct_landed_cost_reversal(allocation, layer, bin_row, voucher_type, voucher_id):
+        if remaining > 0 and bin_row is None:
             raise _landed_cost_reversal_not_reconstructible()
         key = (str(allocation.company), str(allocation.item_code), str(allocation.warehouse))
-        value_by_bin[key] = value_by_bin.get(key, Decimal("0")) + functional_amount
-        prepared.append((allocation, bin_row, functional_amount))
+        value_by_bin[key] = value_by_bin.get(key, Decimal("0")) + remaining
+        prepared.append((allocation, layer, bin_row, remaining, consumed, consumers))
     _validate_landed_cost_reversal_capacity(prepared, value_by_bin)
     return prepared
 
 
-def _can_reconstruct_landed_cost_reversal(
-    allocation: LandedCostAllocation,
-    layer: StockValuationLayer,
-    bin_row: StockBin | None,
-    voucher_type: str,
-    voucher_id: str,
-) -> bool:
-    """Check the allocation, stock balance, and valuation history are trustworthy."""
-    if not _landed_cost_layer_matches_allocation(allocation, layer, voucher_type, voucher_id):
-        return False
-    if bin_row is None:
-        return False
-    if _decimal_value(bin_row.actual_qty) <= 0 or _decimal_value(layer.stock_value_difference) <= 0:
-        return False
-    return not _has_later_stock_valuation_layer(layer, voucher_type=voucher_type, voucher_id=voucher_id)
+def _landed_cost_consumption(layer: StockValuationLayer) -> tuple[Decimal, list[tuple[Any, Decimal]]]:
+    """Suma la atribución consumida y exige evidencia forward-only en cada salida."""
+    consumed = Decimal("0")
+    consumers: list[tuple[Any, Decimal]] = []
+    later = (
+        database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.company == layer.company,
+                StockValuationLayer.item_code == layer.item_code,
+                StockValuationLayer.warehouse == layer.warehouse,
+                StockValuationLayer.qty < 0,
+                or_(
+                    StockValuationLayer.posting_date > layer.posting_date,
+                    and_(
+                        StockValuationLayer.posting_date == layer.posting_date,
+                        StockValuationLayer.id > layer.id,
+                    ),
+                ),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for movement in later:
+        entries = _parse_consumed_layers(movement)
+        if not entries or not all(entry.get("landed_attributed") for entry in entries):
+            raise _landed_cost_reversal_not_reconstructible()
+        share = Decimal("0")
+        for entry in entries:
+            raw = (entry.get("landed_costs") or {}).get(str(layer.id))
+            if raw is not None:
+                share += Decimal(str(raw))
+        if share > 0:
+            consumed += share
+            consumers.append((movement, share))
+    if consumed > _decimal_value(layer.stock_value_difference):
+        raise _landed_cost_reversal_not_reconstructible()
+    return consumed, consumers
+
+
+def _parse_consumed_layers(movement: StockValuationLayer) -> list[dict[str, Any]] | None:
+    """Devuelve la composición JSON de una salida o ``None`` si no es legible."""
+    raw = getattr(movement, "consumed_layers", None)
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, list) or not all(isinstance(entry, dict) for entry in payload):
+        return None
+    return payload
 
 
 def _landed_cost_layer_matches_allocation(
@@ -6047,14 +6105,169 @@ def _landed_cost_layer_matches_allocation(
 
 
 def _validate_landed_cost_reversal_capacity(
-    prepared: Sequence[tuple[LandedCostAllocation, StockBin, Decimal]],
+    prepared: Sequence[
+        tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]
+    ],
     value_by_bin: dict[tuple[str, str, str], Decimal],
 ) -> None:
-    """Reject a reversal when available stock value cannot cover all allocations."""
-    for allocation, bin_row, _functional_amount in prepared:
+    """Reject a reversal when available stock value cannot cover the remaining amount."""
+    for allocation, _layer, bin_row, remaining, _consumed, _consumers in prepared:
+        if remaining <= 0:
+            continue
         key = (str(allocation.company), str(allocation.item_code), str(allocation.warehouse))
-        if _decimal_value(bin_row.stock_value) < value_by_bin[key]:
+        if bin_row is None or _decimal_value(bin_row.stock_value) < value_by_bin[key]:
             raise _landed_cost_reversal_not_reconstructible()
+
+
+def _post_landed_cost_consumed_adjustments(
+    prepared: Sequence[
+        tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]
+    ],
+    *,
+    company: str,
+    voucher_type: str,
+    voucher_id: str,
+    posting_date: Any,
+) -> list[GLEntry]:
+    """Contrapartida por libro: devuelve inventario consumido y descarga COGS/gasto.
+
+    El reverso genérico ya acreditó inventario por el importe completo del costo
+    capitalizado. Aquí se devuelve la parte consumida al inventario y se descarga
+    la cuenta de costo que la recibió en cada salida, por libro y moneda histórica.
+    """
+    functional_by_account: dict[str, Decimal] = {}
+    for allocation, layer, _bin_row, _remaining, _consumed, _consumers in prepared:
+        account = warehouse_inventory_account_id(allocation.warehouse, company)
+        if not account:
+            raise _landed_cost_reversal_not_reconstructible()
+        functional_by_account[account] = functional_by_account.get(account, Decimal("0")) + _decimal_value(
+            layer.stock_value_difference
+        )
+
+    adjustments: dict[tuple[str, str, str], Decimal] = {}
+    ledger_templates: dict[tuple[str, str], Any] = {}
+    destination_templates: dict[tuple[str, str, str], Any] = {}
+    for allocation, layer, _bin_row, _remaining, consumed, consumers in prepared:
+        if consumed <= 0:
+            continue
+        account = warehouse_inventory_account_id(allocation.warehouse, company)
+        original = _decimal_value(layer.stock_value_difference)
+        original_rows = (
+            database.session.execute(
+                select(GLEntry).where(
+                    GLEntry.voucher_type == voucher_type,
+                    GLEntry.voucher_id == voucher_id,
+                    GLEntry.account_id == account,
+                    GLEntry.debit > 0,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_ledger: dict[str, Decimal] = {}
+        for row in original_rows:
+            by_ledger[str(row.ledger_id)] = by_ledger.get(str(row.ledger_id), Decimal("0")) + Decimal(row.debit)
+            ledger_templates.setdefault((str(row.ledger_id), account), row)
+        if not by_ledger:
+            raise _landed_cost_reversal_not_reconstructible()
+        for ledger_id, book_total in by_ledger.items():
+            allocation_book = book_total * original / functional_by_account[account]
+            for consumer, share in consumers:
+                consumer_book = allocation_book * share / original
+                for destination, amount in _consumer_destination_amounts(consumer, ledger_id, account, consumer_book):
+                    key = (ledger_id, account, str(destination.account_id))
+                    adjustments[key] = adjustments.get(key, Decimal("0")) + amount
+                    destination_templates.setdefault(key, destination)
+    return _landed_adjustment_entries(
+        adjustments,
+        ledger_templates,
+        destination_templates,
+        company=company,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_date=posting_date,
+    )
+
+
+def _consumer_destination_amounts(
+    consumer: Any, ledger_id: str, inventory_account: str, consumer_book: Decimal
+) -> list[tuple[Any, Decimal]]:
+    """Reparte el importe consumido entre las cuentas de costo de la salida."""
+    destinations = (
+        database.session.execute(
+            select(GLEntry).where(
+                GLEntry.voucher_type == consumer.voucher_type,
+                GLEntry.voucher_id == consumer.voucher_id,
+                GLEntry.ledger_id == ledger_id,
+                GLEntry.debit > 0,
+                GLEntry.account_id != inventory_account,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    total_debit = sum((Decimal(row.debit) for row in destinations), Decimal("0"))
+    if not destinations or total_debit <= 0:
+        raise _landed_cost_reversal_not_reconstructible()
+    return [(row, consumer_book * Decimal(row.debit) / total_debit) for row in destinations]
+
+
+def _landed_adjustment_entries(
+    adjustments: dict[tuple[str, str, str], Decimal],
+    ledger_templates: dict[tuple[str, str], Any],
+    destination_templates: dict[tuple[str, str, str], Any],
+    *,
+    company: str,
+    voucher_type: str,
+    voucher_id: str,
+    posting_date: Any,
+) -> list[GLEntry]:
+    """Construye las contrapartidas balanceadas por libro y cuenta."""
+    entries: list[GLEntry] = []
+    for (ledger_id, inventory_account, _destination_account), amount in adjustments.items():
+        if amount == 0:
+            continue
+        inventory_template = ledger_templates[(ledger_id, inventory_account)]
+        destination = destination_templates[(ledger_id, inventory_account, _destination_account)]
+        entries.append(
+            GLEntry(
+                posting_date=posting_date,
+                company=company,
+                ledger_id=ledger_id,
+                account_id=inventory_account,
+                account_code=inventory_template.account_code,
+                debit=amount,
+                credit=Decimal("0"),
+                debit_in_account_currency=amount,
+                credit_in_account_currency=Decimal("0"),
+                account_currency=inventory_template.account_currency,
+                company_currency=inventory_template.company_currency,
+                exchange_rate=inventory_template.exchange_rate,
+                voucher_type=voucher_type,
+                voucher_id=voucher_id,
+                is_cancelled=False,
+            )
+        )
+        entries.append(
+            GLEntry(
+                posting_date=posting_date,
+                company=company,
+                ledger_id=ledger_id,
+                account_id=destination.account_id,
+                account_code=destination.account_code,
+                debit=Decimal("0"),
+                credit=amount,
+                debit_in_account_currency=Decimal("0"),
+                credit_in_account_currency=amount,
+                account_currency=destination.account_currency,
+                company_currency=destination.company_currency,
+                exchange_rate=destination.exchange_rate,
+                voucher_type=voucher_type,
+                voucher_id=voucher_id,
+                is_cancelled=False,
+            )
+        )
+    return entries
 
 
 def _landed_cost_reversal_not_reconstructible() -> PostingError:
