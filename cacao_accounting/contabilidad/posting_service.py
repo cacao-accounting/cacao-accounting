@@ -2210,15 +2210,35 @@ def _valuation_method_for_company(company_code: str) -> str:
 
 
 def _consume_valuation_layer(queue: list, remaining: Decimal) -> Decimal:
-    """Consume cantidad desde el frente FIFO; entradas son ``[layer_id, qty, rate]``."""
+    """Consume cantidad desde el frente FIFO; entradas son ``[layer_id, qty, rate, attr]``."""
     while remaining > 0 and queue:
         available_qty = queue[0][1]
         consumed_qty = min(available_qty, remaining)
         remaining -= consumed_qty
+        _consume_entry_attribution(queue[0], consumed_qty, available_qty)
         queue[0][1] = available_qty - consumed_qty
         if queue[0][1] <= 0:
             queue.pop(0)
     return remaining
+
+
+def _consume_entry_attribution(entry: list, consumed_qty: Decimal, qty_before: Decimal) -> dict[str, Decimal]:
+    """Reparte la atribución de costo capitalizado consumida y deja el remanente."""
+    attribution = entry[3] if len(entry) > 3 else {}
+    if not attribution or qty_before <= 0:
+        return {}
+    if consumed_qty >= qty_before:
+        entry[3] = {}
+        return dict(attribution)
+    ratio = consumed_qty / qty_before
+    consumed: dict[str, Decimal] = {}
+    remaining: dict[str, Decimal] = {}
+    for layer_id, amount in attribution.items():
+        part = amount * ratio
+        consumed[layer_id] = part
+        remaining[layer_id] = amount - part
+    entry[3] = remaining
+    return consumed
 
 
 def _consume_pinned_layer(queue: list, source_layer_id: str | None, remaining: Decimal) -> Decimal:
@@ -2233,6 +2253,7 @@ def _consume_pinned_layer(queue: list, source_layer_id: str | None, remaining: D
             if entry[0] == source_layer_id and entry[1] > 0:
                 consumed_qty = min(entry[1], remaining)
                 remaining -= consumed_qty
+                _consume_entry_attribution(entry, consumed_qty, entry[1])
                 entry[1] -= consumed_qty
                 if entry[1] <= 0:
                     queue.pop(index)
@@ -2240,6 +2261,21 @@ def _consume_pinned_layer(queue: list, source_layer_id: str | None, remaining: D
     if remaining > 0:
         remaining = _consume_valuation_layer(queue, remaining)
     return remaining
+
+
+def _apply_value_only_layer(queue: list, layer_value: Decimal, layer_id: str | None) -> None:
+    """Distribuye una capa de solo valor y registra el share de costo capitalizado."""
+    total_qty = sum((entry[1] for entry in queue), Decimal("0"))
+    if total_qty <= 0:
+        return
+    adjustment_rate = layer_value / total_qty
+    for entry in queue:
+        entry[2] += adjustment_rate
+        if len(entry) <= 3:
+            entry.append({})
+        if layer_id:
+            share = layer_value * entry[1] / total_qty
+            entry[3][layer_id] = entry[3].get(layer_id, Decimal("0")) + share
 
 
 def _process_valuation_layer(
@@ -2253,11 +2289,7 @@ def _process_valuation_layer(
 ) -> tuple[list, Decimal, bool]:
     """Apply one valuation layer and report whether the caller should continue."""
     if qty == 0 and layer_value != 0 and queue:
-        total_qty = sum((available_qty for _, available_qty, _ in queue), Decimal("0"))
-        if total_qty > 0:
-            adjustment_rate = layer_value / total_qty
-            for entry in queue:
-                entry[2] += adjustment_rate
+        _apply_value_only_layer(queue, layer_value, layer_id)
         return queue, negative_balance, True
     if qty > 0:
         if negative_balance > 0:
@@ -2265,7 +2297,7 @@ def _process_valuation_layer(
             negative_balance -= offset
             qty -= offset
         if qty > 0:
-            queue.append([layer_id, qty, rate])
+            queue.append([layer_id, qty, rate, {}])
         return queue, negative_balance, True
     if qty < 0:
         negative_balance += _consume_pinned_layer(queue, source_layer_id, abs(qty))
@@ -2401,10 +2433,28 @@ def _layer_batch_id(
     return str(sle_batch) if sle_batch is not None else None
 
 
-def _moving_average_valuation(available: list, total_available: Decimal, quantity: Decimal) -> tuple[Decimal, Decimal]:
+def _moving_average_valuation(
+    available: list, total_available: Decimal, quantity: Decimal
+) -> tuple[Decimal, Decimal, list[dict[str, str]]]:
     total_value = sum((entry[1] * entry[2] for entry in available), Decimal("0"))
     average_rate = total_value / total_available
-    return quantity * average_rate, average_rate
+    landed_totals: dict[str, Decimal] = {}
+    for entry in available:
+        attribution = entry[3] if len(entry) > 3 else {}
+        for layer_id, amount in attribution.items():
+            landed_totals[layer_id] = landed_totals.get(layer_id, Decimal("0")) + amount
+    consumed_layers: list[dict[str, str]] = []
+    if landed_totals and total_available > 0:
+        share = quantity / total_available
+        consumed_layers.append(
+            {
+                "layer_id": "",
+                "qty": str(quantity),
+                "rate": str(average_rate),
+                "landed_costs": {layer_id: str(amount * share) for layer_id, amount in landed_totals.items()},
+            }
+        )
+    return quantity * average_rate, average_rate, consumed_layers
 
 
 def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
@@ -2419,17 +2469,19 @@ def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decima
         consume_qty = min(entry[1], remaining)
         total_cost += consume_qty * entry[2]
         remaining -= consume_qty
+        landed_costs = _consume_entry_attribution(entry, consume_qty, entry[1])
         entry[1] -= consume_qty
         if entry[0]:
             layer_id = str(entry[0])
             consumed_by_layer[layer_id] = consumed_by_layer.get(layer_id, Decimal("0")) + consume_qty
-            consumed_layers.append(
-                {
-                    "layer_id": layer_id,
-                    "qty": str(consume_qty),
-                    "rate": str(entry[2]),
-                }
-            )
+            composition = {
+                "layer_id": layer_id,
+                "qty": str(consume_qty),
+                "rate": str(entry[2]),
+            }
+            if landed_costs:
+                composition["landed_costs"] = {key: str(value) for key, value in landed_costs.items()}
+            consumed_layers.append(composition)
         if entry[1] > 0:
             continue
         queue.pop(0)
@@ -2480,13 +2532,16 @@ def _consume_stock_valuation_layers(
             # Una salida que selecciona un lote concreto se valora con las capas
             # de entrada de ese lote (dimension de primer nivel del almacen), no
             # con el promedio global del articulo entre todos los lotes.
-            cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
-            return cost_amount, average_rate, None, []
+            cost_amount, average_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
+            return cost_amount, average_rate, None, consumed_layers
         if bin_qty >= quantity and bin_qty > 0:
             average_rate = bin_value / bin_qty
-            return quantity * average_rate, average_rate, None, []
-        cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
-        return cost_amount, average_rate, None, []
+            _ignored_cost, _ignored_rate, consumed_layers = _moving_average_valuation(
+                available, total_available, quantity
+            )
+            return quantity * average_rate, average_rate, None, consumed_layers
+        cost_amount, average_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
+        return cost_amount, average_rate, None, consumed_layers
 
     return _fifo_valuation(available, quantity)
 
@@ -5288,7 +5343,13 @@ def _inventory_warehouse_for_purpose(document: StockEntry, line: StockEntryItem,
         return line.source_warehouse or document.from_warehouse
     if purpose in {"material_receipt", "adjustment_positive"}:
         return line.target_warehouse or document.to_warehouse
-    return line.warehouse or line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
+    return (
+        getattr(line, "warehouse", None)
+        or line.target_warehouse
+        or line.source_warehouse
+        or document.to_warehouse
+        or document.from_warehouse
+    )
 
 
 def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
