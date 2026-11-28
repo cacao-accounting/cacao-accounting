@@ -88,6 +88,8 @@ _POSTED_CANCEL_DOCTYPES = frozenset(
         "sales_return",
         "sales_credit_note",
         "sales_debit_note",
+        "purchase_credit_note",
+        "purchase_debit_note",
         "import_landed_cost",
     }
 )
