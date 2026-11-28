@@ -673,6 +673,7 @@ def upload_attachment(
     return {
         "file_id": file_record.id,
         "attachment_id": stored.attachment_id,
+        "path": stored.file_path,
         "file_name": file_record.file_name,
         "file_size": file_record.file_size,
         "mime_type": file_record.mime_type,
@@ -1134,14 +1135,16 @@ def upload_item_image(item_id: str, file_storage: Any, user_id: str | None = Non
         remarks=f"Imagen del producto {item.code}",
         commit=False,
     )
-    file_record, path = get_attachment_file(result["file_id"])
-    item.image_path = path
+    stored_path = result.get("path", "")
     try:
+        file_record, path = get_attachment_file(result["file_id"])
+        item.image_path = path
         old_paths = _delete_attachment_records(list(old_attachments))
         database.session.commit()
     except Exception:
         database.session.rollback()
-        cleanup_uncommitted_attachment(StoredAttachment("", "", path))
+        if stored_path:
+            cleanup_uncommitted_attachment(StoredAttachment("", "", stored_path))
         raise
 
     for old_path in old_paths:

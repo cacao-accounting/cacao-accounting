@@ -508,6 +508,30 @@ def test_fallo_al_confirmar_reemplazo_conserva_la_imagen_anterior(attachment_app
         assert {path.name for path in upload_folder.iterdir()} == {Path(first_path).name}
 
 
+def test_fallo_al_leer_la_imagen_nueva_limpia_archivo_y_filas(attachment_app, users, monkeypatch):
+    """#1957: un fallo tras almacenar el archivo no deja adjuntos huérfanos."""
+    import cacao_accounting.attachment_service as service
+
+    with attachment_app.app_context():
+        first = upload_item_image("ITEM-1", _storage("producto.png", PNG), user_id=users["admin"])
+        first_path = first["image_path"]
+
+        def fail_read(file_id):
+            raise OSError("lectura de imagen falló")
+
+        monkeypatch.setattr(service, "get_attachment_file", fail_read)
+        with pytest.raises(OSError):
+            upload_item_image("ITEM-1", _storage("producto2.png", PNG + b"2"), user_id=users["admin"])
+
+        item = database.session.execute(database.select(Item).filter_by(code="ITEM-1")).scalar_one()
+        assert item.image_path == first_path
+        assert os.path.exists(first_path)
+        assert [file.id for file in database.session.execute(database.select(File)).scalars().all()] == [first["file_id"]]
+        assert len(database.session.execute(database.select(FileAttachment)).scalars().all()) == 1
+        upload_folder = Path(attachment_app.config["UPLOAD_FOLDER"])
+        assert {path.name for path in upload_folder.iterdir()} == {Path(first_path).name}
+
+
 def test_fallo_de_transaccion_no_deja_registros_ni_archivos(attachment_app, party_id, monkeypatch):
     """Un fallo al persistir revierte filas y elimina el archivo físico."""
     import cacao_accounting.attachment_service as service
