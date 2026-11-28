@@ -591,7 +591,7 @@ def api_credential():  # pragma: no cover
     if request.method == "GET":
         return _render_api_credential(
             companies=companies,
-            has_credential=bool(current_user.api_token_hash),
+            has_credential=bool(current_user.api_credential_hash),
         )
 
     action = request.form.get("accion", "")
@@ -599,13 +599,13 @@ def api_credential():  # pragma: no cover
         abort(400)
 
     if action == "revocar":
-        # Se elimina la huella persistida: el JWT deja de validar sin tocar
-        # ``auth_version`` y sin cerrar la sesión del navegador.
-        current_user.token = None
+        # Se elimina solo la huella de integración: la sesión del navegador y
+        # su JWT persistido no se tocan.
+        helpers.revocar_credencial_api(current_user)
         database.session.commit()
         return _render_api_credential(companies=companies, has_credential=False, revoked=True)
 
-    credential = helpers.asignar_token_para_usuario(current_user)
+    credential = helpers.asignar_credencial_api(current_user)
     if credential is None:
         current_app.logger.error("No se pudo emitir la credencial API del usuario autenticado")
         abort(503)

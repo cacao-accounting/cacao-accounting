@@ -155,7 +155,7 @@ def _credential_hash(app: Flask, user_id: str) -> str | None:
     with app.app_context():
         user = database.session.get(User, user_id)
         assert user is not None
-        return user.api_token_hash
+        return user.api_credential_hash
 
 
 def test_emision_muestra_el_secreto_una_vez_y_permite_usarlo(credential_app):
@@ -183,6 +183,32 @@ def test_emision_muestra_el_secreto_una_vez_y_permite_usarlo(credential_app):
     assert token not in follow_up.get_data(as_text=True)
 
 
+def test_login_de_navegador_no_invalida_la_credencial(credential_app):
+    """Un acceso nuevo del navegador conserva la credencial de integración."""
+    app = credential_app
+    client = _login(app, "api_owner")
+    token = _extract_credential(client.post(CREDENTIAL_PATH, data={"accion": "emitir"}))
+
+    browser = app.test_client()
+    login = browser.post("/login", data={"usuario": "api_owner", "acceso": PASSWORD})
+    assert login.status_code == 302
+
+    with app.app_context():
+        user = database.session.get(User, "api_owner")
+        assert user is not None
+        # El navegador persistió su propio JWT y la integración conservó su huella.
+        assert user.api_token_hash is not None
+        assert user.api_credential_hash == sha256(token.encode("utf-8")).hexdigest()
+
+    assert _is_authorized(app, token)
+
+    # Rotar sigue invalidando únicamente la credencial de integración anterior.
+    rotated = _extract_credential(browser.post(CREDENTIAL_PATH, data={"accion": "rotar"}))
+    assert rotated != token
+    assert not _is_authorized(app, token)
+    assert _is_authorized(app, rotated)
+
+
 def test_rotacion_invalida_la_credencial_anterior(credential_app):
     """Rotar reemplaza la huella y deja de aceptar el JWT previo."""
     app = credential_app
@@ -202,16 +228,22 @@ def test_revocacion_invalida_la_credencial_y_conserva_la_sesion(credential_app):
     app = credential_app
     client = _login(app, "api_owner")
     token = _extract_credential(client.post(CREDENTIAL_PATH, data={"accion": "emitir"}))
+    browser = app.test_client()
+    assert browser.post("/login", data={"usuario": "api_owner", "acceso": PASSWORD}).status_code == 302
     with app.app_context():
         user = database.session.get(User, "api_owner")
         assert user is not None
         version_before = user.auth_version
+        browser_token = user.token
+    assert browser_token
 
     response = client.post(CREDENTIAL_PATH, data={"accion": "revocar"})
     assert response.status_code == 200
     assert token not in response.get_data(as_text=True)
     assert not _is_authorized(app, token)
     assert _credential_hash(app, "api_owner") is None
+    # El JWT del navegador pertenece a otra huella y sigue vigente.
+    assert _is_authorized(app, browser_token)
 
     with app.app_context():
         user = database.session.get(User, "api_owner")

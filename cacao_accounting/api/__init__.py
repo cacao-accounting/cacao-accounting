@@ -685,7 +685,17 @@ def _identity_for_api_token(token: str):
     from cacao_accounting.database import User, database
 
     identidad = database.session.get(User, user_id)
-    if not identidad or not identidad.token_matches(token) or not identidad.active:
+    if not identidad or not identidad.active:
+        return None
+    # La credencial de integración y el JWT del navegador tienen huellas
+    # separadas: iniciar sesión en otro dispositivo no invalida la integración
+    # y revocar la integración no cierra la sesión web (#2285).
+    from cacao_accounting.auth.helpers import TOKEN_USE_API_CREDENTIAL
+
+    if data.get("token_use") == TOKEN_USE_API_CREDENTIAL:
+        if not identidad.api_credential_matches(token):
+            return None
+    elif not identidad.token_matches(token):
         return None
     # #1355: no se aceptan JWT legacy sin la claim de versión; de otro modo un
     # token anterior a la revocación seguiría coincidiendo con auth_version 0.

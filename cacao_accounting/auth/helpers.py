@@ -20,6 +20,8 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 ph = PasswordHasher()
 
+TOKEN_USE_API_CREDENTIAL = "api_credential"
+
 
 def obtener_usuario(usuario: str) -> Optional[User]:
     """Busca un usuario activo por nombre de usuario."""
@@ -126,6 +128,45 @@ def revocar_credenciales_usuario(identidad: User) -> None:
     """Invalidate every browser session and API token issued to a user."""
     identidad.auth_version = User.auth_version + 1
     identidad.token = None
+
+
+def asignar_credencial_api(identidad: User) -> str | None:
+    """Genera y persiste una credencial de integración independiente.
+
+    Se distingue de ``asignar_token_para_usuario`` porque el login de
+    navegador reemplaza su propia huella en cada acceso; la credencial de
+    integración conserva una huella separada y solo cambia por emisión,
+    rotación o revocación explícita (#2285).
+    """
+    token: str | None = None
+    try:
+        ahora = _utcnow()
+        payload = {
+            "user_id": identidad.id,
+            "auth_version": identidad.auth_version,
+            "token_use": TOKEN_USE_API_CREDENTIAL,
+            "iat": ahora,
+            "nbf": ahora,
+            "exp": ahora + timedelta(hours=8),
+            "jti": uuid4().hex,
+        }
+        token = encode(
+            payload,
+            current_app.config["SECRET_KEY"],
+            algorithm="HS256",
+        )
+        identidad.set_api_credential(token)
+        database.session.commit()
+    except (KeyError, PyJWTError) as exc:
+        assert exc is not None  # nosec
+        log.warning("No se pudo generar la credencial API.")
+        return None
+    return token
+
+
+def revocar_credencial_api(identidad: User) -> None:
+    """Elimina la credencial de integración sin cerrar la sesión web."""
+    identidad.set_api_credential(None)
 
 
 def redireccion_despues_de_login():

@@ -337,6 +337,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     active = database.Column(database.Boolean())
     auth_version = database.Column(database.Integer(), nullable=False, default=0, server_default="0")
     api_token_hash = database.Column(database.String(64), nullable=True, index=True)
+    api_credential_hash = database.Column(database.String(64), nullable=True)
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
@@ -419,6 +420,21 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
             return False
         fingerprint = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
         return hmac.compare_digest(self.api_token_hash, fingerprint)
+
+    def set_api_credential(self, value: str | None) -> None:
+        """Registra la huella de una credencial de integración.
+
+        La credencial de integración vive en su propia columna para que un
+        inicio de sesión de navegador no la reemplace ni la invalide (#2285).
+        """
+        self.api_credential_hash = hashlib.sha256(value.encode("utf-8")).hexdigest() if value else None
+
+    def api_credential_matches(self, candidate: str | None) -> bool:
+        """Compara un JWT de integración con su huella persistida."""
+        if not candidate or not self.api_credential_hash:
+            return False
+        fingerprint = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(self.api_credential_hash, fingerprint)
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
