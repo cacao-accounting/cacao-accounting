@@ -86,11 +86,11 @@
     </div>
   </div>
 
-  {% if from_invoice_id %}
+  {% if from_invoice_id and not edit %}
   {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=purchase_invoice&source_id=" ~ from_invoice_id ~ "&company=" ~ factura_origen.company) }}
-  {% elif from_receipt_id %}
+  {% elif from_receipt_id and not edit %}
   {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company) }}
-  {% elif from_order_id %}
+  {% elif from_order_id and not edit %}
   {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_order&target_type=purchase_invoice&source_id=" ~ from_order_id ~ "&company=" ~ orden_origen.company) }}
   {% else %}
   {{ tf_macros.transaction_grid() }}

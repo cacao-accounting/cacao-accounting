@@ -3142,10 +3142,25 @@ def _validate_purchase_reversal_of(
     document_type: str | None = None,
     posting_date: date | None = None,
     lock_source: bool = False,
+    transaction_currency: str | None = None,
+    order_id: str | None = None,
+    receipt_id: str | None = None,
 ) -> None:
-    """Valida origen y limite acumulado de una nota de credito de compra."""
+    """Valida origen, moneda, enlaces y limite acumulado de una nota de compra."""
     source = _load_reversal_source(reversal_of, lock_source)
     _validate_reversal_source(source, supplier_id, company, reversal_of)
+    if transaction_currency:
+        validate_immutable_header(source, source.company, transaction_currency)
+    if order_id or receipt_id:
+        order = database.session.get(PurchaseOrder, order_id) if order_id else None
+        receipt = database.session.get(PurchaseReceipt, receipt_id) if receipt_id else None
+        _validate_purchase_note_source_links(
+            source,
+            order,
+            receipt,
+            order_id=order_id,
+            receipt_id=receipt_id,
+        )
     if document_type == "purchase_credit_note":
         _assert_no_issued_withholding(source)
         if note_amount is not None:
@@ -3514,7 +3529,14 @@ def _purchase_invoice_creation_context() -> dict[str, Any]:
     _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
     reversal_of = context["from_invoice"] if context["document_type"] in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) else None
     if reversal_of:
-        _validate_purchase_reversal_of(reversal_of, supplier_id, company)
+        _validate_purchase_reversal_of(
+            reversal_of,
+            supplier_id,
+            company,
+            transaction_currency=transaction_currency,
+            order_id=context["from_order"],
+            receipt_id=context["from_receipt"],
+        )
     context.update(
         company=company,
         supplier_id=supplier_id,
@@ -3598,6 +3620,9 @@ def _finalize_purchase_invoice(factura: PurchaseInvoice, total: Decimal, context
             note_amount=grand_total,
             document_type=context["document_type"],
             posting_date=factura.posting_date,
+            transaction_currency=factura.transaction_currency,
+            order_id=factura.purchase_order_id,
+            receipt_id=factura.purchase_receipt_id,
         )
     _persist_purchase_invoice_fiscal_snapshot(factura)
     log_create(factura)
@@ -3641,6 +3666,9 @@ def _handle_purchase_invoice_edit_post(registro):
             registro.credit_note_type = credit_note_type
         purchase_order_id = request.form.get("from_order") or getattr(registro, "purchase_order_id", None)
         purchase_receipt_id = request.form.get("from_receipt") or getattr(registro, "purchase_receipt_id", None)
+        if registro.document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
+            registro.purchase_order_id = purchase_order_id
+            registro.purchase_receipt_id = purchase_receipt_id
         _validate_supplier_invoice_flags(
             registro.supplier_id,
             registro.company,
@@ -3660,6 +3688,17 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.transaction_currency = (
             request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
         )
+        if registro.document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
+            _validate_purchase_reversal_of(
+                registro.reversal_of or "",
+                registro.supplier_id,
+                registro.company,
+                document_type=registro.document_type,
+                posting_date=registro.posting_date,
+                transaction_currency=registro.transaction_currency,
+                order_id=registro.purchase_order_id,
+                receipt_id=registro.purchase_receipt_id,
+            )
         _validate_purchase_tax_template(
             registro.company,
             registro.tax_template_id,

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -13,10 +14,13 @@ import pytest
 from cacao_accounting.compras import services
 from cacao_accounting.database import (
     Currency,
+    ExchangeRate,
     Party,
     PurchaseInvoice,
+    PurchaseInvoiceItem,
     PurchaseOrder,
     PurchaseReceipt,
+    User,
     database,
 )
 
@@ -32,6 +36,12 @@ def purchase_note_sources(entorno_contable_aislado):
             currency = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
             if currency is None:
                 database.session.add(Currency(code=code, name=code, decimals=2, active=True, default=False))
+        database.session.add_all(
+            [
+                ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.5"), date=date(2026, 5, 20)),
+                ExchangeRate(origin="EUR", destination="NIO", rate=Decimal("40.0"), date=date(2026, 5, 20)),
+            ]
+        )
         database.session.flush()
         source_order = PurchaseOrder(
             company="cacao",
@@ -207,3 +217,204 @@ def test_valid_note_uses_source_invoice_currency_and_links(purchase_note_sources
     assert context["transaction_currency"] == "USD"
     assert context["from_order"] == sources["order_id"]
     assert context["from_receipt"] == sources["receipt_id"]
+
+
+def _draft_note(sources: dict[str, str], *, currency: str = "USD") -> str:
+    """Crea una nota borrador con la evidencia mínima para editar."""
+    note = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 20),
+        docstatus=0,
+        document_no=f"NC-EDIT-{sources['invoice_id'][-6:]}",
+        document_type="purchase_credit_note",
+        credit_note_type="commercial_adjustment",
+        is_return=True,
+        supplier_id=sources["supplier_id"],
+        supplier_name="Proveedor Principal SA",
+        purchase_order_id=sources["order_id"],
+        purchase_receipt_id=sources["receipt_id"],
+        reversal_of=sources["invoice_id"],
+        transaction_currency=currency,
+        base_currency="NIO",
+        exchange_rate=Decimal("36.5") if currency == "USD" else Decimal("40"),
+        total=Decimal("20"),
+        grand_total=Decimal("20"),
+        base_grand_total=Decimal("730") if currency == "USD" else Decimal("800"),
+        outstanding_amount=Decimal("20"),
+        remarks="Nota original",
+    )
+    database.session.add(note)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=note.id,
+            item_code="ART01",
+            item_name="Artículo comercial",
+            qty=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+            is_superseded=False,
+        )
+    )
+    database.session.commit()
+    return str(note.id)
+
+
+def _cliente(app):
+    """Cliente autenticado como administrador de la app aislada."""
+    client = app.test_client()
+    with app.app_context():
+        admin_id = str(database.session.execute(database.select(User.id).filter_by(user="admin")).scalar_one())
+    with client.session_transaction() as session:
+        session["_user_id"] = admin_id
+        session["_fresh"] = True
+    return client
+
+
+def _edit_form(sources: dict[str, str], note: PurchaseInvoice, *, currency: str, remarks: str) -> dict[str, str]:
+    """Formulario completo de edición para una nota vinculada a su factura."""
+    return {
+        "version": str(note.version),
+        "supplier_id": sources["supplier_id"],
+        "company": "cacao",
+        "posting_date": "2026-05-20",
+        "transaction_currency": currency,
+        "credit_note_type": "commercial_adjustment",
+        "from_order": sources["order_id"],
+        "from_receipt": sources["receipt_id"],
+        "from_invoice": sources["invoice_id"],
+        "remarks": remarks,
+        "item_code_0": "ART01",
+        "item_name_0": "Artículo comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
+    }
+
+
+def test_edicion_fija_fuente_y_bloquea_moneda(purchase_note_sources):
+    """El formulario de edición conserva la factura origen y su moneda."""
+    sources = purchase_note_sources
+    app = sources["app"]
+    with app.app_context():
+        note_id = _draft_note(sources)
+
+    response = _cliente(app).get(f"/buying/purchase-invoice/{note_id}/edit")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert '"initialSourceType": "purchase_invoice"' in body
+    assert '"flowLockedFields": ["company", "currency"]' in body
+    assert '"currency": "USD"' in body
+    assert f'name="from_invoice" value="{sources["invoice_id"]}"' in body
+    assert "loadSourceFromUrl" not in body
+
+
+def test_edicion_rechaza_moneda_ajena_sin_mutar_borrador(purchase_note_sources, monkeypatch):
+    """Una nota editada en EUR no reemplaza la moneda USD de la factura origen."""
+    sources = purchase_note_sources
+    _bypass_unrelated_creation_guards(monkeypatch)
+    app = sources["app"]
+    with app.app_context():
+        note_id = _draft_note(sources)
+        note = database.session.get(PurchaseInvoice, note_id)
+        assert note is not None
+        original_item_id = database.session.execute(
+            database.select(PurchaseInvoiceItem.id).filter_by(purchase_invoice_id=note_id, is_superseded=False)
+        ).scalar_one()
+        data = _edit_form(sources, note, currency="EUR", remarks="No debe persistir")
+
+    response = _cliente(app).post(f"/buying/purchase-invoice/{note_id}/edit", data=data, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert "La moneda debe coincidir con el documento origen." in response.get_data(as_text=True)
+    with app.app_context():
+        persisted = database.session.get(PurchaseInvoice, note_id)
+        assert persisted is not None
+        assert persisted.transaction_currency == "USD"
+        assert persisted.exchange_rate == Decimal("36.5")
+        assert persisted.remarks == "Nota original"
+        assert persisted.purchase_order_id == sources["order_id"]
+        assert persisted.purchase_receipt_id == sources["receipt_id"]
+        active_items = list(
+            database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=note_id, is_superseded=False)
+            )
+            .scalars()
+            .all()
+        )
+        assert [item.id for item in active_items] == [original_item_id]
+
+
+@pytest.mark.parametrize(
+    ("field", "source_key", "message"),
+    [
+        ("from_receipt", "unrelated_usd_receipt_id", "La recepción indicada no pertenece al flujo de la factura origen."),
+        ("from_order", "unrelated_order_id", "La orden indicada no pertenece al flujo de la factura origen."),
+    ],
+)
+def test_edicion_rechaza_enlaces_ajenos(
+    purchase_note_sources,
+    monkeypatch,
+    field: str,
+    source_key: str,
+    message: str,
+):
+    """La edición tampoco acepta orden o recepción fuera del flujo origen."""
+    sources = purchase_note_sources
+    _bypass_unrelated_creation_guards(monkeypatch)
+    app = sources["app"]
+    with app.app_context():
+        note_id = _draft_note(sources)
+        note = database.session.get(PurchaseInvoice, note_id)
+        assert note is not None
+        data = _edit_form(sources, note, currency="USD", remarks="No debe persistir")
+        data[field] = sources[source_key]
+
+    response = _cliente(app).post(f"/buying/purchase-invoice/{note_id}/edit", data=data, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert message in response.get_data(as_text=True)
+    with app.app_context():
+        persisted = database.session.get(PurchaseInvoice, note_id)
+        assert persisted is not None
+        assert persisted.purchase_order_id == sources["order_id"]
+        assert persisted.purchase_receipt_id == sources["receipt_id"]
+        assert persisted.remarks == "Nota original"
+
+
+def test_edicion_valida_recalcula_tasa_de_la_factura_origen(purchase_note_sources, monkeypatch):
+    """Una edición válida conserva USD y recalcula importes base con su tasa."""
+    sources = purchase_note_sources
+    _bypass_unrelated_creation_guards(monkeypatch)
+    app = sources["app"]
+    with app.app_context():
+        note_id = _draft_note(sources)
+        note = database.session.get(PurchaseInvoice, note_id)
+        assert note is not None
+        data = _edit_form(sources, note, currency="USD", remarks="Nota editada")
+
+    response = _cliente(app).post(f"/buying/purchase-invoice/{note_id}/edit", data=data, follow_redirects=True)
+
+    assert response.status_code == 200
+    with app.app_context():
+        persisted = database.session.get(PurchaseInvoice, note_id)
+        assert persisted is not None
+        assert persisted.transaction_currency == "USD"
+        assert persisted.exchange_rate == Decimal("36.5")
+        assert persisted.grand_total == Decimal("20")
+        assert persisted.base_grand_total == Decimal("730.0000")
+        assert persisted.remarks == "Nota editada"
+        assert persisted.purchase_order_id == sources["order_id"]
+        assert persisted.purchase_receipt_id == sources["receipt_id"]
+        active_items = list(
+            database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=note_id, is_superseded=False)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(active_items) == 1
+        assert active_items[0].amount == Decimal("20")

@@ -4,6 +4,7 @@
 """Modulo de Compras."""
 
 import json
+from typing import Any
 
 from datetime import date
 
@@ -3224,6 +3225,59 @@ def compras_factura_compra(invoice_id):
     )
 
 
+def _purchase_invoice_edit_sources(registro: PurchaseInvoice) -> dict[str, Any]:
+    """Resuelve la factura y los enlaces inmutables de una nota en edición."""
+    document_type = registro.document_type or PURCHASE_INVOICE
+    sources = {
+        "document_type": document_type,
+        "factura_origen": None,
+        "orden_origen": None,
+        "recepcion_origen": None,
+        "from_order_id": None,
+        "from_receipt_id": None,
+        "from_invoice_id": None,
+    }
+    if document_type not in ("purchase_credit_note", "purchase_debit_note") or not registro.reversal_of:
+        return sources
+    factura_origen = database.session.get(PurchaseInvoice, registro.reversal_of)
+    if factura_origen is None:
+        return sources
+    _require_purchase_document_access(factura_origen, "consultar")
+    from_order_id = registro.purchase_order_id or factura_origen.purchase_order_id
+    from_receipt_id = registro.purchase_receipt_id or factura_origen.purchase_receipt_id
+    sources.update(
+        factura_origen=factura_origen,
+        orden_origen=database.session.get(PurchaseOrder, from_order_id) if from_order_id else None,
+        recepcion_origen=database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None,
+        from_order_id=from_order_id,
+        from_receipt_id=from_receipt_id,
+        from_invoice_id=factura_origen.id,
+    )
+    return sources
+
+
+def _configure_purchase_note_edit_header(
+    transaction_config: dict[str, Any],
+    registro: PurchaseInvoice,
+    factura_origen: PurchaseInvoice | None,
+) -> None:
+    """Fija compañía y moneda de la nota según su factura origen."""
+    if factura_origen is None:
+        return
+    source_currency = effective_currency(factura_origen) or registro.transaction_currency or ""
+    transaction_config["initialSourceType"] = "purchase_invoice"
+    transaction_config["flowLockedFields"] = ["company", "currency"]
+    transaction_config["initialHeader"] = {
+        "company": factura_origen.company or "",
+        "posting_date": str(registro.posting_date or ""),
+        "currency": source_currency,
+        "transaction_currency": source_currency,
+        "remarks": registro.remarks or "",
+        "party": factura_origen.supplier_id or "",
+        "party_label": factura_origen.supplier_name or "",
+    }
+
+
 @compras.route("/purchase-invoice/<invoice_id>/edit", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -3269,6 +3323,14 @@ def compras_factura_compra_editar(invoice_id: str):
     lineas = database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id, is_superseded=False)
     ).scalars()
+    edit_sources = _purchase_invoice_edit_sources(registro)
+    document_type = edit_sources["document_type"]
+    factura_origen = edit_sources["factura_origen"]
+    orden_origen = edit_sources["orden_origen"]
+    recepcion_origen = edit_sources["recepcion_origen"]
+    from_order_id = edit_sources["from_order_id"]
+    from_receipt_id = edit_sources["from_receipt_id"]
+    from_invoice_id = edit_sources["from_invoice_id"]
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_INVOICE,
         "viewKey": "draft",
@@ -3303,7 +3365,7 @@ def compras_factura_compra_editar(invoice_id: str):
             for item in lineas
         ],
     }
-    document_type = registro.document_type or PURCHASE_INVOICE
+    _configure_purchase_note_edit_header(transaction_config, registro, factura_origen)
     formulario.is_return.data = False
     return render_template(
         "compras/factura_compra_nuevo.html",
@@ -3311,12 +3373,12 @@ def compras_factura_compra_editar(invoice_id: str):
         titulo=_("Editar Factura de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
-        orden_origen=None,
-        recepcion_origen=None,
-        factura_origen=None,
-        from_order_id=None,
-        from_receipt_id=None,
-        from_invoice_id=None,
+        orden_origen=orden_origen,
+        recepcion_origen=recepcion_origen,
+        factura_origen=factura_origen,
+        from_order_id=from_order_id,
+        from_receipt_id=from_receipt_id,
+        from_invoice_id=from_invoice_id,
         document_type=document_type,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
@@ -3462,6 +3524,9 @@ def compras_factura_compra_submit(invoice_id: str):
                 document_type=registro.document_type,
                 posting_date=registro.posting_date,
                 lock_source=True,
+                transaction_currency=registro.transaction_currency,
+                order_id=registro.purchase_order_id,
+                receipt_id=registro.purchase_receipt_id,
             )
         from cacao_accounting.approval_engine import ApprovalEngine
 
