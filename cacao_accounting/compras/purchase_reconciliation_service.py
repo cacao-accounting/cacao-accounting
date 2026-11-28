@@ -26,6 +26,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from cacao_accounting.database import (
+    DocumentRelation,
     Item,
     ItemUOMConversion,
     PurchaseEconomicEvent,
@@ -624,8 +625,51 @@ def _existing_credit_note_allocation(note_item: PurchaseInvoiceItem) -> Purchase
     ).scalar_one_or_none()
 
 
-def _single_source_item(note_item: PurchaseInvoiceItem, source_by_code: dict[str, list[Any]]) -> PurchaseInvoiceItem:
-    """Resolve the unique source invoice line matching a credit note line."""
+def _linked_source_item(
+    note_item: PurchaseInvoiceItem,
+    source_id: str,
+    target_type: str,
+    source_by_code: dict[str, list[Any]],
+) -> PurchaseInvoiceItem | None:
+    """Resuelve la línea origen exacta desde la relación documental activa.
+
+    La captura de la nota guarda ``source_item_id`` en ``DocumentRelation``;
+    cuando la factura repite el código de artículo esa relación es la única
+    identidad inequívoca (#1424).
+    """
+    source_item_ids = {
+        str(source_item_id)
+        for source_item_id in database.session.execute(
+            select(DocumentRelation.source_item_id).where(
+                DocumentRelation.source_type == "purchase_invoice",
+                DocumentRelation.source_id == source_id,
+                DocumentRelation.target_type == target_type,
+                DocumentRelation.target_item_id == note_item.id,
+                DocumentRelation.status == "active",
+            )
+        ).scalars()
+        if source_item_id
+    }
+    if len(source_item_ids) != 1:
+        return None
+    linked = database.session.get(PurchaseInvoiceItem, source_item_ids.pop())
+    if linked is None or linked.purchase_invoice_id != source_id:
+        return None
+    if not any(candidate.id == linked.id for candidate in source_by_code.get(linked.item_code, [])):
+        return None
+    return linked
+
+
+def _single_source_item(
+    note_item: PurchaseInvoiceItem,
+    source_by_code: dict[str, list[Any]],
+    source_id: str | None = None,
+    target_type: str = "purchase_credit_note",
+) -> PurchaseInvoiceItem:
+    """Resuelve la línea origen, priorizando la relación documental (#1424)."""
+    linked = _linked_source_item(note_item, source_id, target_type, source_by_code) if source_id else None
+    if linked is not None:
+        return linked
     candidates = source_by_code.get(note_item.item_code, [])
     if len(candidates) != 1:
         raise PurchaseReconciliationError(_("La línea de la nota debe corresponder a una única línea de la factura origen."))
@@ -737,7 +781,7 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
         if existing is not None:
             allocations.append(existing)
             continue
-        source_item = _single_source_item(note_item, source_by_code)
+        source_item = _single_source_item(note_item, source_by_code, source.id, note.document_type)
         amount = _line_amount(note_item)
         _validate_credit_note_line_capacity(source_item, amount)
         return_item = None
