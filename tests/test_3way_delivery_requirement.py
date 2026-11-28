@@ -76,9 +76,9 @@ def _entrega(document_no: str, order_id: str | None) -> DeliveryNote:
     return entrega
 
 
-def test_2way_conserva_semantica_sin_delivery(app):
+def test_2way_conserva_semantica_sin_delivery(entorno_contable_aislado):
     """Modalidad 2-way sin Nota de Entrega no exige el vínculo (#1813)."""
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _config("2-way", require_sales_order=True)
         order = _orden("SO-1813-2W")
         invoice = _crear_factura(order.id, "SI-1813-2W")
@@ -87,9 +87,9 @@ def test_2way_conserva_semantica_sin_delivery(app):
         _validate_sales_order_requirement(invoice)
 
 
-def test_2way_sin_flag_permite_factura_sin_vinculos(app):
+def test_2way_sin_flag_permite_factura_sin_vinculos(entorno_contable_aislado):
     """2-way con require_sales_order apagado no impone vínculos."""
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _config("2-way", require_sales_order=False)
         invoice = _crear_factura(None, "SI-1813-2W-OFF")
         database.session.commit()
@@ -97,9 +97,9 @@ def test_2way_sin_flag_permite_factura_sin_vinculos(app):
         _validate_sales_order_requirement(invoice)
 
 
-def test_3way_exige_nota_de_entrega(app):
+def test_3way_exige_nota_de_entrega(entorno_contable_aislado):
     """Modalidad 3-way exige la Nota de Entrega antes de aprobar (#1813)."""
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _config("3-way", require_sales_order=True)
         order = _orden("SO-1813-3W")
         invoice = _crear_factura(order.id, "SI-1813-3W")
@@ -109,9 +109,9 @@ def test_3way_exige_nota_de_entrega(app):
             _validate_sales_order_requirement(invoice)
 
 
-def test_3way_exige_ambos_vinculos_con_flag_apagado(app):
+def test_3way_exige_ambos_vinculos_con_flag_apagado(entorno_contable_aislado):
     """3-way no depende de require_sales_order: exige orden y entrega."""
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _config("3-way", require_sales_order=False)
         invoice = _crear_factura(None, "SI-1813-3W-OFF")
         database.session.commit()
@@ -120,9 +120,9 @@ def test_3way_exige_ambos_vinculos_con_flag_apagado(app):
             _validate_sales_order_requirement(invoice)
 
 
-def test_3way_rechaza_entrega_sin_orden(app):
+def test_3way_rechaza_entrega_sin_orden(entorno_contable_aislado):
     """Una Nota de Entrega sin Orden de Venta no satisface 3-way."""
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _config("3-way", require_sales_order=False)
         delivery = _entrega("DN-1813-SIN-OV", None)
         invoice = _crear_factura(None, "SI-1813-DN-SIN-OV", delivery.id)
@@ -132,9 +132,23 @@ def test_3way_rechaza_entrega_sin_orden(app):
             _validate_sales_order_requirement(invoice)
 
 
-def test_3way_acepta_entrega_ligada_a_orden(app):
+def test_3way_rechaza_orden_derivada_no_aprobada(entorno_contable_aislado):
+    """La orden referida por la entrega debe seguir aprobada y ser compatible."""
+    with entorno_contable_aislado.app.app_context():
+        _config("3-way", require_sales_order=False)
+        order = _orden("SO-1813-DERIVADA")
+        order.docstatus = 0
+        delivery = _entrega("DN-1813-DERIVADA", order.id)
+        invoice = _crear_factura(None, "SI-1813-DERIVADA", delivery.id)
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="debe estar aprobado"):
+            _validate_sales_order_requirement(invoice)
+
+
+def test_3way_acepta_entrega_ligada_a_orden(entorno_contable_aislado):
     """La entrega que pertenece a la orden satisface ambos vínculos."""
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _config("3-way", require_sales_order=False)
         order = _orden("SO-1813-3W-OK")
         delivery = _entrega("DN-1813-3W-OK", order.id)

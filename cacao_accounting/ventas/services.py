@@ -1931,6 +1931,15 @@ def _validate_3way_delivery_requirement(invoice: SalesInvoice, config: SalesMatc
         raise ValueError(_("La modalidad 3-way exige una Nota de Entrega vinculada a la factura."))
 
 
+def _validate_3way_order_source(invoice: SalesInvoice, source: Any) -> None:
+    """Valida la orden directa o derivada de la nota de entrega en 3-way."""
+    derived_order_id = invoice.sales_order_id or getattr(source, "sales_order_id", None)
+    if not derived_order_id:
+        raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
+    if not invoice.sales_order_id:
+        _validate_sales_source_link(invoice, "sales_order", derived_order_id)
+
+
 def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> None:
     """Rechaza facturas sin orden de venta o nota de entrega según la modalidad."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
@@ -1942,8 +1951,7 @@ def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any
         if not invoice.sales_order_id and not invoice.delivery_note_id:
             raise ValueError(_("La modalidad 3-way exige una Orden de Venta y una Nota de Entrega vinculadas a la factura."))
         source = _validate_sales_invoice_source_links(invoice, items)
-        if not invoice.sales_order_id and not getattr(source, "sales_order_id", None):
-            raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
+        _validate_3way_order_source(invoice, source)
         if not invoice.delivery_note_id:
             raise ValueError(_("La modalidad 3-way exige una Nota de Entrega vinculada a la factura."))
         _validate_3way_delivery_requirement(invoice, config)
