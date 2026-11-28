@@ -354,34 +354,10 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             PaymentEntry.posting_date <= as_of_date,
         )
     references = list(database.session.execute(relation_query).scalars().all())
-
-    physical_reference_type = "purchase_invoice" if document_type.startswith("purchase_") else "sales_invoice"
-    fallback_query = (
-        select(PaymentReference)
-        .outerjoin(
-            DocumentRelation,
-            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
-        )
-        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
-        .where(
-            PaymentReference.reference_type == physical_reference_type,
-            PaymentReference.reference_id == document_id,
-            _document_active_at_cutoff(PaymentEntry, as_of_date),
-            PaymentEntry.company == document.company,
-            or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
-            DocumentRelation.id.is_(None),
-        )
-    )
-    if as_of_date is not None:
-        fallback_query = fallback_query.where(
-            or_(
-                PaymentReference.allocation_date.is_(None),
-                PaymentReference.allocation_date <= as_of_date,
-            ),
-            PaymentEntry.posting_date <= as_of_date,
-        )
-    legacy_references = list(database.session.execute(fallback_query).scalars().all())
-    return references + legacy_references
+    # #1304: DocumentRelation es el vínculo canónico. Una referencia huérfana
+    # (sin relación activa) no representa una aplicación del subledger y no
+    # debe alterar el saldo financiero.
+    return references
 
 
 def compute_outstanding_amount(
