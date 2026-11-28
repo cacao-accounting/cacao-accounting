@@ -11,18 +11,23 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.approval_engine import approved_execution
+from cacao_accounting.approval_engine import ApprovalEngine, approved_execution
 from cacao_accounting.contabilidad.posting_service import submit_document
 from cacao_accounting.database import (
+    ApprovalMatrix,
+    ApprovalRequest,
+    CacaoConfig,
     CompanyParty,
     DocumentRelation,
     Item,
+    Modules,
     Party,
     SalesInvoice,
     SalesInvoiceItem,
     SalesOrder,
     SalesOrderItem,
     User,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.document_flow import create_document_relation
@@ -84,8 +89,41 @@ def flujo_exposicion_real(entorno_contable_aislado):
         )
         database.session.add(orden_linea)
         database.session.flush()
-        orden.docstatus = 1
+        modulo = database.session.execute(database.select(Modules).filter_by(module="sales")).scalar_one_or_none()
+        if modulo is None:
+            database.session.add(Modules(module="sales", default=False, enabled=True))
+        else:
+            modulo.enabled = True
+        requester = User(
+            id=f"req-{sufijo}",
+            user=f"req_{sufijo}",
+            name="Solicitante",
+            password=b"x",
+            classification="user",
+            active=True,
+            company="cacao",
+        )
+        database.session.add(requester)
+        database.session.flush()
+        database.session.add(UserCompanyAccess(user_id=requester.id, company_code="cacao"))
+        database.session.add(CacaoConfig(key="approval_engine_enabled_cacao", value="true"))
+        database.session.add(
+            ApprovalMatrix(
+                company_id="cacao",
+                document_type="sales_order",
+                user_id=actor.id,
+                min_amount=Decimal("0"),
+                max_amount=None,
+                approval_level=1,
+                enabled=True,
+            )
+        )
+        database.session.flush()
+        solicitud = ApprovalEngine.request_approval(orden, actor=requester)
+        assert solicitud is not None
+        ApprovalEngine.approve(orden, actor, request=solicitud)
         database.session.commit()
+        assert orden.docstatus == 1
 
         factura = SalesInvoice(
             company="cacao",
@@ -164,6 +202,12 @@ def test_exposicion_usa_lineas_reales_aprobadas(entorno_contable_aislado, flujo_
         assert ids["exposicion_antes"] == Decimal("300")
         assert ids["exposicion_despues"] == Decimal("200")
         assert _approved_customer_order_exposure("cacao", ids["cliente"]) == Decimal("200")
+        orden = database.session.get(SalesOrder, ids["orden"])
+        assert orden.docstatus == 1
+        solicitud = database.session.execute(
+            database.select(ApprovalRequest).filter_by(document_id=ids["orden"], document_type="sales_order")
+        ).scalar_one()
+        assert solicitud.status == "Approved"
         relacion = database.session.execute(
             database.select(DocumentRelation).filter_by(
                 target_type="sales_invoice",
