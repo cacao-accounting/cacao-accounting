@@ -749,10 +749,10 @@ class _PaymentPostingContext:
 
 
 def _load_payment_references(document: PaymentEntry) -> list[PaymentReference]:
-    """Carga las referencias documentales asociadas a un pago."""
-    return list(
-        database.session.execute(select(PaymentReference).where(PaymentReference.payment_id == document.id)).scalars().all()
-    )
+    """Carga referencias con relación canónica activa para el subledger."""
+    from cacao_accounting.document_flow.payment import list_active_payment_references
+
+    return list_active_payment_references(document)
 
 
 def _find_existing_payment_opening(document: PaymentEntry) -> ARAPLedgerEntry | None:

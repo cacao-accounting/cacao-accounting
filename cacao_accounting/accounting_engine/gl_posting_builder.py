@@ -9,8 +9,6 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import select
-
 from cacao_accounting.accounting_engine.common.context import CalculationContext, JournalEntryProforma
 from cacao_accounting.contabilidad.posting import (
     GLEntryParams,
@@ -179,7 +177,9 @@ def _payment_open_balance_in_ledger(
     ledger_id: str | None = None,
 ) -> Decimal:
     """Value referenced invoice balances at their carrying value for a book."""
-    references = database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
+    from cacao_accounting.document_flow.payment import list_active_payment_references
+
+    references = list_active_payment_references(payment)
     fallback_currency = str(payment.base_currency or payment.transaction_currency or ledger_currency)
     valued_balance = Decimal("0")
     has_carrying_value = False

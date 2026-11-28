@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     BankAccount,
     Book,
     CompanyDefaultAccount,
+    DocumentRelation,
     GLEntry,
     Party,
     PaymentEntry,
@@ -150,19 +151,34 @@ def _payment(bank_account_id: str, invoice, amount: Decimal, number: str) -> str
     )
     database.session.add(document)
     database.session.flush()
+    reference = PaymentReference(
+        payment_id=document.id,
+        reference_type=str(invoice.document_type),
+        reference_id=str(invoice.id),
+        reference_document_no=invoice.document_no,
+        reference_date=FECHA,
+        allocated_amount=amount,
+        payment_amount=amount,
+        total_amount=amount,
+        outstanding_amount=amount,
+        party_type=party_type,
+        party_id=party_id,
+        company="cacao",
+    )
+    database.session.add(reference)
+    database.session.flush()
     database.session.add(
-        PaymentReference(
-            payment_id=document.id,
-            reference_type=str(invoice.document_type),
-            reference_id=str(invoice.id),
-            reference_document_no=invoice.document_no,
-            reference_date=FECHA,
-            allocated_amount=amount,
-            payment_amount=amount,
-            total_amount=amount,
-            outstanding_amount=amount,
-            party_type=party_type,
-            party_id=party_id,
+        DocumentRelation(
+            source_type=str(invoice.document_type),
+            source_id=str(invoice.id),
+            target_type="payment_entry",
+            target_id=str(document.id),
+            target_item_id=str(reference.id),
+            company="cacao",
+            qty=Decimal("1"),
+            amount=amount,
+            relation_type="payment_allocation",
+            status="active",
         )
     )
     database.session.flush()

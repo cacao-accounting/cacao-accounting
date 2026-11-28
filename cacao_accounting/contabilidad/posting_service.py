@@ -1191,19 +1191,22 @@ def _tax_result_for_document(document: Any, items: Sequence[Any]) -> TaxCalculat
 
 
 def _payment_has_references(payment_id: str) -> bool:
-    from cacao_accounting.database import PaymentReference
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    return database.session.execute(select(PaymentReference.id).filter_by(payment_id=payment_id)).scalars().first() is not None
+    payment = database.session.get(PaymentEntry, payment_id)
+    return bool(payment and list_active_payment_references(payment))
 
 
 def _payment_total_allocated(payment_id: str) -> Decimal:
-    """Retorna la suma de allocated_amount de las referencias de un pago."""
-    from cacao_accounting.database import PaymentReference
+    """Retorna la suma de allocated_amount de las referencias canónicas de un pago."""
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    result = database.session.execute(
-        select(func.coalesce(func.sum(PaymentReference.allocated_amount), Decimal("0"))).filter_by(payment_id=payment_id)
-    ).scalar()
-    return result or Decimal("0")
+    payment = database.session.get(PaymentEntry, payment_id)
+    if payment is None:
+        return Decimal("0")
+    return sum(
+        (_decimal_value(reference.allocated_amount) for reference in list_active_payment_references(payment)), Decimal("0")
+    )
 
 
 def _remaining_outstanding_from_ledger(target: Any, as_of_date: date) -> Decimal | None:
@@ -1246,9 +1249,9 @@ def _cap_payment_references_to_outstanding(document: PaymentEntry) -> None:
     conforme a la decisión registrada en el issue. Los documentos sin apertura
     canónica conservan su cálculo previo.
     """
-    from cacao_accounting.database import PaymentReference
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    references = database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all()
+    references = list_active_payment_references(document)
     if not references:
         return
     posting_date = getattr(document, "posting_date", None) or date.today()
@@ -1281,12 +1284,15 @@ def _payment_has_realized_fx_difference(payment_id: str | None) -> bool:
     """Indica si una referencia de pago conserva una diferencia cambiaria realizada."""
     if not payment_id:
         return False
-    from cacao_accounting.database import PaymentReference
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    fx_amounts = database.session.execute(
-        select(PaymentReference.fx_difference_amount).filter_by(payment_id=payment_id)
-    ).scalars()
-    return any(amount is not None and _decimal_value(amount) != 0 for amount in fx_amounts)
+    payment = database.session.get(PaymentEntry, payment_id)
+    if payment is None:
+        return False
+    return any(
+        reference.fx_difference_amount is not None and _decimal_value(reference.fx_difference_amount) != 0
+        for reference in list_active_payment_references(payment)
+    )
 
 
 def _signed_tax_delta(document: Any, tax_result: TaxCalculationResult | None) -> Decimal:

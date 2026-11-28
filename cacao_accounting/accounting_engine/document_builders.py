@@ -876,8 +876,10 @@ def _payment_event_type(payment_type: str, party_type: str) -> str:
 
 
 def _payment_references(document: PaymentEntry) -> list[PaymentReference]:
-    """Load references associated with a payment entry."""
-    return list(database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all())
+    """Carga solo referencias con relación documental canónica activa."""
+    from cacao_accounting.document_flow.payment import list_active_payment_references
+
+    return list_active_payment_references(document)
 
 
 def _payment_settlement_amounts(

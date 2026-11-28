@@ -534,6 +534,32 @@ def _payment_allocation_sign(payment: PaymentEntry) -> Decimal:
     return Decimal("1") if receive else Decimal("-1")
 
 
+def list_active_payment_references(payment: PaymentEntry) -> list[PaymentReference]:
+    """Devuelve referencias con relación canónica activa y ambos endpoints válidos."""
+    query = (
+        select(PaymentReference)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == PaymentEntry.id)
+            & (
+                DocumentRelation.source_type
+                == func.coalesce(func.nullif(PaymentReference.flow_source_type, ""), PaymentReference.reference_type)
+            )
+            & (DocumentRelation.source_id == PaymentReference.reference_id),
+        )
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
+            PaymentReference.payment_id == payment.id,
+            PaymentEntry.company == payment.company,
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == payment.company),
+        )
+    )
+    return list(database.session.execute(query).scalars().all())
+
+
 def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     """Calcula el saldo no aplicado (abierto) de un pago."""
     if getattr(payment, "docstatus", 0) == 2:
