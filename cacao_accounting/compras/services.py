@@ -3095,7 +3095,7 @@ def _compute_credit_capacity(source: PurchaseInvoice) -> Decimal:
     A credit note is a commercial reversal of the invoice, so its capacity is
     independent of payments already applied to the source. Payments affect the
     supplier's cash settlement, not the amount that can be credited back after
-    a physical return, so only active credit and debit notes are considered.
+    a physical return, so only approved credit and debit notes are considered.
     """
     active_relations = database.session.execute(
         database.select(DocumentRelation).where(
@@ -3110,7 +3110,7 @@ def _compute_credit_capacity(source: PurchaseInvoice) -> Decimal:
     debited = Decimal("0")
     for relation in active_relations:
         target = database.session.get(PurchaseInvoice, relation.target_id)
-        if target is None or target.docstatus == 2:
+        if target is None or target.docstatus != 1:
             continue
         amount = Decimal(str(relation.amount or target.grand_total or "0"))
         if target.document_type == "purchase_credit_note":
@@ -3248,7 +3248,7 @@ def _new_purchase_reversal_relation(invoice: PurchaseInvoice, target_type: str, 
 
 
 def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:
-    """Indica si una factura tiene notas de crédito/débito activas downstream."""
+    """Indica si una factura tiene notas de crédito/débito aprobadas downstream."""
     active_note = (
         database.select(DocumentRelation.id)
         .join(PurchaseInvoice, PurchaseInvoice.id == DocumentRelation.target_id)
@@ -3257,7 +3257,7 @@ def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:
             DocumentRelation.source_id == invoice_id,
             DocumentRelation.target_type.in_(("purchase_credit_note", "purchase_debit_note")),
             DocumentRelation.status == "active",
-            PurchaseInvoice.docstatus != 2,
+            PurchaseInvoice.docstatus == 1,
         )
     )
     return database.session.execute(active_note).scalar_one_or_none() is not None
