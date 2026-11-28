@@ -794,7 +794,7 @@
                   <input type="hidden" name="modal_batch_id" x-model="selectedValue" x-effect="modalLine.batch_id = selectedValue" :required="modalLine.has_batch">
                   <div class="ca-smart-select-input-wrap">
                     <input class="form-control ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
-                      @focus="onFocus" @blur="closeSoon" :placeholder="'{{ _('Buscar lote') }}'" :required="modalLine.has_batch">
+                      @focus="onFocus" @blur="closeSoon" :placeholder='{{ _("Buscar lote")|tojson }}' :required="modalLine.has_batch">
                     <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
                       title="{{ _('Limpiar') }}">×</button>
                   </div>
@@ -816,7 +816,7 @@
                   {{ _('Serie') }}
                   <span class="text-danger" x-show="modalLine.has_serial_no" x-cloak>*</span>
                 </label>
-                <input class="form-control" type="text" x-model="modalLine.serial_no" :placeholder="'{{ _('Número de serie') }}'" :required="modalLine.has_serial_no">
+                <input class="form-control" type="text" x-model="modalLine.serial_no" :placeholder='{{ _("Número de serie")|tojson }}' :required="modalLine.has_serial_no">
               </div>
             </div>
             <div class="mt-3">
@@ -974,7 +974,7 @@
           <h6>{{ _('Columnas aceptadas:') }}</h6>
           <div class="d-flex flex-wrap gap-2 mb-2">
             <template x-for="col in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="col.key">
-              <span class="badge" :class="col.required ? 'bg-primary' : 'bg-secondary'" :title="col.required ? '{{ _('Requerido') }}' : '{{ _('Opcional') }}'">
+              <span class="badge" :class="col.required ? 'bg-primary' : 'bg-secondary'" :title='col.required ? {{ _("Requerido")|tojson }} : {{ _("Opcional")|tojson }}'>
                 <span x-text="col.label"></span>
                 <template x-if="col.required"><span class="ms-1">*</span></template>
               </span>
@@ -1053,7 +1053,7 @@
               <template x-for="(err, idx) in importModal.errors" :key="idx">
                 <li>
                   <template x-if="err.row !== undefined">
-                    <span class="fw-bold" x-text="'{{ _('Fila') }} ' + err.row + ': '"></span>
+                    <span class="fw-bold" x-text='{{ _("Fila")|tojson }} + err.row + ": "'></span>
                   </template>
                   <span x-text="err.message"></span>
                 </li>

@@ -146,14 +146,14 @@
               <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send-fill me-1"></i> {{ _('Enviar por Correo') }}</button>
             </form>
           {% elif confirmation.status in ('sent', 'viewed') %}
-            <form method="POST" action="{{ url_for('balance_confirmations.reenviar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit="return confirm('{{ _("¿Está seguro de que desea reenviar la confirmación? Esto invalidará el código y enlace anterior.") }}');">
+            <form method="POST" action="{{ url_for('balance_confirmations.reenviar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit='return confirm({{ _("¿Está seguro de que desea reenviar la confirmación? Esto invalidará el código y enlace anterior.")|tojson }});'>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-arrow-repeat me-1"></i> {{ _('Reenviar Confirmación') }}</button>
             </form>
           {% endif %}
 
           {% if confirmation.status not in ('confirmed', 'disputed', 'cancelled', 'expired') %}
-            <form method="POST" action="{{ url_for('balance_confirmations.cancelar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit="return confirm('{{ _("¿Está seguro de que desea cancelar esta solicitud? Se desactivarán todos los accesos externos.") }}');">
+            <form method="POST" action="{{ url_for('balance_confirmations.cancelar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit='return confirm({{ _("¿Está seguro de que desea cancelar esta solicitud? Se desactivarán todos los accesos externos.")|tojson }});'>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline-danger w-100"><i class="bi bi-x-circle me-1"></i> {{ _('Cancelar Solicitud') }}</button>
             </form>

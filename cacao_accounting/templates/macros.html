@@ -549,7 +549,7 @@
                 <i class="bi bi-download"></i>
               </a>
               {% if is_cloud_mode() and can_modify %}
-              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit="return confirm('{{ _("¿Eliminar este archivo adjunto?") }}');">
+              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit='return confirm({{ _("¿Eliminar este archivo adjunto?")|tojson }});'>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
                 <input type="hidden" name="reference_type" value="{{ reference_type }}">
@@ -749,7 +749,7 @@
              this.infoLoaded = true;
              if (data.enabled) {
                this.recipients = data.default_recipient || '';
-               this.subject = data.subject || '{{ _("Notificación de documento") }}';
+               this.subject = data.subject || {{ _("Notificación de documento")|tojson }};
                this.body = data.body || '';
              }
            })
@@ -758,7 +758,7 @@
        sendEmail() {
          if (!this.recipients.trim()) {
            this.alertType = 'danger';
-           this.alertMessage = '{{ _("Ingrese al menos un correo de destinatario.") }}';
+           this.alertMessage = {{ _("Ingrese al menos un correo de destinatario.")|tojson }};
            return;
          }
          this.loading = true;
@@ -781,7 +781,7 @@
            this.loading = false;
            if (res.status === 200 && res.body.success) {
              this.alertType = 'success';
-             this.alertMessage = res.body.message || '{{ _("Correo enviado exitosamente.") }}';
+             this.alertMessage = res.body.message || {{ _("Correo enviado exitosamente.")|tojson }};
              setTimeout(() => {
                var modalEl = document.getElementById('emailNotificationModal');
                var modal = bootstrap.Modal.getInstance(modalEl);
@@ -790,13 +790,13 @@
              }, 1500);
            } else {
              this.alertType = 'danger';
-             this.alertMessage = res.body.error || '{{ _("Error al enviar el correo.") }}';
+             this.alertMessage = res.body.error || {{ _("Error al enviar el correo.")|tojson }};
            }
          })
          .catch(() => {
            this.loading = false;
            this.alertType = 'danger';
-           this.alertMessage = '{{ _("Error de conexión al enviar el correo.") }}';
+           this.alertMessage = {{ _("Error de conexión al enviar el correo.")|tojson }};
          });
        }
      }"
@@ -877,11 +877,11 @@
     </form>
   {% elif docstatus == 1 %}
     <form method="post" action="{{ cancel_url }}" class="d-inline"
-          onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
+          onsubmit='var r=prompt({{ _("Indique el motivo de la anulación:")|tojson }}); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();'>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="reason" value="">
       <button type="submit" class="btn btn-sm btn-outline-danger"
-              onclick="return confirm('{{ _("¿Cancelar este documento?") }}')">
+              onclick='return confirm({{ _("¿Cancelar este documento?")|tojson }})'>
         <i class="bi bi-arrow-counterclockwise me-1"></i>{{ cancel_label }}
       </button>
     </form>
