@@ -1118,6 +1118,19 @@ def inventario_entrada_duplicar(entry_id: str):
     if origen.purpose not in STOCK_ENTRY_PURPOSES:
         abort(404)
     # #1897: no duplicar mientras la anulaci?n est? pendiente; validar en POST por carrera.
+    from cacao_accounting.default_scope import lock_default_scope
+
+    # #1897: serializa duplicación y solicitud de anulación sobre el mismo
+    # documento; en SQLite usa BEGIN IMMEDIATE y en PostgreSQL la fila.
+    lock_default_scope("stock_entry_duplicate", origen.id)
+    origen = database.session.execute(
+        database.select(StockEntry)
+        .where(StockEntry.id == entry_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if origen is None or origen.docstatus == 2:
+        abort(400)
     if _stock_entry_has_pending_cancellation(origen.id):
         abort(409)
 

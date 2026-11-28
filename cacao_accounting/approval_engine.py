@@ -916,6 +916,10 @@ class ApprovalEngine:
                 raise ValueError(_("Debe indicar el motivo de la anulación."))
         amount = cls.get_document_amount(document)
 
+        if base_doctype == "stock_entry":
+            from cacao_accounting.default_scope import lock_default_scope
+
+            lock_default_scope("stock_entry_duplicate", document.id)
         cls._lock_document(document)
         req = database.session.execute(
             select(ApprovalRequest)
