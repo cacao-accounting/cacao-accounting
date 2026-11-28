@@ -1461,6 +1461,7 @@ def editar_libro(id_libro):
             ComprobanteContable,
             ExchangeRevaluationItem,
             GLEntry,
+            LedgerMappingRule,
             PeriodCloseRun,
             RecurringJournalApplication,
             RecurringJournalTemplate,
@@ -1483,6 +1484,13 @@ def editar_libro(id_libro):
                 )
             ),
             database.select(ComprobanteContable.id).filter_by(book=libro.code),
+            database.select(LedgerMappingRule.id).where(
+                or_(
+                    LedgerMappingRule.source_book == libro.code,
+                    LedgerMappingRule.target_book == libro.code,
+                ),
+                LedgerMappingRule.is_active.is_(True),
+            ),
             database.select(PeriodCloseRun.id).filter_by(company=libro.entity),
         )
         if any(database.session.execute(query.limit(1)).scalar_one_or_none() for query in history_queries):
