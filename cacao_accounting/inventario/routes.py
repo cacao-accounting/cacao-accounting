@@ -1108,7 +1108,13 @@ def _stock_entry_has_pending_cancellation(entry_id: str) -> bool:
 @modulo_activo("inventory")
 @login_required
 def inventario_entrada_duplicar(entry_id: str):
-    """Duplica un movimiento de inventario como borrador nuevo."""
+    """Duplica un movimiento de inventario como borrador nuevo.
+
+    #1893: el duplicado es un documento independiente. Copia solo datos
+    reutilizables de cabecera y líneas; no hereda relaciones documentales,
+    aprobación, posting, conciliación ni cierre, y no genera SLE/GL. La
+    referencia al origen queda como comentario informativo en el AuditTrail.
+    """
     origen = database.session.get(StockEntry, entry_id)
     if not origen:
         abort(404)
