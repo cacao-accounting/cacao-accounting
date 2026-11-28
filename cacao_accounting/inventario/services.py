@@ -1464,6 +1464,28 @@ def _stock_entry_line_origins(entry: StockEntry) -> dict[str, dict[str, str]]:
     return origins
 
 
+def _stock_entry_item_names(codes: set[str]) -> dict[str, str]:
+    """Devuelve el nombre del artículo para cada código solicitado."""
+    if not codes:
+        return {}
+    return {
+        code: name
+        for code, name in database.session.execute(database.select(Item.code, Item.name).where(Item.code.in_(codes))).all()
+    }
+
+
+def attach_stock_entry_item_names(lineas: list[StockEntryItem]) -> list[StockEntryItem]:
+    """Adjunta el nombre del artículo a líneas usadas en vistas de lectura.
+
+    ``StockEntryItem`` no denormaliza ``item_name`` y las plantillas de detalle
+    lo leen; sin este atributo la descripción se renderiza vacía (#1810).
+    """
+    item_names = _stock_entry_item_names({line.item_code for line in lineas if line.item_code})
+    for line in lineas:
+        setattr(line, "item_name", item_names.get(line.item_code or "", ""))
+    return lineas
+
+
 def _stock_entry_line_form_data(
     item: StockEntryItem,
     item_names: dict[str, str],
@@ -1500,15 +1522,7 @@ def _render_stock_entry_edit_form(
     formulario = formulario or FormularioEntradaAlmacen(obj=registro)
 
     lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars().all()
-    item_codes = {item.item_code for item in lineas if item.item_code}
-    item_names: dict[str, str] = {}
-    if item_codes:
-        item_names = {
-            code: name
-            for code, name in database.session.execute(
-                database.select(Item.code, Item.name).where(Item.code.in_(item_codes))
-            ).all()
-        }
+    item_names = _stock_entry_item_names({item.item_code for item in lineas if item.item_code})
     origins = {} if request.method == "POST" else _stock_entry_line_origins(registro)
     initial_lines = (
         _submitted_stock_entry_lines()

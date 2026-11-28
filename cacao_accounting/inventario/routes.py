@@ -95,6 +95,7 @@ from cacao_accounting.inventario.services import (
     _handle_stock_entry_edit_post,
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
+    attach_stock_entry_item_names,
     STOCK_ENTRY_PURPOSES,
 )
 
@@ -1031,7 +1032,7 @@ def inventario_entrada(entry_id):
         abort(404)
     exige_acceso_compania("inventory", registro.company, "consultar")
     filas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry_id)).all()
-    lineas = _attach_stock_entry_line_sources([fila[0] for fila in filas], entry_id)
+    lineas = attach_stock_entry_item_names(_attach_stock_entry_line_sources([fila[0] for fila in filas], entry_id))
     items = [(linea,) for linea in lineas]
     titulo = (registro.document_no or entry_id) + " - " + APPNAME
     return render_template(
