@@ -33,8 +33,9 @@ FECHA = date(2026, 5, 15)
 
 
 @pytest.fixture
-def flujo_exposicion_real(app, entorno_contable):
-    """Crea y aprueba orden y factura con líneas reales; limpia todo al final."""
+def flujo_exposicion_real(entorno_contable_aislado):
+    """Crea y aprueba orden y factura con líneas reales en una base aislada."""
+    app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:8]
     item_code = f"EXP-REAL-{sufijo}"
     with app.app_context():
@@ -154,43 +155,11 @@ def flujo_exposicion_real(app, entorno_contable):
 
     yield ids
 
-    with app.app_context():
-        from cacao_accounting.database import (
-            ARAPLedgerBookEntry,
-            ARAPLedgerEntry,
-            ARAPOpenItem,
-            AuditTrail,
-            GLEntry,
-        )
 
-        database.session.execute(
-            database.delete(DocumentRelation).where(
-                DocumentRelation.target_type == "sales_invoice", DocumentRelation.target_id == ids["factura"]
-            )
-        )
-        database.session.execute(database.delete(ARAPOpenItem).where(ARAPOpenItem.document_id == ids["factura"]))
-        ledger_ids = database.session.execute(
-            database.select(ARAPLedgerEntry.id).where(ARAPLedgerEntry.document_id == ids["factura"])
-        ).scalars()
-        database.session.execute(
-            database.delete(ARAPLedgerBookEntry).where(ARAPLedgerBookEntry.ledger_entry_id.in_(list(ledger_ids)))
-        )
-        database.session.execute(database.delete(ARAPLedgerEntry).where(ARAPLedgerEntry.document_id == ids["factura"]))
-        database.session.execute(database.delete(GLEntry).where(GLEntry.voucher_id == ids["factura"]))
-        database.session.execute(database.delete(AuditTrail).where(AuditTrail.document_id == ids["factura"]))
-        database.session.execute(database.delete(SalesInvoiceItem).where(SalesInvoiceItem.sales_invoice_id == ids["factura"]))
-        database.session.execute(database.delete(SalesInvoice).where(SalesInvoice.id == ids["factura"]))
-        database.session.execute(database.delete(SalesOrderItem).where(SalesOrderItem.sales_order_id == ids["orden"]))
-        database.session.execute(database.delete(SalesOrder).where(SalesOrder.id == ids["orden"]))
-        database.session.execute(database.delete(CompanyParty).where(CompanyParty.party_id == ids["cliente"]))
-        database.session.execute(database.delete(Party).where(Party.id == ids["cliente"]))
-        database.session.execute(database.delete(Item).where(Item.code == ids["item"]))
-        database.session.commit()
-
-
-def test_exposicion_usa_lineas_reales_aprobadas(app, flujo_exposicion_real):
+def test_exposicion_usa_lineas_reales_aprobadas(entorno_contable_aislado, flujo_exposicion_real):
     """La relación real descuenta la exposición después del posting."""
     ids = flujo_exposicion_real
+    app = entorno_contable_aislado.app
     with app.app_context():
         assert ids["exposicion_antes"] == Decimal("300")
         assert ids["exposicion_despues"] == Decimal("200")
