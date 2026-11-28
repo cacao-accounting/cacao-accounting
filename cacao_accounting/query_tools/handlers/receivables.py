@@ -7,17 +7,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func
 
 from cacao_accounting.database import (
     SalesInvoice,
     database,
 )
-from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.handlers.aging import AgingQuery, get_aging_result
+from cacao_accounting.query_tools.handlers.open_documents import paginate_positive_outstanding
 from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
     paginate,
@@ -119,19 +118,15 @@ def get_receivables_open_documents(
     if party_id:
         query = query.where(SalesInvoice.customer_id == party_id)
 
-    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-
-    rows = (
-        database.session.execute(
-            query.order_by(SalesInvoice.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
-        )
-        .scalars()
-        .all()
+    total, page_rows = paginate_positive_outstanding(
+        model=SalesInvoice,
+        query=query,
+        page=_page,
+        page_size=_page_size,
     )
 
     items = []
-    for inv in rows:
-        outstanding = compute_outstanding_amount(inv)
+    for inv, outstanding in page_rows:
         items.append(
             {
                 "id": inv.id,
