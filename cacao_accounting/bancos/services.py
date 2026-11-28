@@ -616,10 +616,17 @@ def _petty_cash_name_exists(company: str, name: str, exclude_id: str) -> bool:
 
 
 def _is_petty_cash_name_conflict(error: IntegrityError) -> bool:
-    """Reconoce la violación de unicidad de nombre sin ocultar otros errores."""
-    message = str(getattr(error, "orig", error)).lower()
-    return "uq_petty_cash_account" in message or (
-        "petty_cash_account" in message and "unique" in message and "name" in message
+    """Reconoce solo la unicidad de nombre sin ocultar otros errores."""
+    original = getattr(error, "orig", error)
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name is not None:
+        return constraint_name == "uq_petty_cash_account"
+    message = str(original).lower()
+    return (
+        "unique constraint failed: petty_cash_account.company, petty_cash_account.name" in message
+        or 'duplicate key value violates unique constraint "uq_petty_cash_account"' in message
+        or "for key 'uq_petty_cash_account'" in message
     )
 
 
@@ -686,6 +693,7 @@ def update_petty_cash_account(
         petty_cash.notes = notes
 
     try:
+        database.session.flush()
         database.session.commit()
     except IntegrityError as exc:
         database.session.rollback()
