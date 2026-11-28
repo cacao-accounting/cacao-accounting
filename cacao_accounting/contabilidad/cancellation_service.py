@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import and_, or_, select
@@ -409,34 +410,75 @@ def _consumed_stock_dependencies(document: Any, source_type: str, source_id: str
             StockLedgerEntry.item_code,
             StockLedgerEntry.warehouse,
             StockLedgerEntry.batch_id,
-        ).where(
+        )
+        .where(
             StockLedgerEntry.voucher_type == source_type,
             StockLedgerEntry.voucher_id == source_id,
             StockLedgerEntry.is_cancelled.is_(False),
             StockLedgerEntry.qty_change > 0,
             StockLedgerEntry.batch_id.is_not(None),
         )
+        .distinct()
     ).all()
+    dependencies.extend(_batch_consumption_dependencies(inbound_batches, source_id, seen))
+
+    return dependencies
+
+
+def _batch_consumption_dependencies(
+    inbound_batches: Any, source_id: str, seen: set[tuple[str, str]]
+) -> list[CancellationDependency]:
+    """Detecta dependencias reales por lote usando el saldo diario sin el documento.
+
+    #2343: una salida anterior al ingreso no depende de él solo por compartir
+    lote. Se reconstruye el saldo diario del lote excluyendo el documento: si el
+    acumulado nunca es negativo, la cancelación no crea stock negativo y no hay
+    dependencia real. Los movimientos del mismo día se netean porque su orden
+    intra-día no es auditable.
+    """
+    from cacao_accounting.database import StockLedgerEntry
+
+    dependencies: list[CancellationDependency] = []
     for company, item_code, warehouse, batch_id in inbound_batches:
-        consumed_rows = database.session.execute(
-            select(StockLedgerEntry.voucher_type, StockLedgerEntry.voucher_id).where(
+        lot_rows = database.session.execute(
+            select(
+                StockLedgerEntry.voucher_type,
+                StockLedgerEntry.voucher_id,
+                StockLedgerEntry.qty_change,
+                StockLedgerEntry.posting_date,
+            ).where(
                 StockLedgerEntry.company == company,
                 StockLedgerEntry.item_code == item_code,
                 StockLedgerEntry.warehouse == warehouse,
                 StockLedgerEntry.batch_id == batch_id,
                 StockLedgerEntry.is_cancelled.is_(False),
-                StockLedgerEntry.qty_change < 0,
                 StockLedgerEntry.voucher_id != source_id,
             )
         ).all()
-        for voucher_type, voucher_id in consumed_rows:
+        if _daily_lot_balance_is_non_negative(lot_rows):
+            continue
+        for voucher_type, voucher_id, qty_change, _posting_date in lot_rows:
+            if Decimal(str(qty_change)) >= 0:
+                continue
             key = (str(voucher_type), str(voucher_id))
             if key in seen or not _stock_consumption_is_active(key[0], key[1]):
                 continue
             seen.add(key)
             dependencies.append(CancellationDependency("consumo de inventario por lote", key[1], key[0]))
-
     return dependencies
+
+
+def _daily_lot_balance_is_non_negative(lot_rows: Any) -> bool:
+    """Suma por fecha los movimientos del lote y descarta saldos negativos."""
+    daily: dict[date, Decimal] = {}
+    for _voucher_type, _voucher_id, qty_change, posting_date in lot_rows:
+        daily[posting_date] = daily.get(posting_date, Decimal("0")) + Decimal(str(qty_change))
+    saldo = Decimal("0")
+    for dia in sorted(daily):
+        saldo += daily[dia]
+        if saldo < 0:
+            return False
+    return True
 
 
 def _stock_consumption_is_active(voucher_type: str, voucher_id: str) -> bool:

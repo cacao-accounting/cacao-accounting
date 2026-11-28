@@ -87,9 +87,9 @@ def _app():
     return app
 
 
-def _sle(*, entry_id, qty, value, batch_id, is_cancelled=False):
+def _sle(*, entry_id, qty, value, batch_id, is_cancelled=False, day=date(2026, 5, 1)):
     return StockLedgerEntry(
-        posting_date=date(2026, 5, 1),
+        posting_date=day,
         item_code="ITEM-B",
         warehouse="WH1",
         company="cacao",
@@ -103,6 +103,25 @@ def _sle(*, entry_id, qty, value, batch_id, is_cancelled=False):
         batch_id=batch_id,
         is_cancelled=is_cancelled,
     )
+
+
+def _movimiento(document_no: str, purpose: str, day: date, warehouse_field: str) -> StockEntry:
+    """Crea un movimiento contabilizado del lote para el escenario #2343."""
+    entrada = StockEntry(
+        company="cacao",
+        purpose=purpose,
+        posting_date=day,
+        document_no=document_no,
+        status="submitted",
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    setattr(entrada, warehouse_field, "WH1")
+    database.session.add(entrada)
+    database.session.flush()
+    return entrada
 
 
 def test_validate_stock_reversal_capacity_rechaza_lote_negativo():
@@ -193,6 +212,67 @@ def test_consumed_stock_dependencies_detecta_consumo_por_lote_moving_average():
         assert any(
             d.kind == "consumo de inventario por lote" and d.identifier == iss_a.id and d.detail == "stock_entry" for d in deps
         )
+
+
+def test_salida_anterior_no_bloquea_cancelar_ingreso_posterior():
+    """#2343: un despacho anterior al segundo ingreso no es su dependencia."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        rec_a = _movimiento("REC-A3", "material_receipt", date(2026, 5, 1), "to_warehouse")
+        iss_a = _movimiento("ISS-A3", "material_issue", date(2026, 5, 2), "from_warehouse")
+        rec_b = _movimiento("REC-B3", "material_receipt", date(2026, 5, 4), "to_warehouse")
+        database.session.add_all(
+            [
+                _sle(entry_id=rec_a.id, qty=10, value=100, batch_id=batch_a, day=date(2026, 5, 1)),
+                _sle(entry_id=iss_a.id, qty=-5, value=-50, batch_id=batch_a, day=date(2026, 5, 2)),
+                _sle(entry_id=rec_b.id, qty=10, value=100, batch_id=batch_a, day=date(2026, 5, 4)),
+            ]
+        )
+        database.session.commit()
+
+        deps_b = _consumed_stock_dependencies(rec_b, "stock_entry", rec_b.id)
+        assert not any(d.kind == "consumo de inventario por lote" for d in deps_b)
+
+
+def test_ingreso_anterior_que_dejaria_negativo_sigue_bloqueado():
+    """El criterio de saldo diario conserva la protección del lote."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        rec_a = _movimiento("REC-A4", "material_receipt", date(2026, 5, 1), "to_warehouse")
+        iss_a = _movimiento("ISS-A4", "material_issue", date(2026, 5, 2), "from_warehouse")
+        rec_b = _movimiento("REC-B4", "material_receipt", date(2026, 5, 4), "to_warehouse")
+        database.session.add_all(
+            [
+                _sle(entry_id=rec_a.id, qty=10, value=100, batch_id=batch_a, day=date(2026, 5, 1)),
+                _sle(entry_id=iss_a.id, qty=-5, value=-50, batch_id=batch_a, day=date(2026, 5, 2)),
+                _sle(entry_id=rec_b.id, qty=10, value=100, batch_id=batch_a, day=date(2026, 5, 4)),
+            ]
+        )
+        database.session.commit()
+
+        deps_a = _consumed_stock_dependencies(rec_a, "stock_entry", rec_a.id)
+        assert any(d.kind == "consumo de inventario por lote" and d.identifier == iss_a.id for d in deps_a)
+
+
+def test_salida_posterior_dependiente_del_ingreso_se_bloquea():
+    """Un despacho que deja el lote en negativo sin el ingreso sí es dependencia."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        rec_b = _movimiento("REC-B5", "material_receipt", date(2026, 5, 4), "to_warehouse")
+        iss_b = _movimiento("ISS-B5", "material_issue", date(2026, 5, 5), "from_warehouse")
+        database.session.add_all(
+            [
+                _sle(entry_id=rec_b.id, qty=10, value=100, batch_id=batch_a, day=date(2026, 5, 4)),
+                _sle(entry_id=iss_b.id, qty=-12, value=-120, batch_id=batch_a, day=date(2026, 5, 5)),
+            ]
+        )
+        database.session.commit()
+
+        deps_b = _consumed_stock_dependencies(rec_b, "stock_entry", rec_b.id)
+        assert any(d.kind == "consumo de inventario por lote" and d.identifier == iss_b.id for d in deps_b)
 
 
 def test_stock_reversal_persiste_batch_en_svl():
