@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, cast
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.accounting_engine.common.context import (
@@ -1713,6 +1713,18 @@ def _prior_payment_document_net(
     )
     if as_of_date is not None:
         consulta = consulta.where(PaymentEntry.posting_date <= as_of_date)
+    if as_of_date is None:
+        consulta = consulta.where(PaymentEntry.docstatus == 1)
+    else:
+        # #2333: una anulación posterior al corte no debe borrar el pago del
+        # histórico; se usa la marca temporal disponible como reconstrucción.
+        corte = _cutoff_timestamp(as_of_date)
+        consulta = consulta.where(
+            or_(
+                PaymentEntry.docstatus == 1,
+                and_(PaymentEntry.docstatus == 2, PaymentEntry.modified >= corte),
+            )
+        )
     prior_references = database.session.execute(consulta).all()
     if not prior_references:
         return Decimal("0")
@@ -1734,6 +1746,11 @@ def _prior_payment_document_net(
         if payment_total > 0:
             payments_net += payment_entries_net * (document_allocated / payment_total)
     return payments_net
+
+
+def _cutoff_timestamp(as_of_date: date) -> datetime:
+    """Primer instante posterior al corte para distinguir bajas posteriores."""
+    return datetime.combine(as_of_date + timedelta(days=1), time.min)
 
 
 def _document_carrying_value_in_ledger(
@@ -1780,11 +1797,15 @@ def _document_carrying_value_in_ledger(
             GLEntry.account_id == party_account_id,
             GLEntry.voucher_type == voucher_type,
             GLEntry.voucher_id.in_(voucher_ids),
-            GLEntry.is_cancelled.is_(False),
             GLEntry.is_reversal.is_(False),
         ]
-        if as_of_date is not None:
+        if as_of_date is None:
+            condiciones.append(GLEntry.is_cancelled.is_(False))
+        else:
+            # #2333: una baja posterior al corte no elimina la evidencia del
+            # histórico; se reconstruye con la marca temporal disponible.
             condiciones.append(GLEntry.posting_date <= as_of_date)
+            condiciones.append(or_(GLEntry.is_cancelled.is_(False), GLEntry.modified >= _cutoff_timestamp(as_of_date)))
         row = database.session.execute(
             select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(*condiciones)
         ).scalar_one()
