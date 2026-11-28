@@ -401,10 +401,13 @@ def parse_xlsx_lines() -> ResponseReturnValue:
         return jsonify({"valid": False, "errors": [{"field": "file", "message": _("Debe seleccionar un archivo XLSX.")}]}), 400
     if not str(uploaded.filename).casefold().endswith(".xlsx"):
         return jsonify({"valid": False, "errors": [{"field": "file", "message": _("Solo se admite formato XLSX.")}]}), 400
+    # #2352: el handle se cierra antes de escribir y el archivo temporal
+    # permanece dentro del try/finally, de modo que una copia incompleta
+    # también se elimina (incluido Windows, donde no se puede borrar abierto).
     with tempfile.NamedTemporaryFile(prefix="cacao-import-", suffix=".xlsx", delete=False) as temporary:
-        uploaded.save(temporary)
         path = temporary.name
     try:
+        uploaded.save(path)
         safe, reason = _xlsx_archive_is_safe(path)
         if not safe:
             return jsonify({"valid": False, "errors": [{"field": "file", "message": reason}]}), 400

@@ -10,9 +10,11 @@ silencio.
 
 import io
 import json
+import tempfile
 import zipfile
 
 import openpyxl
+from werkzeug.datastructures import FileStorage
 
 from cacao_accounting.api import line_import
 from cacao_accounting.api.line_import_registry import LineImportSchemaRegistry
@@ -108,3 +110,70 @@ def test_endpoint_rechaza_varias_hojas_de_lineas(authenticated_client):
     assert payload["valid"] is False
     assert payload["rows"] == []
     assert payload["errors"][0]["field"] == "sheet"
+
+
+def _residuales(directorio) -> list[str]:
+    """Nombres de temporales de importación que quedaron en el directorio."""
+    return sorted(ruta.name for ruta in directorio.iterdir() if ruta.name.startswith("cacao-import-"))
+
+
+def test_endpoint_exitoso_no_deja_temporal(monkeypatch, tmp_path, authenticated_client):
+    """Una carga válida responde y elimina el archivo de trabajo."""
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    client = authenticated_client("admin")
+
+    response = client.post(
+        "/api/line-import/parse-xlsx",
+        data={"doctype": "journal_entry", "file": (io.BytesIO(_xlsx_bytes()), "valido.xlsx")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["valid"] is True
+    assert _residuales(tmp_path) == []
+    assert str(tmp_path) not in response.get_data(as_text=True)
+
+
+def test_endpoint_con_error_de_parseo_no_deja_temporal(monkeypatch, tmp_path, authenticated_client):
+    """Un archivo dañado responde 400 y no deja evidencia temporal."""
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    client = authenticated_client("admin")
+
+    response = client.post(
+        "/api/line-import/parse-xlsx",
+        data={"doctype": "journal_entry", "file": (io.BytesIO(_fake_zip_bytes()), "falso.xlsx")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert _residuales(tmp_path) == []
+    assert str(tmp_path) not in response.get_data(as_text=True)
+
+
+def test_fallo_de_copia_inicial_elimina_el_parcial(monkeypatch, tmp_path, authenticated_client):
+    """Si la copia falla tras escribir parte del archivo, el residual se borra."""
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    destinos: list[str] = []
+
+    def _copia_y_falla(self, dst, buffer_size=16384):
+        if isinstance(dst, (str, bytes)):
+            destinos.append(str(dst))
+            with open(dst, "wb") as parcial:
+                parcial.write(b"parcial")
+        else:
+            dst.write(b"parcial")
+        raise OSError("falló la copia del archivo")
+
+    monkeypatch.setattr(FileStorage, "save", _copia_y_falla)
+    client = authenticated_client("admin")
+
+    response = client.post(
+        "/api/line-import/parse-xlsx",
+        data={"doctype": "journal_entry", "file": (io.BytesIO(_xlsx_bytes()), "valido.xlsx")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    assert destinos, "la ruta debe copiar a un archivo temporal nombrado"
+    assert _residuales(tmp_path) == []
+    assert str(tmp_path) not in response.get_data(as_text=True)
