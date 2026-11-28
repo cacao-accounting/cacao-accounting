@@ -415,6 +415,24 @@ def _validate_incoming_serial(serial, allow_transfer: bool, allow_return: bool) 
         raise InventoryServiceError(_("El serial ya existe y solo puede cambiar de bodega mediante una transferencia."))
 
 
+def validate_serial_transition(
+    serial: Any,
+    item_code: str,
+    *,
+    outgoing: bool,
+    warehouse: str | None = None,
+    allow_transfer: bool = False,
+    allow_return: bool = False,
+) -> None:
+    """Comparte la transición contextual de series entre posting y prevalidación."""
+    if serial is not None and serial.item_code != item_code:
+        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
+    if outgoing:
+        _validate_outgoing_serial(serial, warehouse)
+        return
+    _validate_incoming_serial(serial, allow_transfer, allow_return)
+
+
 def _claim_outgoing_serial(serial_no: str, item_code: str, warehouse: str | None) -> None:
     """Reserva el serial disponible dentro de la transacción de salida.
 
@@ -462,9 +480,13 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
         _claim_outgoing_serial(serial_no, item.code, warehouse)
         return
     serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
-    if serial is not None and serial.item_code != item.code:
-        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
-    _validate_incoming_serial(serial, allow_transfer, allow_return)
+    validate_serial_transition(
+        serial,
+        item.code,
+        outgoing=False,
+        allow_transfer=allow_transfer,
+        allow_return=allow_return,
+    )
 
 
 def validate_batch_serial(

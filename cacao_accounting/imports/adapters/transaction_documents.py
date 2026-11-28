@@ -58,6 +58,7 @@ from cacao_accounting.imports.utils.validation import (
     validate_import_warehouse,
 )
 from cacao_accounting.imports.utils.dates import parse_import_date
+from cacao_accounting.inventario.service import InventoryServiceError, validate_serial_transition
 
 
 from cacao_accounting.i18n import _
@@ -79,6 +80,9 @@ class TransactionImportConfig:
     receipt_fields: tuple[str, ...] = ()
     invoice_fields: tuple[str, ...] = ()
     include_batch_serial: bool = False
+    serial_outgoing: bool = False
+    serial_allow_transfer: bool = False
+    serial_allow_return: bool = False
 
 
 class TransactionDocumentAdapter(BaseImportAdapter):
@@ -375,28 +379,24 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         existing = database.session.execute(database.select(SerialNumber).filter_by(serial_no=cleaned)).scalar_one_or_none()
         if existing is not None and existing.item_code != item.code:
             return [_("El numero de serie '%(serial)s' ya esta registrado para otro articulo.") % {"serial": cleaned}]
-        return self._validate_existing_serial_state(existing, warehouse)
+        return self._validate_existing_serial_state(existing, item.code, warehouse)
 
     def _serial_outgoing(self) -> bool:
-        return self.config.entity_type == "delivery_note"
+        return self.config.serial_outgoing
 
-    def _validate_existing_serial_state(self, existing: Any, warehouse: Any) -> list[str]:
-        if existing is None:
-            return []
-        if self._serial_outgoing():
-            if existing.serial_status != "available":
-                return [_("El serial '%(serial)s' no esta disponible para salida.") % {"serial": existing.serial_no}]
-            if warehouse and existing.warehouse and str(existing.warehouse) != str(warehouse):
-                return [_("El serial '%(serial)s' no se encuentra en la bodega de salida.") % {"serial": existing.serial_no}]
-            return []
-        if existing.serial_status == "cancelled":
-            return []
-        if existing.serial_status == "delivered" and self.config.entity_type in {"purchase_receipt"}:
-            return []
-        return [
-            _("El serial '%(serial)s' ya existe y no puede reingresarse en este tipo de documento.")
-            % {"serial": existing.serial_no}
-        ]
+    def _validate_existing_serial_state(self, existing: Any, item_code: str, warehouse: Any) -> list[str]:
+        try:
+            validate_serial_transition(
+                existing,
+                item_code,
+                outgoing=self._serial_outgoing(),
+                warehouse=str(warehouse) if warehouse else None,
+                allow_transfer=self.config.serial_allow_transfer,
+                allow_return=self.config.serial_allow_return,
+            )
+        except InventoryServiceError as exc:
+            return [str(exc)]
+        return []
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
         """Valida fecha, período, origen, bodega, tercero y moneda del documento."""
@@ -974,6 +974,7 @@ class DeliveryNoteAdapter(TransactionDocumentAdapter):
                 party_name_field="customer_name",
                 source_field="sales_order_id",
                 include_batch_serial=True,
+                serial_outgoing=True,
             )
         )
 

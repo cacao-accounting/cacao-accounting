@@ -5,13 +5,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Item, SerialNumber, database
-from cacao_accounting.imports.adapters.transaction_documents import DeliveryNoteAdapter
+from cacao_accounting.database import CompanyParty, Item, ItemUOMConversion, Party, SerialNumber, UOM, database
+from cacao_accounting.imports.adapters.transaction_documents import (
+    DeliveryNoteAdapter,
+    PurchaseReceiptAdapter,
+    TransactionDocumentAdapter,
+)
 from cacao_accounting.inventario.service import validate_batch_serial_draft
 
 
@@ -25,12 +31,28 @@ def _item_serializado() -> str:
             item_type="goods",
             is_stock_item=True,
             is_sale_item=True,
+            is_purchase_item=True,
             has_serial_no=True,
             default_uom="UND",
         )
     )
     database.session.commit()
     return codigo
+
+
+def _habilitar_cliente() -> None:
+    """Habilita el tercero del escenario para validar el documento completo."""
+    party = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+    party.is_active = True
+    party.is_customer = True
+    vinculo = database.session.execute(
+        database.select(CompanyParty).filter_by(company="cacao", party_id=party.id)
+    ).scalar_one_or_none()
+    if vinculo is None:
+        database.session.add(CompanyParty(company="cacao", party_id=party.id, is_active=True))
+    else:
+        vinculo.is_active = True
+    database.session.commit()
 
 
 def _fila(item_code: str, cantidad: str, serie: str) -> dict[str, str]:
@@ -82,7 +104,7 @@ def test_importacion_rechaza_serie_de_otro_articulo(app, entorno_contable):
 
         errores = DeliveryNoteAdapter().validate_document([_fila(item_code, "1", serie)], {"company_id": "cacao"})
 
-        assert any("registrado para otro articulo" in error for error in errores)
+        assert any("registrado para otro art" in error for error in errores)
 
 
 def test_borrador_serializado_exige_una_unidad(app, entorno_contable):
@@ -123,3 +145,58 @@ def test_importacion_rechaza_serial_duplicado_en_documento(app, entorno_contable
         filas[1]["document_ref"] = filas[0]["document_ref"]
         errores = DeliveryNoteAdapter().validate_document(filas, {"company_id": "cacao"})
         assert any("duplicado" in e.lower() for e in errores)
+
+
+def test_recepcion_rechaza_serial_entregado_sin_devolucion(entorno_contable_aislado):
+    """Una recepción normal no puede reingresar un serial ya entregado."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        item_code = _item_serializado()
+        serie = f"SERIE-{uuid4().hex[:8]}"
+        database.session.add(SerialNumber(item_code=item_code, serial_no=serie, serial_status="delivered", warehouse="BOD01"))
+        database.session.commit()
+        fila = _fila(item_code, "1", serie)
+        fila["tercero"] = "PRV001"
+
+        errores = PurchaseReceiptAdapter().validate_document([fila], {"company_id": "cacao"})
+
+        assert any("solo puede cambiar de bodega" in error for error in errores)
+
+
+def test_importacion_permite_transferencia_de_serial_disponible(entorno_contable_aislado):
+    """La prevalidación respeta allow_transfer igual que el posting."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        item_code = _item_serializado()
+        serie = f"SERIE-{uuid4().hex[:8]}"
+        database.session.add(SerialNumber(item_code=item_code, serial_no=serie, serial_status="available", warehouse="BOD01"))
+        database.session.commit()
+        config = replace(DeliveryNoteAdapter().config, serial_outgoing=False, serial_allow_transfer=True)
+        adapter = TransactionDocumentAdapter(config)
+        _habilitar_cliente()
+
+        errores = adapter.validate_document([_fila(item_code, "1", serie)], {"company_id": "cacao"})
+
+        assert not any("serial" in error.lower() for error in errores)
+
+
+def test_importacion_convierte_uom_antes_de_validar_serial(entorno_contable_aislado):
+    """Dos cajas de 0.5 unidades representan una unidad base serializada."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        item_code = _item_serializado()
+        serie = f"SERIE-{uuid4().hex[:8]}"
+        database.session.add(UOM(code="CAJA", name="Caja"))
+        database.session.flush()
+        database.session.add(
+            ItemUOMConversion(item_code=item_code, from_uom="CAJA", to_uom="UND", conversion_factor=Decimal("0.5"))
+        )
+        database.session.add(SerialNumber(item_code=item_code, serial_no=serie, serial_status="available", warehouse="BOD01"))
+        database.session.commit()
+        fila = _fila(item_code, "2", serie)
+        fila["uom"] = "CAJA"
+        _habilitar_cliente()
+
+        errores = DeliveryNoteAdapter().validate_document([fila], {"company_id": "cacao"})
+
+        assert not any("serial" in error.lower() for error in errores)
