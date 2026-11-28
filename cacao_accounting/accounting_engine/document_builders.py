@@ -667,7 +667,13 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         return None
     company = _require_company(document.company)
     references = _payment_references(document)
-    settlement_references = [reference for reference in references if not _is_order_payment_reference(reference)]
+    # #1140: una referencia recortada al saldo vigente puede quedar en cero. No
+    # participa de la liquidación; el pago completo se trata como anticipo.
+    settlement_references = [
+        reference
+        for reference in references
+        if not _is_order_payment_reference(reference) and _decimal_value(reference.allocated_amount) > 0
+    ]
     amounts = _payment_settlement_amounts(
         document=document,
         spec=spec,
@@ -696,7 +702,7 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         exchange_rate=amounts.document_exchange_rate,
         items=[_payment_item_context(document, amounts.document_total)],
         tax_rules=tax_rules,
-        references=_payment_accounting_references(document, company, spec, settlement_references, amounts),
+        references=_payment_accounting_references(document, company, spec, settlement_references, amounts, bool(references)),
         settlement_amount=amounts.settlement_amount,
     )
 
@@ -1074,6 +1080,7 @@ def _payment_accounting_references(
     spec: PaymentBuildSpec,
     settlement_references: list[PaymentReference],
     amounts: PaymentSettlementAmounts,
+    has_any_reference: bool,
 ) -> AccountingReferences:
     """Build accounting references for the payment mapper."""
     return _build_references(
@@ -1083,13 +1090,14 @@ def _payment_accounting_references(
         account_lines=[],
         cash_account=_payment_cash_account(document),
         open_balance=amounts.company_open_balance,
-        custom_references=_payment_custom_references(settlement_references, amounts),
+        custom_references=_payment_custom_references(settlement_references, amounts, has_any_reference),
     )
 
 
 def _payment_custom_references(
     settlement_references: list[PaymentReference],
     amounts: PaymentSettlementAmounts,
+    has_any_reference: bool = False,
 ) -> dict[str, Any]:
     """Build custom reference values used by settlement posting."""
     return {
@@ -1100,6 +1108,7 @@ def _payment_custom_references(
             (reference.gain_loss_amount or Decimal("0") for reference in settlement_references), Decimal("0")
         ),
         "use_advance_as_party_balance": not settlement_references,
+        "has_any_reference": has_any_reference,
         "open_payment_amount": amounts.open_payment_amount,
     }
 

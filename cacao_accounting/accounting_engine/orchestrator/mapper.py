@@ -132,6 +132,7 @@ class AccountingMapper:
         account_id = (
             str(advance_account or "") if use_advance_as_party_balance else context.references.get("party_account", "")
         )
+        has_any_reference = bool(context.references.custom_references.get("has_any_reference"))
         return self._build_line(
             context,
             account_id,
@@ -139,7 +140,10 @@ class AccountingMapper:
             side=self._settlement_balance_side(context),
             description=f"Settlement - {context.document_type}",
             exchange_rate=self._document_exchange_rate(context),
-            party_id=None if use_advance_as_party_balance else context.party_id,
+            # #1140: la contrapartida del excedente de un pago con referencias
+            # conserva el tercero para conciliar AR/AP contra GL. Un anticipo
+            # sin referencias mantiene el contrato previo (sin tercero).
+            party_id=context.party_id if (not use_advance_as_party_balance or has_any_reference) else None,
         )
 
     def _map_cash_line(

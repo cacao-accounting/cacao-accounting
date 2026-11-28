@@ -9,6 +9,8 @@ import json
 
 from dataclasses import dataclass
 
+from datetime import date
+
 from decimal import Decimal, InvalidOperation
 
 from typing import Any, Iterable, Sequence
@@ -1195,6 +1197,77 @@ def _payment_total_allocated(payment_id: str) -> Decimal:
     return result or Decimal("0")
 
 
+def _remaining_outstanding_from_ledger(target: Any, as_of_date: date) -> Decimal | None:
+    """Saldo vigente del documento destino desde el ledger canónico.
+
+    Devuelve ``None`` cuando el documento no tiene apertura canónica (flujo
+    legacy), para no alterar su cálculo previo.
+    """
+    from cacao_accounting.database import ARAPLedgerEntry
+    from cacao_accounting.document_flow.registry import normalize_doctype
+
+    document_type = normalize_doctype(str(getattr(target, "document_type", None) or getattr(target, "__tablename__", "")))
+    opening = database.session.execute(
+        select(ARAPLedgerEntry.id)
+        .where(
+            ARAPLedgerEntry.document_type == document_type,
+            ARAPLedgerEntry.document_id == str(target.id),
+            ARAPLedgerEntry.event_type == "opening",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if opening is None:
+        return None
+    balance = ARAPLedgerEntry.document_balance(
+        document_type,
+        str(target.id),
+        as_of_date=as_of_date,
+        currency=getattr(target, "transaction_currency", None) or getattr(target, "currency", None),
+    )
+    is_return = bool(getattr(target, "is_return", False)) or "credit_note" in document_type or "return" in document_type
+    return abs(balance) if is_return else max(balance, Decimal("0"))
+
+
+def _cap_payment_references_to_outstanding(document: PaymentEntry) -> None:
+    """Limita cada referencia al saldo vigente del documento destino (#1140).
+
+    El saldo se calcula dentro de la transacción de posting. La parte que
+    excede el saldo abierto no se aplica a la factura: permanece como importe
+    no aplicado del pago y se contabiliza como anticipo del mismo tercero,
+    conforme a la decisión registrada en el issue. Los documentos sin apertura
+    canónica conservan su cálculo previo.
+    """
+    from cacao_accounting.database import PaymentReference
+
+    references = database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all()
+    if not references:
+        return
+    posting_date = getattr(document, "posting_date", None) or date.today()
+    for reference in references:
+        if not reference.reference_id:
+            continue
+        target_model = SalesInvoice if str(reference.reference_type).startswith("sales_") else PurchaseInvoice
+        target = (
+            database.session.execute(select(target_model).where(target_model.id == reference.reference_id).with_for_update())
+            .scalars()
+            .first()
+        )
+        if target is None:
+            continue
+        remaining = _remaining_outstanding_from_ledger(target, posting_date)
+        if remaining is None:
+            continue
+        requested = abs(_decimal_value(reference.allocated_amount))
+        effective = min(requested, remaining)
+        if effective == requested:
+            continue
+        reference.allocated_amount = effective
+        payment_amount = _decimal_value(reference.payment_amount)
+        if requested and payment_amount:
+            reference.payment_amount = (payment_amount * effective / requested).quantize(Decimal("0.0001"))
+    database.session.flush()
+
+
 def _payment_has_realized_fx_difference(payment_id: str | None) -> bool:
     """Indica si una referencia de pago conserva una diferencia cambiaria realizada."""
     if not payment_id:
@@ -1605,6 +1678,7 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         raise PostingError(_("El monto del pago debe ser mayor que cero."))
 
     if payment_type in {"pay", "receive"}:
+        _cap_payment_references_to_outstanding(document)
         engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
         if engine_payload is not None:
             settlement = engine_payload.results.get("settlement")
@@ -1662,21 +1736,22 @@ def _create_payment_pay_entries(
 
     allocated = _payment_total_allocated(document.id) if party_account_id else Decimal("0")
 
-    if party_account_id and allocated > Decimal("0") and amount > allocated:
+    if party_account_id and amount > allocated:
         entries: list[GLEntry] = []
-        entries.extend(
-            _normal_entries_for_amount(
-                context=context,
-                debit_account_id=party_account_id,
-                credit_account_id=bank_account_id,
-                amount=allocated,
-                party_type=party_type,
-                party_id=document.party_id,
-                credit_bank_account_id=document.bank_account_id,
-                debit_remarks="Pago a proveedor",
-                credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
+        if allocated > Decimal("0"):
+            entries.extend(
+                _normal_entries_for_amount(
+                    context=context,
+                    debit_account_id=party_account_id,
+                    credit_account_id=bank_account_id,
+                    amount=allocated,
+                    party_type=party_type,
+                    party_id=document.party_id,
+                    credit_bank_account_id=document.bank_account_id,
+                    debit_remarks="Pago a proveedor",
+                    credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
+                )
             )
-        )
         excess = amount - allocated
         supplier_advance_account = _require_account(
             advance_account_id,
@@ -1735,7 +1810,7 @@ def _create_payment_receive_entries(
 
     allocated = _payment_total_allocated(document.id) if party_account_id else Decimal("0")
 
-    if party_account_id and allocated > Decimal("0") and amount > allocated:
+    if party_account_id and amount > allocated:
         entries: list[GLEntry] = [
             _create_gl_entry(
                 context=context,
@@ -1747,18 +1822,21 @@ def _create_payment_receive_entries(
                     entry_remarks="Cuenta bancaria receptora",
                 ),
             ),
-            _create_gl_entry(
-                context=context,
-                params=GLEntryParams(
-                    account_id=party_account_id,
-                    debit=Decimal("0"),
-                    credit=allocated,
-                    party_type=party_type,
-                    party_id=document.party_id,
-                    entry_remarks=_payment_entry_remarks(receivable, True),
-                ),
-            ),
         ]
+        if allocated > Decimal("0"):
+            entries.append(
+                _create_gl_entry(
+                    context=context,
+                    params=GLEntryParams(
+                        account_id=party_account_id,
+                        debit=Decimal("0"),
+                        credit=allocated,
+                        party_type=party_type,
+                        party_id=document.party_id,
+                        entry_remarks=_payment_entry_remarks(receivable, True),
+                    ),
+                )
+            )
         excess = amount - allocated
         if excess > 0:
             customer_advance_account = _require_account(

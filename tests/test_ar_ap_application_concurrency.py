@@ -198,6 +198,8 @@ def arap_application(tmp_path):
             is_closed=False,
             financial_closed=False,
         )
+        database.session.add(fiscal_year)
+        database.session.flush()
         period = AccountingPeriod(
             entity=company_code,
             fiscal_year_id=fiscal_year.id,
