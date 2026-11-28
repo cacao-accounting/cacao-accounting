@@ -5063,6 +5063,9 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
 
     company = _company_for(document)
+    # Todas las rutas de actividad comparten el lock de Entity con el cambio
+    # de método de valuación; no solo los consumos FIFO (#1881).
+    _valuation_method_for_company(company)
     purpose = getattr(document, "purpose", "").lower()
     for line in database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars():
         _validate_stock_entry_warehouses(document, line)

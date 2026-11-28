@@ -19,16 +19,26 @@ from sqlalchemy.engine import make_url
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.contabilidad.posting_service import _valuation_method_for_company
+from cacao_accounting.contabilidad import posting_service
+from cacao_accounting.contabilidad.posting_service import post_stock_entry
 from cacao_accounting.database import (
+    Accounts,
+    AccountingPeriod,
+    Book,
     Currency,
     Entity,
+    FiscalYear,
     Item,
+    StockEntry,
+    StockEntryItem,
     StockLedgerEntry,
     UOM,
+    User,
     Warehouse,
+    WarehouseCompanyAccount,
     database,
 )
+from flask_login import login_user
 from cacao_accounting.inventario.valuation_settings import update_company_valuation_method
 
 pytestmark = pytest.mark.database
@@ -110,7 +120,74 @@ def pg_app():
             database.session.add(
                 Item(code="ART-1881", name="Artículo 1881", item_type="goods", is_stock_item=True, default_uom="UND1881")
             )
-            database.session.add(Warehouse(code="BOD-1881", name="Bodega 1881", company="cacao"))
+            database.session.add_all(
+                [
+                    Warehouse(code="BOD-1881-A", name="Bodega origen 1881", company="cacao"),
+                    Warehouse(code="BOD-1881-B", name="Bodega destino 1881", company="cacao"),
+                ]
+            )
+            database.session.flush()
+            inventory = Accounts(
+                code="1109-1881",
+                name="Inventario 1881",
+                entity="cacao",
+                group=False,
+                active=True,
+                enabled=True,
+                account_type="stock",
+            )
+            book = Book(
+                entity="cacao",
+                code="LIB-1881",
+                name="Libro 1881",
+                currency="NIO",
+                status="activo",
+                is_primary=True,
+            )
+            fiscal_year = FiscalYear(
+                entity="cacao",
+                name="2026",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+                is_closed=False,
+            )
+            database.session.add_all([inventory, book, fiscal_year])
+            database.session.flush()
+            database.session.add(
+                AccountingPeriod(
+                    entity="cacao",
+                    fiscal_year_id=fiscal_year.id,
+                    name="2026",
+                    start=date(2026, 1, 1),
+                    end=date(2026, 12, 31),
+                    enabled=True,
+                    is_closed=False,
+                )
+            )
+            database.session.add_all(
+                [
+                    WarehouseCompanyAccount(
+                        warehouse_code="BOD-1881-A",
+                        company="cacao",
+                        inventory_account_id=inventory.id,
+                        is_active=True,
+                    ),
+                    WarehouseCompanyAccount(
+                        warehouse_code="BOD-1881-B",
+                        company="cacao",
+                        inventory_account_id=inventory.id,
+                        is_active=True,
+                    ),
+                    User(
+                        user="admin-1881",
+                        name="Admin 1881",
+                        password=b"unused",
+                        classification="admin",
+                        active=True,
+                        company="cacao",
+                    ),
+                ]
+            )
             database.session.commit()
         yield aplicacion
     finally:
@@ -133,6 +210,35 @@ def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
         entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
         original = entity.valuation_method or "moving_average"
         nuevo = _metodo_distinto(original)
+        entry = StockEntry(
+            company="cacao",
+            purpose="material_transfer",
+            posting_date=date(2026, 5, 20),
+            document_no="SE-1881",
+            from_warehouse="BOD-1881-A",
+            to_warehouse="BOD-1881-B",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            docstatus=1,
+        )
+        database.session.add(entry)
+        database.session.flush()
+        database.session.add(
+            StockEntryItem(
+                stock_entry_id=entry.id,
+                item_code="ART-1881",
+                source_warehouse="BOD-1881-A",
+                target_warehouse="BOD-1881-B",
+                qty=Decimal("5"),
+                qty_in_base_uom=Decimal("5"),
+                uom="UND1881",
+                basic_rate=Decimal("10"),
+                amount=Decimal("50"),
+            )
+        )
+        database.session.commit()
+        entry_id = str(entry.id)
 
     posting_locked = threading.Event()
     guard_at_lock = threading.Event()
@@ -158,26 +264,27 @@ def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
             resultado["posting_pid"] = conexion.execute(text("SELECT pg_backend_pid()")).scalar_one()
             listener = _lock_listener()
             event.listen(conexion, "before_cursor_execute", listener)
-            try:
-                _valuation_method_for_company("cacao")  # SELECT ... FOR UPDATE sobre Entity
+            create_original = posting_service._create_stock_ledger
+
+            def pausar_antes_de_crear_actividad(documento):
                 posting_locked.set()
-                liberar.wait(timeout=10)
-                database.session.add(
-                    StockLedgerEntry(
-                        posting_date=date(2026, 5, 20),
-                        item_code="ART-1881",
-                        warehouse="BOD-1881",
-                        company="cacao",
-                        qty_change=Decimal("5"),
-                        voucher_type="stock_entry",
-                        voucher_id="SE-1881",
-                    )
-                )
+                assert liberar.wait(timeout=10), "no se liberó el posting"
+                return create_original(documento)
+
+            posting_service._create_stock_ledger = pausar_antes_de_crear_actividad
+            try:
+                entry = database.session.get(StockEntry, entry_id)
+                assert entry is not None
+                with pg_app.test_request_context(f"/inventory/stock-entry/{entry_id}"):
+                    user = database.session.execute(database.select(User).filter_by(user="admin-1881")).scalar_one()
+                    login_user(user)
+                    post_stock_entry(entry)
                 database.session.commit()
-            except Exception as exc:  # pragma: no cover - diagn?stico de la prueba
+            except Exception as exc:  # pragma: no cover - diagnóstico de la prueba
                 resultado["posting_error"] = repr(exc)
                 database.session.rollback()
             finally:
+                posting_service._create_stock_ledger = create_original
                 event.remove(conexion, "before_cursor_execute", listener)
 
     def guard():
