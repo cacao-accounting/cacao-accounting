@@ -7,6 +7,9 @@ La edición de una entrada vinculada compara la identidad de origen enviada por
 el formulario con la persistida. El render debe hidratar ``source_type``,
 ``source_id`` y ``source_item_id`` de cada línea; de lo contrario una edición
 de solo cabecera se rechaza como si el origen se hubiese eliminado.
+
+Los casos usan una base SQLite aislada: la evidencia documental es append-only
+y no debe borrarse durante el teardown de una prueba.
 """
 
 import json
@@ -16,18 +19,29 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
-from cacao_accounting.database import DocumentRelation, StockEntry, StockEntryItem, database
+from cacao_accounting.database import DocumentRelation, StockEntry, StockEntryItem, User, database
 
 _CONFIG_RE = re.compile(r"transactionForm\((.*?)\)'", re.DOTALL)
 
 
-def _seed_linked_entry(app, request: pytest.FixtureRequest, relation_status: str = "active") -> dict[str, str]:
-    """Crea un movimiento con una línea y una relación documental de origen.
+def _admin_client(app):
+    """Cliente HTTP autenticado sobre la app aislada de la prueba."""
+    with app.app_context():
+        admin = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
+        user_id = str(admin.id)
+        auth_version = admin.auth_version
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+    return client
 
-    Usa el artículo y la UOM del escenario contable compartido y registra la
-    limpieza de las filas confirmadas para no contaminar pruebas posteriores.
-    """
+
+def _seed_linked_entry(app, relation_status: str = "active") -> dict[str, str]:
+    """Crea un movimiento vinculado en la base aislada de la prueba."""
     suffix = uuid4().hex[:10]
     with app.app_context():
         from cacao_accounting.database import NamingSeries
@@ -78,7 +92,7 @@ def _seed_linked_entry(app, request: pytest.FixtureRequest, relation_status: str
         )
         database.session.add(relation)
         database.session.commit()
-        ids = {
+        return {
             "entry": entry.id,
             "line": line.id,
             "relation": relation.id,
@@ -87,32 +101,15 @@ def _seed_linked_entry(app, request: pytest.FixtureRequest, relation_status: str
             "source_item_id": relation.source_item_id,
         }
 
-    def _cleanup() -> None:
-        """Elimina la evidencia temporal en orden de dependencias."""
-        with app.app_context():
-            saved_relation = database.session.get(DocumentRelation, ids["relation"])
-            if saved_relation is not None:
-                database.session.delete(saved_relation)
-            saved_line = database.session.get(StockEntryItem, ids["line"])
-            if saved_line is not None:
-                database.session.delete(saved_line)
-            saved_entry = database.session.get(StockEntry, ids["entry"])
-            if saved_entry is not None:
-                database.session.delete(saved_entry)
-            database.session.commit()
 
-    request.addfinalizer(_cleanup)
-    return ids
-
-
-def _seed_second_company(app, request: pytest.FixtureRequest) -> tuple[str, str]:
+def _seed_second_company(app) -> tuple[str, str]:
     """Crea otra compañía accesible por el usuario para probar el cambio de compañía."""
-    from cacao_accounting.database import Entity, NamingSeries, User, UserCompanyAccess
+    from cacao_accounting.database import Entity, NamingSeries, UserCompanyAccess
     from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 
     code = f"OT{uuid4().hex[:6]}"
     with app.app_context():
-        user_id = str(database.session.execute(database.select(User.id).filter_by(user="admin")).scalar_one())
+        user_id = str(database.session.execute(select(User.id).filter_by(user="admin")).scalar_one())
         database.session.add(
             Entity(
                 code=code,
@@ -130,27 +127,6 @@ def _seed_second_company(app, request: pytest.FixtureRequest) -> tuple[str, str]
         series_id = database.session.execute(
             database.select(NamingSeries.id).filter_by(entity_type="stock_entry", company=code)
         ).scalar_one()
-
-    def _cleanup() -> None:
-        """Elimina el acceso y la compañía temporal."""
-        with app.app_context():
-            access = database.session.execute(
-                database.select(UserCompanyAccess).filter_by(user_id=user_id, company_code=code)
-            ).scalar_one_or_none()
-            if access is not None:
-                database.session.delete(access)
-                database.session.flush()
-            for series in database.session.execute(
-                database.select(NamingSeries).filter_by(entity_type="stock_entry", company=code)
-            ).scalars():
-                database.session.delete(series)
-            database.session.flush()
-            entity = database.session.execute(database.select(Entity).filter_by(code=code)).scalar_one_or_none()
-            if entity is not None:
-                database.session.delete(entity)
-            database.session.commit()
-
-    request.addfinalizer(_cleanup)
     return code, series_id
 
 
@@ -196,11 +172,11 @@ def _form_from_render(config: dict, **header_overrides: str) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("relation_status", ["active", "closed"])
-def test_edit_render_hydrates_line_origin(app, request, authenticated_client, entorno_contable, relation_status):
+def test_edit_render_hydrates_line_origin(entorno_contable_aislado, relation_status):
     """El GET de edición publica el origen persistido de cada línea vinculada."""
-    del entorno_contable
-    ids = _seed_linked_entry(app, request, relation_status)
-    config = _edit_config(authenticated_client("admin"), ids["entry"])
+    app = entorno_contable_aislado.app
+    ids = _seed_linked_entry(app, relation_status)
+    config = _edit_config(_admin_client(app), ids["entry"])
 
     assert config["initialLines"]
     line = config["initialLines"][0]
@@ -209,11 +185,11 @@ def test_edit_render_hydrates_line_origin(app, request, authenticated_client, en
     assert line["source_item_id"] == ids["source_item_id"]
 
 
-def test_header_edit_from_rendered_form_preserves_relation(app, request, authenticated_client, entorno_contable):
+def test_header_edit_from_rendered_form_preserves_relation(entorno_contable_aislado):
     """El POST derivado del render real guarda la cabecera y conserva la relación."""
-    del entorno_contable
-    ids = _seed_linked_entry(app, request, "active")
-    client = authenticated_client("admin")
+    app = entorno_contable_aislado.app
+    ids = _seed_linked_entry(app, "active")
+    client = _admin_client(app)
     form = _form_from_render(_edit_config(client, ids["entry"]))
 
     response = client.post(f"/inventory/stock-entry/{ids['entry']}/edit", data=form)
@@ -230,12 +206,12 @@ def test_header_edit_from_rendered_form_preserves_relation(app, request, authent
         assert saved_relation.target_item_id == ids["line"]
 
 
-def test_header_edit_rejects_company_change_without_mutating_evidence(app, request, authenticated_client, entorno_contable):
+def test_header_edit_rejects_company_change_without_mutating_evidence(entorno_contable_aislado):
     """Cambiar la compañía de una entrada vinculada se rechaza antes de tocar evidencia."""
-    del entorno_contable
-    ids = _seed_linked_entry(app, request, "active")
-    client = authenticated_client("admin")
-    other_company, other_series = _seed_second_company(app, request)
+    app = entorno_contable_aislado.app
+    ids = _seed_linked_entry(app, "active")
+    client = _admin_client(app)
+    other_company, other_series = _seed_second_company(app)
     form = _form_from_render(_edit_config(client, ids["entry"]), company=other_company, naming_series=other_series)
 
     response = client.post(f"/inventory/stock-entry/{ids['entry']}/edit", data=form)
