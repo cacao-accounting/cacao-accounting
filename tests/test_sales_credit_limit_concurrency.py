@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
@@ -43,11 +42,8 @@ FECHA = date(2026, 5, 15)
 
 
 def _app(tmp_path):
-    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
-    if uri.startswith("sqlite"):
-        uri = f"sqlite:///{tmp_path / 'credit-limit.sqlite'}"
-    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
-        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+    """Cada caso usa su propio archivo SQLite, sin reutilizar una base externa."""
+    uri = f"sqlite:///{tmp_path / 'credit-limit.sqlite'}"
     return create_app(
         {
             **configuracion,
@@ -66,15 +62,29 @@ def _app(tmp_path):
     )
 
 
+@pytest.fixture
+def credit_app(tmp_path):
+    """App con base dedicada que se descarta al terminar el caso."""
+    app = _app(tmp_path)
+    yield app
+    with app.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
 def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
     company = f"E{suffix}"
     with app.app_context():
         database.create_all()
+        module = database.session.execute(database.select(Modules).filter_by(module="sales")).scalar_one_or_none()
+        if module is None:
+            database.session.add(Modules(module="sales", default=False, enabled=True))
+        else:
+            module.enabled = True
         database.session.add_all(
             [
                 Currency(code=f"C{suffix}", name="Moneda", decimals=2, active=True, default=False),
                 UOM(code=f"U{suffix}", name="Unidad", is_active=True),
-                Modules(module="sales", default=False, enabled=True),
                 Entity(
                     code=company,
                     name=f"Empresa {suffix}",
@@ -145,9 +155,9 @@ def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
         return result
 
 
-def test_aprobaciones_diferidas_no_superan_el_limite(tmp_path):
+def test_aprobaciones_diferidas_no_superan_el_limite(credit_app):
     """El flujo real de ApprovalEngine respeta el lock de crédito."""
-    app = _app(tmp_path)
+    app = credit_app
     with app.app_context():
         database.session.remove()
     suffix = uuid4().hex[:6].upper()
@@ -229,11 +239,23 @@ def test_aprobaciones_diferidas_no_superan_el_limite(tmp_path):
             database.session.execute(database.select(SalesOrder).filter_by(company=company, docstatus=1)).scalars().all()
         )
         assert len(approved) == 1
+        approved_id = approved[0].id
+        rejected_id = next(order_id for order_id in order_ids if order_id != approved_id)
+        requests_by_document = {
+            row.document_id: row
+            for row in database.session.execute(
+                database.select(ApprovalRequest).where(ApprovalRequest.document_id.in_(order_ids))
+            ).scalars()
+        }
+        assert requests_by_document[approved_id].status == "Approved"
+        assert requests_by_document[rejected_id].status in {"Pending Approval", "Rejected"}
+        rechazada = database.session.get(SalesOrder, rejected_id)
+        assert rechazada.docstatus == 0
 
 
-def test_dos_aprobaciones_no_superan_el_limite(tmp_path):
+def test_dos_aprobaciones_no_superan_el_limite(credit_app):
     """Dos documentos de 60 con límite 100 no pueden confirmarse ambos."""
-    app = _app(tmp_path)
+    app = credit_app
     suffix = uuid4().hex[:6].upper()
     company, customer_id, order_ids = _seed(app, suffix)
     barrier = Barrier(2, timeout=30)
@@ -256,16 +278,11 @@ def test_dos_aprobaciones_no_superan_el_limite(tmp_path):
             finally:
                 database.session.remove()
 
-    try:
-        with ThreadPoolExecutor(max_workers=2) as workers:
-            results = list(workers.map(approve, order_ids))
-        assert sorted(results) == ["aprobada", "rechazada"], results
-        with app.app_context():
-            approved = (
-                database.session.execute(database.select(SalesOrder).filter_by(company=company, docstatus=1)).scalars().all()
-            )
-            assert len(approved) == 1
-    finally:
-        with app.app_context():
-            database.session.remove()
-            database.engine.dispose()
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = list(workers.map(approve, order_ids))
+    assert sorted(results) == ["aprobada", "rechazada"], results
+    with app.app_context():
+        approved = (
+            database.session.execute(database.select(SalesOrder).filter_by(company=company, docstatus=1)).scalars().all()
+        )
+        assert len(approved) == 1
