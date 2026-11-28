@@ -108,12 +108,7 @@ def get_payables_open_documents(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(PurchaseInvoice)
-        .where(PurchaseInvoice.company == company_id)
-        .where(PurchaseInvoice.docstatus == 1)
-        .where(PurchaseInvoice.status.in_(["open", "overdue"]))
-    )
+    query = database.select(PurchaseInvoice).where(PurchaseInvoice.company == company_id).where(PurchaseInvoice.docstatus == 1)
 
     if party_id:
         query = query.where(PurchaseInvoice.supplier_id == party_id)

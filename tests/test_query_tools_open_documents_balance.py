@@ -66,8 +66,8 @@ def _ledger(document, party_type: str, amount: Decimal, event_type: str) -> None
     database.session.flush()
 
 
-def _sales_invoice(customer_id: str, number: str) -> SalesInvoice:
-    """Crea una factura de venta publicada con estado open."""
+def _sales_invoice(customer_id: str, number: str, status: str | None = "open") -> SalesInvoice:
+    """Crea una factura de venta publicada con el estado indicado."""
     invoice = SalesInvoice(
         company="cacao",
         customer_id=customer_id,
@@ -76,7 +76,7 @@ def _sales_invoice(customer_id: str, number: str) -> SalesInvoice:
         document_type="sales_invoice",
         posting_date=CORTE,
         docstatus=1,
-        status="open",
+        status=status,
         total=Decimal("100"),
         grand_total=Decimal("100"),
         base_total=Decimal("100"),
@@ -90,8 +90,8 @@ def _sales_invoice(customer_id: str, number: str) -> SalesInvoice:
     return invoice
 
 
-def _purchase_invoice(supplier_id: str, number: str) -> PurchaseInvoice:
-    """Crea una factura de compra publicada con estado open."""
+def _purchase_invoice(supplier_id: str, number: str, status: str | None = "open") -> PurchaseInvoice:
+    """Crea una factura de compra publicada con el estado indicado."""
     invoice = PurchaseInvoice(
         company="cacao",
         supplier_id=supplier_id,
@@ -100,7 +100,7 @@ def _purchase_invoice(supplier_id: str, number: str) -> PurchaseInvoice:
         document_type="purchase_invoice",
         posting_date=CORTE,
         docstatus=1,
-        status="open",
+        status=status,
         total=Decimal("100"),
         grand_total=Decimal("100"),
         base_total=Decimal("100"),
@@ -194,3 +194,46 @@ def test_payables_omite_facturas_liquidadas(entorno_contable_aislado):
         assert result["total_items"] == 1
         assert [item["document_no"] for item in result["items"]] == ["AP-ABIERTA"]
         assert Decimal(result["items"][0]["outstanding"]) == Decimal("100.0000")
+
+
+def test_receivables_incluye_facturas_sin_estado_heredado(entorno_contable_aislado):
+    """Una factura contabilizada con status NULL aparece por su saldo real."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _ensure_modules()
+        customer_id = str(database.session.execute(select(Party.id).filter_by(code="CLI001")).scalar_one())
+        invoice = _sales_invoice(customer_id, "AR-SIN-ESTADO", status=None)
+        _ledger(invoice, "customer", Decimal("100"), "opening")
+        database.session.commit()
+
+        result = receivables_handlers.get_receivables_open_documents.handler(
+            context=_context("receivables.reports.read"),
+            company_id="cacao",
+            page=1,
+            page_size=100,
+        )
+
+        assert [item["document_no"] for item in result["items"]] == ["AR-SIN-ESTADO"]
+        assert Decimal(result["items"][0]["outstanding"]) == Decimal("100.0000")
+        assert result["total_items"] == 1
+
+
+def test_payables_incluye_facturas_sin_estado_heredado(entorno_contable_aislado):
+    """AP aplica el mismo criterio de saldo real sin depender del estado."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _ensure_modules()
+        supplier_id = str(database.session.execute(select(Party.id).filter_by(code="PRV001")).scalar_one())
+        invoice = _purchase_invoice(supplier_id, "AP-SIN-ESTADO", status=None)
+        _ledger(invoice, "supplier", Decimal("100"), "opening")
+        database.session.commit()
+
+        result = payables_handlers.get_payables_open_documents.handler(
+            context=_context("payables.reports.read"),
+            company_id="cacao",
+            page=1,
+            page_size=100,
+        )
+
+        assert [item["document_no"] for item in result["items"]] == ["AP-SIN-ESTADO"]
+        assert result["total_items"] == 1

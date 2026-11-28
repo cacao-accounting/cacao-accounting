@@ -108,12 +108,7 @@ def get_receivables_open_documents(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(SalesInvoice)
-        .where(SalesInvoice.company == company_id)
-        .where(SalesInvoice.docstatus == 1)
-        .where(SalesInvoice.status.in_(["open", "overdue"]))
-    )
+    query = database.select(SalesInvoice).where(SalesInvoice.company == company_id).where(SalesInvoice.docstatus == 1)
 
     if party_id:
         query = query.where(SalesInvoice.customer_id == party_id)
