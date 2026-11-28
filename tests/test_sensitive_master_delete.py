@@ -28,6 +28,25 @@ from cacao_accounting.database import (
 )
 
 
+def _crear_plantilla_recurrente(application: Flask, libro: str, code: str = "REC-A") -> str:
+    """Registra una plantilla recurrente que depende del libro indicado."""
+    from cacao_accounting.database import RecurringJournalTemplate
+
+    with application.app_context():
+        libro_id = database.session.execute(database.select(Book.id).filter_by(code=libro)).scalar_one()
+        plantilla = RecurringJournalTemplate(
+            code=code,
+            company="A",
+            ledger_id=libro_id,
+            name="Plantilla de prueba",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+        )
+        database.session.add(plantilla)
+        database.session.commit()
+        return plantilla.id
+
+
 def _crear_app(cloud: bool = False) -> Flask:
     """Crea una app aislada con controles internos activos y dos compañías."""
     application = create_app(
@@ -170,9 +189,32 @@ def test_anio_fiscal_con_dependencias_no_se_borra(application):
     respuesta = _cliente(application).post(f"/accounting/fiscal_year/{exercise_id}/delete", follow_redirects=True)
 
     assert respuesta.status_code == 200
-    assert "existen dependencias" in respuesta.get_data(as_text=True)
+    assert "el año fiscal EJERCICIO-A: existen dependencias (períodos contables)" in respuesta.get_data(as_text=True)
     with application.app_context():
         assert database.session.get(FiscalYear, exercise_id) is not None
+        assert (
+            database.session.execute(
+                database.select(AccountingPeriod).filter_by(fiscal_year_id=exercise_id)
+            ).scalar_one_or_none()
+            is not None
+        )
+
+
+def test_libro_con_dependencias_no_se_borra(application):
+    """Un libro con plantillas recurrentes informa la dependencia y persiste."""
+    _crear_plantilla_recurrente(application, "LIBROA")
+    respuesta = _cliente(application).post("/accounting/book/delete/LIBROA", follow_redirects=True)
+
+    assert respuesta.status_code == 200
+    assert "el libro LIBROA: existen dependencias (plantillas recurrentes)" in respuesta.get_data(as_text=True)
+    with application.app_context():
+        from cacao_accounting.database import RecurringJournalTemplate
+
+        assert database.session.execute(database.select(Book).filter_by(code="LIBROA")).scalar_one_or_none() is not None
+        assert (
+            database.session.execute(database.select(RecurringJournalTemplate).filter_by(code="REC-A")).scalar_one_or_none()
+            is not None
+        )
 
 
 def test_borrado_de_compania_ajena_se_rechaza():
@@ -231,3 +273,47 @@ def test_mensaje_de_anio_fiscal_se_traduce_al_ingles(application):
         assert "maestro protegido" not in texto
     finally:
         _restaura_idioma(application, idioma)
+
+
+def test_mensaje_de_libro_con_dependencias_se_traduce_al_ingles(application):
+    """El maestro, la dependencia y la plantilla salen completos en inglés."""
+    _crear_plantilla_recurrente(application, "LIBROA")
+    client, idioma = _cliente_en_ingles(application)
+    try:
+        respuesta = client.post("/accounting/book/delete/LIBROA", follow_redirects=True)
+        texto = respuesta.get_data(as_text=True)
+        assert "the book LIBROA cannot be deleted: dependencies exist (recurring templates)." in texto
+        assert "No se puede eliminar" not in texto
+        assert "plantillas recurrentes" not in texto
+    finally:
+        _restaura_idioma(application, idioma)
+    with application.app_context():
+        assert database.session.execute(database.select(Book).filter_by(code="LIBROA")).scalar_one_or_none() is not None
+
+
+def test_mensaje_de_anio_fiscal_con_dependencias_se_traduce_al_ingles(application):
+    """El año fiscal con períodos informa la dependencia traducida."""
+    with application.app_context():
+        exercise = database.session.execute(database.select(FiscalYear).filter_by(name="EJERCICIO-A")).scalar_one()
+        database.session.add(
+            AccountingPeriod(
+                entity="A",
+                fiscal_year_id=exercise.id,
+                name="2026-01",
+                start=date(2026, 1, 1),
+                end=date(2026, 1, 31),
+            )
+        )
+        database.session.commit()
+        exercise_id = exercise.id
+    client, idioma = _cliente_en_ingles(application)
+    try:
+        respuesta = client.post(f"/accounting/fiscal_year/{exercise_id}/delete", follow_redirects=True)
+        texto = respuesta.get_data(as_text=True)
+        assert "the fiscal year EJERCICIO-A cannot be deleted: dependencies exist (accounting periods)." in texto
+        assert "No se puede eliminar" not in texto
+        assert "períodos contables" not in texto
+    finally:
+        _restaura_idioma(application, idioma)
+    with application.app_context():
+        assert database.session.get(FiscalYear, exercise_id) is not None

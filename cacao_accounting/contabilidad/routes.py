@@ -469,7 +469,12 @@ def _reject_sensitive_delete(tipo: str, identificador: str) -> None:
 
 
 def _reject_delete_with_dependencies(label: str, checks: list[tuple[str, Any]]) -> bool:
-    """Bloquea eliminaciones cuando existe cualquier registro dependiente."""
+    """Bloquea eliminaciones cuando existe cualquier registro dependiente.
+
+    ``label`` y los nombres de ``checks`` deben llegar ya traducidos con
+    gettext; los identificadores de los registros se interpolan como datos y
+    nunca forman parte del msgid.
+    """
     dependencies = [name for name, query in checks if database.session.execute(query.limit(1)).first()]
     if not dependencies:
         return False
@@ -951,19 +956,19 @@ def eliminar_entidad(id_entidad):
             )
             return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     if _reject_delete_with_dependencies(
-        f"la entidad {company}",
+        _("la entidad %(code)s") % {"code": company},
         [
-            ("años fiscales", database.select(FiscalYear.id).filter_by(entity=company)),
-            ("períodos contables", database.select(AccountingPeriod.id).filter_by(entity=company)),
-            ("libros", database.select(Book.id).filter_by(entity=company)),
-            ("cuentas", database.select(Accounts.id).filter_by(entity=company)),
-            ("centros de costo", database.select(CostCenter.id).filter_by(entity=company)),
-            ("unidades", database.select(Unit.id).filter_by(entity=company)),
-            ("proyectos", database.select(Project.id).filter_by(entity=company)),
-            ("presupuestos", database.select(Budget.id).filter_by(company=company)),
-            ("comprobantes", database.select(ComprobanteContable.id).filter_by(entity=company)),
+            (_("años fiscales"), database.select(FiscalYear.id).filter_by(entity=company)),
+            (_("períodos contables"), database.select(AccountingPeriod.id).filter_by(entity=company)),
+            (_("libros"), database.select(Book.id).filter_by(entity=company)),
+            (_("cuentas"), database.select(Accounts.id).filter_by(entity=company)),
+            (_("centros de costo"), database.select(CostCenter.id).filter_by(entity=company)),
+            (_("unidades"), database.select(Unit.id).filter_by(entity=company)),
+            (_("proyectos"), database.select(Project.id).filter_by(entity=company)),
+            (_("presupuestos"), database.select(Budget.id).filter_by(company=company)),
+            (_("comprobantes"), database.select(ComprobanteContable.id).filter_by(entity=company)),
             (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(company=company)),
-            ("cuentas bancarias", database.select(BankAccount.id).filter_by(company=company)),
+            (_("cuentas bancarias"), database.select(BankAccount.id).filter_by(company=company)),
         ],
     ):
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
@@ -1150,11 +1155,11 @@ def eliminar_unidad(id_unidad):
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
-            f"la unidad {unidad.code}",
+            _("la unidad %(code)s") % {"code": unidad.code},
             [
-                ("presupuestos", database.select(BudgetLine.id).filter_by(business_unit_id=unidad.id)),
+                (_("presupuestos"), database.select(BudgetLine.id).filter_by(business_unit_id=unidad.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(unit_code=unidad.code)),
-                ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(unit=unidad.code)),
+                (_("comprobantes"), database.select(ComprobanteContableDetalle.id).filter_by(unit=unidad.code)),
                 (_(MOVIMIENTOS_INVENTARIO_LABEL), database.select(StockEntry.id).filter_by(unit_code=unidad.code)),
             ],
         ):
@@ -1367,13 +1372,13 @@ def eliminar_libro(id_unidad):
         )
 
         if _reject_delete_with_dependencies(
-            f"el libro {id_unidad}",
+            _("el libro %(code)s") % {"code": id_unidad},
             [
-                ("presupuestos", database.select(Budget.id).filter_by(ledger_id=libro.id)),
-                ("comprobantes", database.select(ComprobanteContable.id).filter_by(book=libro.code)),
+                (_("presupuestos"), database.select(Budget.id).filter_by(ledger_id=libro.id)),
+                (_("comprobantes"), database.select(ComprobanteContable.id).filter_by(book=libro.code)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(ledger_id=libro.id)),
                 (
-                    "plantillas recurrentes",
+                    _("plantillas recurrentes"),
                     database.select(RecurringJournalTemplate.id).where(
                         or_(
                             RecurringJournalTemplate.ledger_id == libro.id,
@@ -1382,7 +1387,7 @@ def eliminar_libro(id_unidad):
                     ),
                 ),
                 (
-                    "aplicaciones recurrentes",
+                    _("aplicaciones recurrentes"),
                     database.select(RecurringJournalApplication.id).where(
                         or_(
                             RecurringJournalApplication.ledger_id == libro.id,
@@ -2170,11 +2175,11 @@ def eliminar_centro_costo(id_cc):
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
-            f"el centro de costo {registro.code}",
+            _("el centro de costo %(code)s") % {"code": registro.code},
             [
-                ("presupuestos", database.select(BudgetLine.id).filter_by(cost_center_id=registro.id)),
+                (_("presupuestos"), database.select(BudgetLine.id).filter_by(cost_center_id=registro.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(cost_center_code=registro.code)),
-                ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(cost_center=registro.code)),
+                (_("comprobantes"), database.select(ComprobanteContableDetalle.id).filter_by(cost_center=registro.code)),
                 (_(MOVIMIENTOS_INVENTARIO_LABEL), database.select(StockEntry.id).filter_by(cost_center_code=registro.code)),
             ],
         ):
@@ -2385,11 +2390,11 @@ def eliminar_proyecto(project_id):
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
-            f"el proyecto {proyecto.code}",
+            _("el proyecto %(code)s") % {"code": proyecto.code},
             [
-                ("presupuestos", database.select(BudgetLine.id).filter_by(project_id=proyecto.id)),
+                (_("presupuestos"), database.select(BudgetLine.id).filter_by(project_id=proyecto.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(project_code=proyecto.code)),
-                ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(project=proyecto.code)),
+                (_("comprobantes"), database.select(ComprobanteContableDetalle.id).filter_by(project=proyecto.code)),
                 (_(MOVIMIENTOS_INVENTARIO_LABEL), database.select(StockEntry.id).filter_by(project_code=proyecto.code)),
             ],
         ):
@@ -2577,12 +2582,15 @@ def fiscal_year_delete(fy_id):
     if fiscal_year:
         exige_acceso_compania("accounting", fiscal_year.entity, "eliminar")
         if fiscal_year.financial_closed or _reject_delete_with_dependencies(
-            f"el año fiscal {fiscal_year.name}",
+            _("el año fiscal %(code)s") % {"code": fiscal_year.name},
             [
-                ("períodos contables", database.select(AccountingPeriod.id).filter_by(fiscal_year_id=fiscal_year.id)),
-                ("presupuestos", database.select(Budget.id).filter_by(fiscal_year_id=fiscal_year.id)),
-                ("pronósticos de caja", database.select(CashForecast.id).filter_by(fiscal_year_id=fiscal_year.id)),
-                ("comprobantes", database.select(ComprobanteContable.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                (
+                    _("períodos contables"),
+                    database.select(AccountingPeriod.id).filter_by(fiscal_year_id=fiscal_year.id),
+                ),
+                (_("presupuestos"), database.select(Budget.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                (_("pronósticos de caja"), database.select(CashForecast.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                (_("comprobantes"), database.select(ComprobanteContable.id).filter_by(fiscal_year_id=fiscal_year.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(fiscal_year_id=fiscal_year.id)),
             ],
         ):
@@ -2794,13 +2802,13 @@ def accounting_period_delete(period_id):
     if period:
         exige_acceso_compania("accounting", period.entity, "eliminar")
         if _reject_delete_with_dependencies(
-            f"el período {period.name}",
+            _("el período %(code)s") % {"code": period.name},
             [
-                ("presupuesto", database.select(BudgetLine.id).filter_by(period_id=period.id)),
-                ("cierre mensual", database.select(PeriodCloseRun.id).filter_by(period_id=period.id)),
+                (_("presupuesto"), database.select(BudgetLine.id).filter_by(period_id=period.id)),
+                (_("cierre mensual"), database.select(PeriodCloseRun.id).filter_by(period_id=period.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(accounting_period_id=period.id)),
                 (
-                    "entradas GL por fecha",
+                    _("entradas GL por fecha"),
                     database.select(GLEntry.id).filter(
                         GLEntry.company == period.entity,
                         GLEntry.posting_date >= period.start,
@@ -2808,7 +2816,7 @@ def accounting_period_delete(period_id):
                     ),
                 ),
                 (
-                    "comprobantes",
+                    _("comprobantes"),
                     database.select(ComprobanteContable.id).filter(
                         ComprobanteContable.entity == period.entity,
                         ComprobanteContable.date >= period.start,

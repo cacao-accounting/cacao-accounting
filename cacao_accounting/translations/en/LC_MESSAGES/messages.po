@@ -16953,6 +16953,82 @@ msgstr ""
 "%(type)s %(identifier)s cannot be deleted: it is a protected master. "
 "Deactivate the record to preserve traceability."
 
+#, python-format
+msgid "la entidad %(code)s"
+msgstr "the entity %(code)s"
+
+msgid "años fiscales"
+msgstr "fiscal years"
+
+msgid "períodos contables"
+msgstr "accounting periods"
+
+msgid "libros"
+msgstr "books"
+
+msgid "cuentas"
+msgstr "accounts"
+
+msgid "centros de costo"
+msgstr "cost centers"
+
+msgid "unidades"
+msgstr "business units"
+
+msgid "proyectos"
+msgstr "projects"
+
+msgid "presupuestos"
+msgstr "budgets"
+
+msgid "comprobantes"
+msgstr "journal entries"
+
+msgid "cuentas bancarias"
+msgstr "bank accounts"
+
+#, python-format
+msgid "la unidad %(code)s"
+msgstr "the business unit %(code)s"
+
+#, python-format
+msgid "el libro %(code)s"
+msgstr "the book %(code)s"
+
+msgid "plantillas recurrentes"
+msgstr "recurring templates"
+
+msgid "aplicaciones recurrentes"
+msgstr "recurring applications"
+
+#, python-format
+msgid "el centro de costo %(code)s"
+msgstr "the cost center %(code)s"
+
+#, python-format
+msgid "el proyecto %(code)s"
+msgstr "the project %(code)s"
+
+#, python-format
+msgid "el año fiscal %(code)s"
+msgstr "the fiscal year %(code)s"
+
+msgid "pronósticos de caja"
+msgstr "cash forecasts"
+
+#, python-format
+msgid "el período %(code)s"
+msgstr "the period %(code)s"
+
+msgid "presupuesto"
+msgstr "budget"
+
+msgid "cierre mensual"
+msgstr "monthly closing"
+
+msgid "entradas GL por fecha"
+msgstr "GL entries by date"
+
 #: cacao_accounting/contabilidad/routes.py:461
 msgid "Contabilidad | Monedas"
 msgstr "Accounting | Currencies"
