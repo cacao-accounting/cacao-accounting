@@ -1420,6 +1420,9 @@ def ventas_orden_venta_duplicar(order_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            discount_percentage=item.discount_percentage,
+            discount_amount=item.discount_amount,
+            warehouse=item.warehouse,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
