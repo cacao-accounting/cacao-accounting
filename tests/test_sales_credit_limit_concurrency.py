@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
@@ -20,6 +21,7 @@ from cacao_accounting.approval_engine import ApprovalEngine
 from cacao_accounting.database import (
     ApprovalMatrix,
     ApprovalRequest,
+    AuditTrail,
     CacaoConfig,
     CompanyParty,
     Currency,
@@ -42,8 +44,12 @@ FECHA = date(2026, 5, 15)
 
 
 def _app(tmp_path):
-    """Cada caso usa su propio archivo SQLite, sin reutilizar una base externa."""
-    uri = f"sqlite:///{tmp_path / 'credit-limit.sqlite'}"
+    """Usa un archivo SQLite propio o la base externa dedicada de CI."""
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        uri = f"sqlite:///{tmp_path / 'credit-limit.sqlite'}"
+    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
     return create_app(
         {
             **configuracion,
@@ -62,14 +68,44 @@ def _app(tmp_path):
     )
 
 
+def _cleanup_case(case: dict) -> None:
+    """Elimina únicamente las filas sembradas por el caso en una base externa."""
+    company = case.get("company")
+    if not company:
+        return
+    orders = case.get("orders", [])
+    database.session.execute(database.delete(ApprovalRequest).where(ApprovalRequest.company_id == company))
+    database.session.execute(database.delete(ApprovalMatrix).where(ApprovalMatrix.company_id == company))
+    database.session.execute(database.delete(CacaoConfig).where(CacaoConfig.key == f"approval_engine_enabled_{company}"))
+    if orders:
+        database.session.execute(database.delete(AuditTrail).where(AuditTrail.document_id.in_(orders)))
+        database.session.execute(database.delete(SalesOrderItem).where(SalesOrderItem.sales_order_id.in_(orders)))
+    database.session.execute(database.delete(SalesOrder).where(SalesOrder.company == company))
+    database.session.execute(database.delete(UserCompanyAccess).where(UserCompanyAccess.company_code == company))
+    users = case.get("users", [])
+    if users:
+        database.session.execute(database.delete(User).where(User.id.in_(users)))
+    database.session.execute(database.delete(CompanyParty).where(CompanyParty.company == company))
+    database.session.execute(database.delete(Party).where(Party.id == case["customer"]))
+    database.session.execute(database.delete(Item).where(Item.code == case["item"]))
+    database.session.execute(database.delete(Entity).where(Entity.code == company))
+    database.session.execute(database.delete(Currency).where(Currency.code == case["currency"]))
+    database.session.execute(database.delete(UOM).where(UOM.code == case["uom"]))
+    database.session.commit()
+
+
 @pytest.fixture
 def credit_app(tmp_path):
-    """App con base dedicada que se descarta al terminar el caso."""
+    """App dedicada; en motores externos limpia solo las filas del caso."""
     app = _app(tmp_path)
     yield app
+    case = app.config.pop("_credit_case", {})
     with app.app_context():
-        database.session.remove()
-        database.engine.dispose()
+        try:
+            _cleanup_case(case)
+        finally:
+            database.session.remove()
+            database.engine.dispose()
 
 
 def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
@@ -151,6 +187,15 @@ def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
         )
         database.session.commit()
         result = (company, customer.id, [order.id for order in orders])
+        app.config["_credit_case"] = {
+            "company": company,
+            "customer": customer.id,
+            "item": item.code,
+            "currency": f"C{suffix}",
+            "uom": f"U{suffix}",
+            "orders": [order.id for order in orders],
+            "users": [],
+        }
         database.session.remove()
         return result
 
@@ -204,6 +249,7 @@ def test_aprobaciones_diferidas_no_superan_el_limite(credit_app):
             ]
         )
         database.session.commit()
+        app.config["_credit_case"]["users"] = [admin_id, requester_id]
         requester = database.session.get(User, requester_id)
         for order_id in order_ids:
             order = database.session.get(SalesOrder, order_id)
