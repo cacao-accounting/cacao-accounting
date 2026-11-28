@@ -122,6 +122,7 @@ from cacao_accounting.bancos.services import (
     petty_cash_expenses_available_for_replenishment,
     petty_cash_open_vouchers_total,
     petty_cash_pending_replenishment_total,
+    petty_cash_fund_currency,
     create_petty_cash_voucher,
     petty_cash_accounts,
     petty_cash_expenses,
@@ -1364,6 +1365,17 @@ def _obtener_fondos_compania():
     return registros
 
 
+def _fondos_moneda_efectiva(fondos) -> dict[str, str]:
+    """Mapea cada fondo a la moneda efectiva de su conciliación (#2341)."""
+    monedas: dict[str, str] = {}
+    for fondo in fondos:
+        try:
+            monedas[fondo.id] = petty_cash_fund_currency(fondo)
+        except ValueError:
+            monedas[fondo.id] = ""
+    return monedas
+
+
 def _cash_company_codes() -> list[str]:
     """Devuelve las companias visibles segun permisos del modulo de Caja y Bancos."""
     scope = _cash_accessible_companies()
@@ -1680,6 +1692,7 @@ def caja_chica_conciliacion_nueva():
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=fondos,
+        fund_currencies=_fondos_moneda_efectiva(fondos),
         today=date.today().isoformat(),
         submitted_data=request.form if request.method == "POST" else {},
         titulo=_("Nueva Conciliación de Caja Chica") + " - " + APPNAME,
@@ -1711,10 +1724,16 @@ def caja_chica_conciliacion_editar(r_id):
         else:
             flash(_("Conciliación de caja chica actualizada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
+    fondo = database.session.get(PettyCashAccount, conciliacion.petty_cash_id)
+    try:
+        fondo_currency = petty_cash_fund_currency(fondo) if fondo else ""
+    except ValueError:
+        fondo_currency = ""
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=[],
-        fondo=database.session.get(PettyCashAccount, conciliacion.petty_cash_id),
+        fondo=fondo,
+        fondo_currency=fondo_currency,
         registro=conciliacion,
         edit=True,
         submitted_data=request.form if request.method == "POST" else {},

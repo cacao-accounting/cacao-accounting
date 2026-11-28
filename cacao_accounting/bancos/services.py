@@ -523,6 +523,16 @@ def _company_currency(company: str) -> str:
     return str(entity.currency)
 
 
+def petty_cash_fund_currency(fund: PettyCashAccount) -> str:
+    """Devuelve la moneda efectiva con la que se registra el fondo.
+
+    Es la misma resolución que usa ``create_petty_cash_reconciliation``: la
+    moneda explícita del fondo o, en su defecto, la funcional de la compañía
+    (#2341).
+    """
+    return str(fund.currency or _company_currency(fund.company))
+
+
 def _validate_petty_cash_currency(company: str, currency: str | None, account: Accounts) -> str:
     """Valida y normaliza la moneda de una caja chica."""
     selected = currency or account.currency or _company_currency(company)
