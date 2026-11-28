@@ -76,3 +76,42 @@ process.stdout.write(JSON.stringify({rate:serialized.rate,amount:serialized.amou
 """
     result = subprocess.run(["node", "-e", script, str(js_path)], capture_output=True, text=True, check=True)
     assert json.loads(result.stdout) == {"rate": "9999999999999.9999", "amount": "9999999999999.9999"}
+
+
+def test_payment_tax_summary_recalculates_without_reference_error():
+    """El resumen fiscal usa la variable separada y conserva todos los totales."""
+    html = Path("cacao_accounting/bancos/templates/bancos/pago_nuevo.html").read_text(encoding="utf-8")
+    match = re.search(r"globalThis\.paymentEntryForm = function \(config\) \{.*?\n  \};", html, re.DOTALL)
+    assert match, "paymentEntryForm not found"
+    source = re.sub(r"\{\{.*?\}\}", "x", match.group(0), flags=re.DOTALL)
+    script = (
+        "globalThis.cacaoLocalIsoDate=()=> '2026-11-01';"
+        "function cloneModalLine(line){return line ? {...line} : null;}" + source + """
+const form = globalThis.paymentEntryForm({initial: {
+  company: 'cacao', currency: 'NIO', posting_date: '2026-11-01', paid_amount: '100',
+  lines: [{allocated_amount: '100', payment_amount: '100', outstanding_amount: '100', discount_amount: '0',
+    gain_loss_amount: '0', payment_exchange_rate: '1', currency: 'NIO'}]
+}});
+form.taxCharges.lines = [
+  {type: 'tax', amount: '15', included_in_price: false, affects_document_total: true,
+    accounting_treatment: 'expense'},
+  {type: 'tax', amount: '5', included_in_price: false, affects_document_total: true,
+    accounting_treatment: 'capitalizable_inventory_cost'},
+  {type: 'tax', amount: '7', included_in_price: false, affects_document_total: true,
+    accounting_treatment: 'separate_tax_account'},
+  {type: 'withholding', amount: '3', included_in_price: false, affects_document_total: true,
+    accounting_treatment: 'withholding'}
+];
+form.recalculateTaxSummary();
+console.log(JSON.stringify(form.taxCharges.summary));
+"""
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == {
+        "subtotal": "100",
+        "document_tax_total": "27",
+        "capitalizable_tax_total": "5",
+        "separate_tax_total": "7",
+        "withholding_total": "3",
+        "grand_total": "127",
+    }
