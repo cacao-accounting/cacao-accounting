@@ -242,19 +242,20 @@ def test_revalidacion_tras_el_lock_usa_lecturas_actuales(cloud_admin_access_app,
 
     app = cloud_admin_access_app
     company = _mk_company(app, "S")
+    other_company = _mk_company(app, "T")
     target = _mk_admin(app, "sync", company_codes=[company])
     _mk_admin(app, "peer", company_codes=[company])
 
-    events: list[tuple[str, bool] | tuple[str]] = []
+    events: list[tuple] = []
     original_assignments = admin_services._user_company_assignments
 
     def spy_assignments(user_id: str, *, for_update: bool = False):
         events.append(("assignments", for_update))
         return original_assignments(user_id, for_update=for_update)
 
-    def spy_lock(*args, **kwargs):
-        events.append(("lock",))
-        return real_lock(*args, **kwargs)
+    def spy_lock(category: str, scopes, **kwargs):
+        events.append(("lock", category, tuple(scope[0] for scope in scopes)))
+        return real_lock(category, scopes, **kwargs)
 
     def spy_check(company_code: str, *, exclude_user_id: str | None = None, for_update: bool = False) -> bool:
         events.append(("check", for_update))
@@ -265,13 +266,16 @@ def test_revalidacion_tras_el_lock_usa_lecturas_actuales(cloud_admin_access_app,
     monkeypatch.setattr(admin_services, "_company_has_recoverable_admin", spy_check)
 
     with app.app_context():
-        admin_services.replace_user_company_access(target, set())
+        admin_services.replace_user_company_access(target, {other_company})
 
     assert events[0] == ("assignments", False)
     assert ("assignments", True) in events
     assert ("check", True) in events
-    # La relectura y la comprobación ocurren después de adquirir el ámbito.
-    first_lock = events.index(("lock",))
+    locks = [event for event in events if event[0] == "lock"]
+    # Un único lote ordenado con las compañías actuales y las solicitadas.
+    assert len(locks) == 1
+    assert locks[0][2] == tuple(sorted((company, other_company)))
+    first_lock = events.index(locks[0])
     assert first_lock < events.index(("assignments", True))
     assert first_lock < events.index(("check", True))
 

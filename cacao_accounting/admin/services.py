@@ -134,17 +134,20 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
         from cacao_accounting.default_scope import lock_default_scopes
 
         # #2321: las filas de usuario no serializan revocaciones de admins
-        # distintos sobre la misma compañía. El lock de ámbito se toma antes
-        # de comprobar recuperadores y de borrar asignaciones; en SQLite usa
-        # BEGIN IMMEDIATE y en PostgreSQL/MySQL una fila bloqueada por compañía.
-        lock_default_scopes("company_admin_access", [(assignment.company_code,) for assignment in removed])
+        # distintos sobre la misma compañía. Se bloquea en un único lote
+        # ordenado el conjunto de compañías que el usuario tenía o recibirá:
+        # así dos transacciones no adquieren scopes en orden cruzado.
+        scopes = sorted({*existing, *company_codes})
+        lock_default_scopes("company_admin_access", [(company_code,) for company_code in scopes])
         # La lectura previa pudo establecer un snapshot bajo REPEATABLE READ.
         # Se revalida el estado real del usuario bajo el mismo lock.
         existing = _user_company_assignments(user_id, for_update=True)
         removed = [assignment for code, assignment in existing.items() if code not in company_codes]
         added = company_codes.difference(existing)
-        if removed:
-            lock_default_scopes("company_admin_access", [(assignment.company_code,) for assignment in removed])
+        if any(assignment.company_code not in scopes for assignment in removed):
+            # El conjunto cambió fuera del bloqueo global; no se adquieren más
+            # scopes en un orden potencialmente cruzado.
+            raise ValueError(_("El acceso a compañías cambió durante la operación. Intente nuevamente."))
         for assignment in removed:
             if not _company_has_recoverable_admin(assignment.company_code, exclude_user_id=user_id, for_update=True):
                 raise ValueError(
