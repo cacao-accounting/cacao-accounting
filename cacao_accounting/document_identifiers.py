@@ -570,21 +570,24 @@ def _resolve_external_counter(
     naming_series_id: str,
     context: dict | None = None,
     explicit_counter_id: str | None = None,
+    company: str | None = None,
 ) -> ExternalCounter | None:
     """Resuelve el contador externo mas apropiado para una serie dada.
 
     Orden de resolucion:
     1. Si explicit_counter_id se provee, usarlo directamente (validando que exista y este activo).
-    2. Buscar en SeriesExternalCounterMap para la serie:
+    2. Buscar en SeriesExternalCounterMap para la serie, descartando los
+       contadores que pertenezcan a otra compania antes de priorizar:
        a. Filtrar candidatos con condicion que coincida con el contexto.
        b. Priorizar por numero de condiciones coincidentes (mas especifico primero).
        c. Fallback: entry sin condicion (condition_json IS NULL).
-    3. Si no hay mapeo, retornar None (sin contador externo).
+    3. Si no hay mapeo elegible, retornar None (sin contador externo).
 
     Args:
         naming_series_id: ID de la NamingSeries activa
         context: Contexto del documento (payment_method, bank_account_id, etc.)
         explicit_counter_id: ID de ExternalCounter explicitamente seleccionado
+        company: Compania del documento; los mapeos de otra compania no compiten
 
     Returns:
         ExternalCounter seleccionado o None si no aplica contador externo.
@@ -592,7 +595,7 @@ def _resolve_external_counter(
     if explicit_counter_id:
         return _get_explicit_counter(explicit_counter_id)
 
-    return _resolve_counter_from_mappings(naming_series_id, context)
+    return _resolve_counter_from_mappings(naming_series_id, context, company)
 
 
 def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
@@ -605,8 +608,10 @@ def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
     return counter
 
 
-def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) -> ExternalCounter | None:
-    """Resuelve contador externo desde mapeos de serie."""
+def _resolve_counter_from_mappings(
+    naming_series_id: str, context: dict | None, company: str | None = None
+) -> ExternalCounter | None:
+    """Resuelve contador externo desde mapeos de serie de la compania."""
     ctx = context or {}
 
     mappings = (
@@ -622,7 +627,7 @@ def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) 
     if not mappings:
         return None
 
-    matched_with_condition, fallback = _collect_matching_counters(list(mappings), ctx)
+    matched_with_condition, fallback = _collect_matching_counters(list(mappings), ctx, company)
 
     if matched_with_condition:
         best = sorted(matched_with_condition, key=lambda x: -x[1])[0][0]
@@ -635,15 +640,24 @@ def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) 
 
 
 def _collect_matching_counters(
-    mappings: "list | tuple", ctx: dict
+    mappings: "list | tuple", ctx: dict, company: str | None = None
 ) -> tuple[list[tuple[SeriesExternalCounterMap, int]], SeriesExternalCounterMap | None]:
-    """Clasifica mapeos en candidatos con condición y fallback sin condición."""
+    """Clasifica mapeos elegibles en candidatos con condición y fallback.
+
+    Un mapeo solo compite cuando su contador está activo y pertenece a la
+    compañía del documento. Así una regla ajena de mayor prioridad no desplaza
+    ni bloquea el contador propio.
+    """
     matched_with_condition: list[tuple[SeriesExternalCounterMap, int]] = []
     fallback: SeriesExternalCounterMap | None = None
 
     for mapping in mappings:
+        if not mapping.external_counter_id:
+            continue
         counter = database.session.get(ExternalCounter, mapping.external_counter_id)
         if not counter or not counter.is_active:
+            continue
+        if company is not None and counter.company != company:
             continue
         if not mapping.condition_json:
             if fallback is None:
@@ -736,6 +750,7 @@ def assign_document_identifier(
         naming_series_id=naming_series.id,
         context=external_context,
         explicit_counter_id=external_counter_id,
+        company=company_code,
     )
     if counter and counter.company != company_code:
         raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
