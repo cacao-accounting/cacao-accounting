@@ -174,3 +174,27 @@ def test_edicion_de_devolucion_rechaza_cambiar_el_proveedor(entorno_contable_ais
         persistida = database.session.get(PurchaseReceipt, devolucion_id)
         assert str(persistida.supplier_id) == datos["origen_supplier"]
         assert persistida.is_return is True
+
+
+def test_edicion_de_devolucion_rechaza_proveedor_vacio(entorno_contable_aislado):
+    """Un POST vacío no puede borrar el proveedor heredado de la recepción origen."""
+    app = entorno_contable_aislado.app
+    datos = _sembrar_origen(app)
+    cliente = _cliente(app)
+    cliente.post("/buying/purchase-receipt/new", data=_formulario(datos, datos["origen_supplier"]))
+    devolucion_id = _devoluciones(app, datos["origen"])[0].id
+
+    respuesta = cliente.post(
+        f"/buying/purchase-receipt/{devolucion_id}/edit",
+        data=_formulario(datos, ""),
+    )
+
+    assert respuesta.status_code == 302
+    with app.app_context():
+        persistida = database.session.get(PurchaseReceipt, devolucion_id)
+        assert str(persistida.supplier_id) == datos["origen_supplier"]
+        assert persistida.supplier_name is not None
+        assert persistida.is_return is True
+    with cliente.session_transaction() as sesion:
+        mensajes = [mensaje for _categoria, mensaje in sesion.get("_flashes", [])]
+    assert any("compartir compañía y proveedor" in mensaje for mensaje in mensajes)

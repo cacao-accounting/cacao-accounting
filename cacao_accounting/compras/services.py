@@ -2256,7 +2256,7 @@ def _validate_purchase_return_supplier(
     """
     if source is None:
         return
-    if supplier_id and source.supplier_id != supplier_id:
+    if source.supplier_id != supplier_id:
         raise ValueError(_("La devolución y la recepción original deben compartir compañía y proveedor."))
     if company and source.company != company:
         raise ValueError(_("La devolución y la recepción original deben compartir compañía y proveedor."))
