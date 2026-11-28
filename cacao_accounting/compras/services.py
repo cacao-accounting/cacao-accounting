@@ -35,6 +35,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 )
 
 from cacao_accounting.database import (
+    Accounts,
     CompanyParty,
     Currency,
     DocumentRelation,
@@ -3800,6 +3801,20 @@ def _parse_grid_rows_from_form(prefix: str, fields: list[str]) -> dict[str, dict
     return grouped
 
 
+def _validate_import_landed_cost_item(item_code: str, qty: Decimal, rate: Decimal) -> Item:
+    """Valida cantidad y catálogo antes de persistir una línea de landed cost."""
+    if qty <= 0:
+        raise ValueError(_("La cantidad debe ser mayor que cero."))
+    if rate < 0:
+        raise ValueError(_("La cantidad y la tarifa de un costo de importación no pueden ser negativas."))
+    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        raise ValueError(_msg_item_inexistente(item_code))
+    if not item.is_active or not item.is_purchase_item or not item.is_stock_item:
+        raise ValueError(_msg_item_no_comprable(item_code))
+    return item
+
+
 def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
     """Guarda las lineas de items del costo de importacion desde el formulario."""
     items_agrupados = _parse_grid_rows_from_form(
@@ -3827,9 +3842,7 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
             continue
         qty = coerce_decimal(data.get("qty", "1"), field_name=_("cantidad"), non_negative=True)
         rate = coerce_decimal(data.get("rate", "0"), field_name=_("tarifa"), non_negative=True)
-        if qty < 0 or rate < 0:
-            raise ValueError(_("La cantidad y la tarifa de un costo de importación no pueden ser negativas."))
-        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        item = _validate_import_landed_cost_item(item_code, qty, rate)
         weight, weight_uom = _landed_cost_dimension(data, item, "weight")
         volume, volume_uom = _landed_cost_dimension(data, item, "volume")
         if weight > 0:
@@ -3901,6 +3914,13 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
             field_name=_("importe del cargo de importación"),
             non_negative=True,
         )
+        if amount <= 0:
+            raise ValueError(_("El monto debe ser mayor que cero."))
+        account_id = data.get("account_id") or None
+        if account_id:
+            account = database.session.get(Accounts, account_id)
+            if account is None or account.entity != registro.company:
+                raise ValueError(_("La cuenta contable indicada no existe para la compañía."))
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_amount = (amount * exchange_rate).quantize(Decimal("0.0001"))
         total += amount
@@ -3912,7 +3932,7 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
                 amount=amount,
                 base_amount=base_amount,
                 allocation_method=None,
-                account_id=data.get("account_id"),
+                account_id=account_id,
             )
         )
     return total
