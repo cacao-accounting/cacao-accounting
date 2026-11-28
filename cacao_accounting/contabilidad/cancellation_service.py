@@ -32,7 +32,6 @@ from cacao_accounting.database import (
     ReconciliationItem,
     StockValuationLayer,
     User,
-    WithholdingCertificate,
     database,
 )
 from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
@@ -268,20 +267,6 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
     dependencies.extend(
         CancellationDependency("conciliacion bancaria", str(row.id), "reconciliation_item") for row in reconciliation_gl_rows
     )
-
-    if isinstance(document, PaymentEntry):
-        # Las referencias del pago son efectos internos reversibles. El hook de
-        # cancelación revierte sus relaciones y refresca los saldos afectados;
-        # bloquearlas aquí haría imposible cancelar cualquier pago aplicado.
-        certificates = database.session.execute(
-            select(WithholdingCertificate).where(
-                WithholdingCertificate.payment_id == source_id,
-                WithholdingCertificate.status != "cancelled",
-            )
-        ).scalars()
-        dependencies.extend(
-            CancellationDependency("certificado de retencion", str(row.id), "withholding_certificate") for row in certificates
-        )
 
     if isinstance(document, ImportLandedCost):
         dependencies.extend(_landed_cost_consumption_dependencies(document, source_types, source_id))
