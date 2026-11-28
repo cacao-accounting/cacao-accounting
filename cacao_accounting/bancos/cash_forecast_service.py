@@ -254,14 +254,36 @@ def _compute_real_movements(
     return real_inflow, real_outflow, real_other
 
 
-def _invoice_forecast_amount(invoice, company_currency: str, flow_date: date) -> tuple[Decimal, Decimal] | None:
+def _invoice_forecast_amount(
+    invoice,
+    company_currency: str,
+    flow_date: date,
+    excluded: list[dict] | None = None,
+) -> tuple[Decimal, Decimal] | None:
     """Resolve an invoice balance from its canonical subledger state."""
     try:
         outstanding = compute_outstanding_amount(invoice)
         return outstanding, _forecast_base_amount(outstanding, invoice, company_currency, flow_date)
-    except CashForecastConversionError:
+    except CashForecastConversionError as exc:
         # An incomplete document must not make every other cash-flow projection
-        # unavailable. It remains excluded until its FX data is completed.
+        # unavailable. Se conserva la exclusión para que la matriz la informe
+        # en lugar de parecer completa (#1325).
+        if excluded is not None:
+            try:
+                outstanding = compute_outstanding_amount(invoice)
+            except Exception:  # pragma: no cover - diagnóstico best-effort
+                outstanding = Decimal("0")
+            excluded.append(
+                {
+                    "id": getattr(invoice, "id", ""),
+                    "document_no": getattr(invoice, "document_no", None),
+                    "document_type": getattr(invoice, "document_type", None),
+                    "amount": outstanding,
+                    "currency": getattr(invoice, "transaction_currency", None),
+                    "date": flow_date,
+                    "reason": str(exc),
+                }
+            )
         return None
 
 
@@ -271,6 +293,7 @@ def _sum_invoice_amount(
     end_date: date,
     company_currency: str = "NIO",
     due_dates: dict[str, date] | None = None,
+    excluded: list[dict] | None = None,
 ) -> Decimal:
     """Suma saldos pendientes usando la fecha de vencimiento del documento."""
     total = Decimal("0")
@@ -282,7 +305,7 @@ def _sum_invoice_amount(
             continue
         if not start_date <= flow_date <= end_date:
             continue
-        forecast = _invoice_forecast_amount(invoice, company_currency, flow_date)
+        forecast = _invoice_forecast_amount(invoice, company_currency, flow_date, excluded=excluded)
         if forecast is None:
             continue
         outstanding, amount = forecast
@@ -358,16 +381,17 @@ def _compute_ar_ap_projections(
     end_date: date,
     company_currency: str,
     due_dates: dict[str, date],
+    excluded: list[dict] | None = None,
 ) -> tuple[Decimal, Decimal]:
     """Calcula proyecciones AR/AP según la zona temporal."""
     if zone == "Current":
-        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date, company_currency, due_dates)
-        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date, company_currency, due_dates)
+        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date, company_currency, due_dates, excluded)
+        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date, company_currency, due_dates, excluded)
         return ar_total, ap_total
     if zone == "Projected":
         return (
-            _sum_invoice_amount(ar_invoices, start_date, end_date, company_currency, due_dates),
-            _sum_invoice_amount(ap_invoices, start_date, end_date, company_currency, due_dates),
+            _sum_invoice_amount(ar_invoices, start_date, end_date, company_currency, due_dates, excluded),
+            _sum_invoice_amount(ap_invoices, start_date, end_date, company_currency, due_dates, excluded),
         )
     return Decimal("0"), Decimal("0")
 
@@ -503,6 +527,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         start_date = p["start_date"]
         end_date = p["end_date"]
         zone = _determine_zone(start_date, end_date, today_date)
+        excluded_invoices: list[dict] = []
 
         real_inflow, real_outflow, real_other = Decimal("0"), Decimal("0"), Decimal("0")
         if account_ids and start_date <= today_date:
@@ -517,6 +542,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
             end_date,
             company_currency,
             invoice_due_dates,
+            excluded_invoices,
         )
         manual_inflow, manual_outflow, incomplete_manual_entries = _compute_manual_projections(
             manual_entries, start_date, end_date, zone, today_date, company_currency
@@ -548,7 +574,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
                 "manual_inflow": manual_inflow,
                 "manual_outflow": manual_outflow,
                 "incomplete_manual_entries": incomplete_manual_entries,
-                "is_incomplete": bool(incomplete_manual_entries),
+                "incomplete_invoice_entries": excluded_invoices,
+                "is_incomplete": bool(incomplete_manual_entries or excluded_invoices),
                 "real_balance": cumulatives["real"],
                 "current_balance": cumulatives["current"],
                 "projected_balance": cumulatives["projected"],

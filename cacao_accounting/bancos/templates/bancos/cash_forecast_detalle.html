@@ -98,10 +98,17 @@
   {% set incomplete_rows = matrix|selectattr('is_incomplete')|list %}
   {% if incomplete_rows %}
   <div class="alert alert-warning m-3" role="alert">
-    <strong>{{ _('Matriz incompleta: faltan conversiones para algunas proyecciones manuales.') }}</strong>
+    <strong>{{ _('Matriz incompleta: faltan conversiones de tasa de cambio.') }}</strong>
     <p class="mb-2">{{ _('Los saldos proyectados no incluyen estos importes y no deben interpretarse como completos.') }}</p>
     <ul class="mb-0">
       {% for row in incomplete_rows %}
+      {% for entry in row.incomplete_invoice_entries %}
+      <li>
+        {{ entry.document_no or entry.id }} — {{ row.period }}:
+        {{ format_money_with_currency(entry.amount, entry.currency) }}
+        ({{ entry.date.strftime('%d/%m/%Y') }}, {{ entry.currency }})
+      </li>
+      {% endfor %}
       {% for entry in row.incomplete_manual_entries %}
       <li>
         {{ entry.concept }} — {{ row.period }}:

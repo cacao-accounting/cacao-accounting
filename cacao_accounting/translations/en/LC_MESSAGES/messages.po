@@ -24,6 +24,9 @@ msgid ""
 msgstr ""
 "Incomplete matrix: conversions are missing for some manual projections."
 
+msgid "Matriz incompleta: faltan conversiones de tasa de cambio."
+msgstr "Incomplete matrix: exchange-rate conversions are missing."
+
 msgid ""
 "Los saldos proyectados no incluyen estos importes y no deben interpretarse "
 "como completos."
