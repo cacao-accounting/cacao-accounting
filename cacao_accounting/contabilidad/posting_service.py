@@ -3468,8 +3468,13 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
         fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
         batch_id = str(getattr(line, "batch_id", "") or "").strip() or None
         if batch_id:
+            from cacao_accounting.default_scope import lock_default_scope
             from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
 
+            # #1878: serializa la capacidad del lote antes de leer el saldo,
+            # para que dos ajustes concurrentes no aprueben contra el mismo
+            # valor disponible.
+            lock_default_scope("stock_batch_value", document.company, line.item_code, source_warehouse, batch_id)
             batch_value = _decimal_value(
                 database.session.execute(
                     exclude_cancelled_stock_entries(
