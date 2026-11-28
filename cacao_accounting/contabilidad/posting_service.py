@@ -881,8 +881,8 @@ def _persist_stock_book_reversals(
         raise PostingError(_("No se puede reversar el inventario sin su valoración original por libro."))
 
 
-def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
-    """Resolve the latest valid historical rate on or before ``posting_date``."""
+def _lookup_exchange_rate_details(origin: str, destination: str, posting_date: Any) -> tuple[Decimal, date | None]:
+    """Resuelve la tasa histórica aplicable y la fecha real de su fila."""
     # #1323: el formulario entrega la fecha como texto; el bind DATE de SQLite
     # solo acepta objetos date. Se normaliza antes de consultar la tasa.
     if isinstance(posting_date, datetime):
@@ -893,10 +893,10 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
         except (TypeError, ValueError) as exc:
             raise PostingError(_("La fecha de contabilizacion es inválida.")) from exc
     if origin == destination:
-        return Decimal("1")
+        return Decimal("1"), None
 
-    def latest_rate(source: str, target: str) -> Decimal | None:
-        rate = (
+    def latest_rate(source: str, target: str) -> ExchangeRate | None:
+        return (
             database.session.execute(
                 select(ExchangeRate)
                 .where(ExchangeRate.origin == source, ExchangeRate.destination == target, ExchangeRate.date <= posting_date)
@@ -905,24 +905,29 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
             .scalars()
             .first()
         )
-        if rate is None:
-            return None
-        value = _decimal_value(rate.rate)
-        if value <= 0:
-            raise _invalid_exchange_rate_error()
-        return value
 
     direct = latest_rate(origin, destination)
     if direct is not None:
-        return direct
+        value = _decimal_value(direct.rate)
+        if value <= 0:
+            raise _invalid_exchange_rate_error()
+        return value, direct.date
     inverse = latest_rate(destination, origin)
     if inverse is not None:
-        return Decimal("1") / inverse
+        value = _decimal_value(inverse.rate)
+        if value <= 0:
+            raise _invalid_exchange_rate_error()
+        return Decimal("1") / value, inverse.date
 
     raise PostingError(
         _("No existe tipo de cambio registrado para %(origin)s -> %(destination)s en la fecha %(posting_date)s.")
         % {"origin": origin, "destination": destination, "posting_date": posting_date}
     )
+
+
+def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
+    """Resuelve la tasa histórica aplicable en o antes de ``posting_date``."""
+    return _lookup_exchange_rate_details(origin, destination, posting_date)[0]
 
 
 def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:

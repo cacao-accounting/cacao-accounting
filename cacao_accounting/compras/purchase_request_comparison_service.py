@@ -240,16 +240,20 @@ def comparison_line_conversion(
             "document",
         )
 
-    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate_details
 
     try:
-        exchange_rate = _lookup_exchange_rate(transaction_currency, base_currency, conversion_date)
+        exchange_rate, exchange_rate_date = _lookup_exchange_rate_details(
+            transaction_currency,
+            base_currency,
+            conversion_date,
+        )
     except PostingError as exc:
         raise ValueError(
             _("No existe tipo de cambio para comparar una oferta en %(transaction_currency)s contra %(base_currency)s.")
             % {"transaction_currency": transaction_currency, "base_currency": base_currency}
         ) from exc
-    return _conversion_payload(rate * exchange_rate, exchange_rate, conversion_date, "lookup")
+    return _conversion_payload(rate * exchange_rate, exchange_rate, exchange_rate_date, "lookup")
 
 
 def comparison_line_base_rate(

@@ -5,7 +5,10 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import re
 from uuid import uuid4
+
+import pytest
 
 from cacao_accounting.database import (
     DocumentRelation,
@@ -128,7 +131,7 @@ def test_comparativo_solicitud_muestra_moneda_funcional_y_equivalente(app, entor
     assert "36.5" in body or "36.5000" in body
 
 
-def _sembrar_comparativo_sin_tasa_de_documento(app) -> str:
+def _sembrar_comparativo_sin_tasa_de_documento(app, rate_date: date = date(2026, 5, 15)) -> str:
     """Crea un comparativo USD/NIO cuya tasa solo existe en el histórico."""
     suffix = uuid4().hex[:6]
     with app.app_context():
@@ -137,7 +140,7 @@ def _sembrar_comparativo_sin_tasa_de_documento(app) -> str:
                 origin="USD",
                 destination="NIO",
                 rate=Decimal("36.5000"),
-                date=date(2026, 5, 15),
+                date=rate_date,
             )
         )
         request = PurchaseRequest(
@@ -216,15 +219,18 @@ def _sembrar_comparativo_sin_tasa_de_documento(app) -> str:
         return comparison.id
 
 
-def test_comparativo_solicitud_expone_la_tasa_consultada_sin_tasa_de_documento(app, entorno_contable, authenticated_client):
-    """QA2 #1942: la conversión resuelta por fecha muestra tasa y fuente."""
+@pytest.mark.parametrize("rate_date", [date(2026, 5, 15), date(2026, 5, 10)], ids=["exacta", "anterior"])
+def test_comparativo_solicitud_expone_la_tasa_consultada_sin_tasa_de_documento(
+    app, entorno_contable, authenticated_client, rate_date
+):
+    """QA2 #1942: la conversión muestra la tasa y la fecha real de la fila aplicada."""
     del entorno_contable
-    comparison_id = _sembrar_comparativo_sin_tasa_de_documento(app)
+    comparison_id = _sembrar_comparativo_sin_tasa_de_documento(app, rate_date=rate_date)
 
     body = authenticated_client().get(f"/buying/request-for-quotation/comparison/{comparison_id}").get_data(as_text=True)
 
     assert "USD 5.00" in body
     assert "NIO 182.50" in body or "NIO 182.5000" in body
     assert "36.5000" in body
-    assert "2026-05-15" in body
+    assert re.search(rf"TC\s+36\.5000\s*,\s*{rate_date.isoformat()}", body)
     assert "tasa consultada" in body
