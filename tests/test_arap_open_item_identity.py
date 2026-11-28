@@ -12,7 +12,11 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from cacao_accounting.api.line_import import _ledger_open_item_matches, _resolve_ledger_open_item_fallback
+from cacao_accounting.api.line_import import (
+    _ledger_open_item_matches,
+    _resolve_ledger_open_item_fallback,
+    _validate_open_item_reference,
+)
 from cacao_accounting.contabilidad.arap_allocation import (
     ARAPOpenItem,
     AllocationRequest,
@@ -244,3 +248,50 @@ def test_fallback_del_ledger_respeta_la_linea_indicada(entorno_contable_aislado)
         assert [item.economic_line_id for item in matches_line_b] == ["line-1147-b"]
         assert resolved is True
         assert validated_row["reference_document"] == "FAC-1147"
+
+
+def test_validacion_de_importacion_usa_reference_line_sin_cache(entorno_contable_aislado):
+    """Sin snapshot, reference_line resuelve una única línea del ledger (#1573)."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        party_id = _customer_id()
+        invoice_id, _first_id, _second_id = _seed_invoice_with_two_lines(party_id)
+        database.session.execute(database.delete(ARAPOpenItemModel).where(ARAPOpenItemModel.document_id == invoice_id))
+        database.session.commit()
+        validated_row: dict[str, str] = {"party": party_id, "party_type": "customer"}
+        row = {
+            "reference_type": "sales_invoice",
+            "reference_document": "FAC-1147",
+            "reference_line": "line-1147-b",
+        }
+        errors: list[dict] = []
+
+        _validate_open_item_reference(row, validated_row, 1, "cacao", errors)
+
+        assert not errors
+        assert validated_row["reference_type"] == "sales_invoice"
+        assert validated_row["reference_document"] == "FAC-1147"
+        assert "reference_open_item_id" not in validated_row
+
+
+def test_validacion_de_importacion_reporta_ambiguedad_sin_linea(entorno_contable_aislado):
+    """Sin reference_line las dos líneas del ledger siguen siendo ambiguas."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        party_id = _customer_id()
+        invoice_id, _first_id, _second_id = _seed_invoice_with_two_lines(party_id)
+        database.session.execute(database.delete(ARAPOpenItemModel).where(ARAPOpenItemModel.document_id == invoice_id))
+        database.session.commit()
+        validated_row: dict[str, str] = {"party": party_id, "party_type": "customer"}
+        errors: list[dict] = []
+
+        _validate_open_item_reference(
+            {"reference_type": "sales_invoice", "reference_document": "FAC-1147"},
+            validated_row,
+            1,
+            "cacao",
+            errors,
+        )
+
+        assert errors
+        assert errors[0]["field"] == "reference_line"
