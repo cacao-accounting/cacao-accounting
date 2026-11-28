@@ -28597,3 +28597,6 @@ msgstr "Sent:"
 
 msgid "Errores:"
 msgstr "Errors:"
+
+msgid "La cuenta de inventario es obligatoria para la configuración de la bodega."
+msgstr "The inventory account is required for the warehouse configuration."

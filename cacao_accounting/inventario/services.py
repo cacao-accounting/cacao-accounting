@@ -554,7 +554,7 @@ def _validate_warehouse_company_rows(rows: list[dict[str, str]]) -> None:
             raise ValueError(_("La compañía seleccionada no existe."))
         account_id = row["inventory_account_id"]
         if not account_id:
-            continue
+            raise ValueError(_("La cuenta de inventario es obligatoria para la configuración de la bodega."))
         account = database.session.get(Accounts, account_id)
         if account is None or account.entity != company:
             raise ValueError(_("La cuenta de inventario debe pertenecer a la compañía seleccionada."))
