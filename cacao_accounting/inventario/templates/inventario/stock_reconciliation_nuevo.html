@@ -43,7 +43,9 @@
             label=_("Compañía"),
             preload=True,
             required=True,
-            x_model="header.company"
+            x_model="header.company",
+            initial_value_expr="header.company",
+            initial_label_expr="header.company"
         ) }}
       </div>
       <div class="col-md-4">
@@ -57,12 +59,19 @@
             required_filters=["company"],
             auto_select_default=True,
             load_on_filter_change=True,
-            required=True
+            required=True,
+            x_model="header.naming_series",
+            initial_value_expr="header.naming_series",
+            initial_label_expr="header.naming_series"
         ) }}
       </div>
       <div class="col-md-4">
         <label class="form-label" for="posting_date">{{ _("Fecha") }}</label>
         <input class="form-control" type="date" id="posting_date" name="posting_date" x-model="header.posting_date" required>
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _("Observaciones") }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
       <div class="col-md-3">
         <label class="form-label" for="adjustment_account_id">{{ _("Cuenta de diferencia") }}</label>
@@ -74,7 +83,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.adjustment_account_id"
+            x_model="header.adjustment_account_id",
+            initial_value_expr="header.adjustment_account_id",
+            initial_label_expr="header.adjustment_account_id"
         ) }}
       </div>
       <div class="col-md-3">
@@ -87,7 +98,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.cost_center_code"
+            x_model="header.cost_center_code",
+            initial_value_expr="header.cost_center_code",
+            initial_label_expr="header.cost_center_code"
         ) }}
       </div>
       <div class="col-md-3">
@@ -100,7 +113,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.unit_code"
+            x_model="header.unit_code",
+            initial_value_expr="header.unit_code",
+            initial_label_expr="header.unit_code"
         ) }}
       </div>
       <div class="col-md-3">
@@ -113,7 +128,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.project_code"
+            x_model="header.project_code",
+            initial_value_expr="header.project_code",
+            initial_label_expr="header.project_code"
         ) }}
       </div>
     </div>
