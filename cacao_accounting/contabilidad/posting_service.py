@@ -9,7 +9,7 @@ import json
 
 from dataclasses import dataclass
 
-from datetime import date
+from datetime import date, datetime
 
 from decimal import Decimal, InvalidOperation
 
@@ -883,6 +883,15 @@ def _persist_stock_book_reversals(
 
 def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
     """Resolve the latest valid historical rate on or before ``posting_date``."""
+    # #1323: el formulario entrega la fecha como texto; el bind DATE de SQLite
+    # solo acepta objetos date. Se normaliza antes de consultar la tasa.
+    if isinstance(posting_date, datetime):
+        posting_date = posting_date.date()
+    elif not isinstance(posting_date, date):
+        try:
+            posting_date = date.fromisoformat(str(posting_date))
+        except (TypeError, ValueError) as exc:
+            raise PostingError(_("La fecha de contabilizacion es inválida.")) from exc
     if origin == destination:
         return Decimal("1")
 
