@@ -1577,10 +1577,22 @@ def _begin_sqlite_write_transaction() -> None:
 
 
 def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: str | None = None):
-    """Marca una conciliacion como conciliada conservando sus cifras originales."""
+    """Confirma una conciliación recalculando sus cifras al corte."""
     reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
     if reconciliation.status != "borrador":
         raise ValueError(_("Solo se puede conciliar un documento en borrador."))
+    # #1230: los movimientos pueden cambiar desde que se creó el borrador; se
+    # recalculan los derivados al corte antes de fijar la conciliación.
+    fund = _validate_petty_cash_fund(reconciliation.petty_cash_id, reconciliation.company)
+    derived = _petty_cash_reconciliation_derived_values(fund, reconciliation.reconciliation_date)
+    open_vouchers = derived["open_vouchers"]
+    expected_cash = derived["expected_cash"]
+    counted_cash = Decimal(str(reconciliation.counted_cash or 0))
+    reconciliation.ledger_balance = derived["ledger_balance"]
+    reconciliation.open_vouchers = open_vouchers
+    reconciliation.expected_cash = expected_cash
+    reconciliation.explained_amount = counted_cash + open_vouchers
+    reconciliation.difference = counted_cash - expected_cash
     if reconciliation.difference and not (reconciliation.explanation or "").strip():
         raise ValueError(_("Una diferencia de caja requiere una explicacion."))
     reconciliation.status = "conciliado"
