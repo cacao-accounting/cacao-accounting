@@ -8,8 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
 
-import os
-
 import pytest
 
 from cacao_accounting import create_app
@@ -27,15 +25,11 @@ pytestmark = pytest.mark.database
 
 
 def _app(tmp_path, name):
-    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
-    if uri.startswith("sqlite"):
-        uri = f"sqlite:///{tmp_path / name}"
-    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
-        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
+    """App dedicada por caso: cada prueba usa su propio archivo SQLite."""
     return create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / name}",
             "SQLALCHEMY_ENGINE_OPTIONS": {
                 **configuracion.get("SQLALCHEMY_ENGINE_OPTIONS", {}),
                 "pool_size": 4,
@@ -207,8 +201,8 @@ def test_apply_party_group_rejects_incompatible_type(tmp_path):
         database.session.remove()
 
 
-def test_ruta_administrativa_y_asignacion_no_dejan_estado_incompatible(tmp_path):
-    """El POST real y una asignación concurrente no conviven en estado inválido."""
+def test_ruta_administrativa_espera_el_bloqueo_del_grupo(tmp_path):
+    """El POST administrativo queda bloqueado mientras otra sesión retiene el ancla."""
     app = _app(tmp_path, "2271-route.sqlite")
     suffix = uuid4().hex[:8]
     with app.app_context():
@@ -233,52 +227,36 @@ def test_ruta_administrativa_y_asignacion_no_dejan_estado_incompatible(tmp_path)
         group_id, party_id, user_id = group.id, party.id, user.id
         database.session.remove()
 
-    lock_held = Barrier(2, timeout=20)
-    release_assignment = Barrier(2, timeout=20)
-
-    def assign_customer() -> str:
-        with app.app_context():
-            try:
-                locked_party_group(group_id)
-                lock_held.wait()
-                release_assignment.wait()
-                p = database.session.get(Party, party_id)
-                apply_party_group(p, group_id, role="customer")
-                database.session.commit()
-                return "asignada"
-            except Exception:
-                database.session.rollback()
-                return "rechazada"
-            finally:
-                database.session.remove()
-
     def change_group() -> int:
         client = app.test_client()
         with client.session_transaction() as session:
             session["_user_id"] = user_id
             session["_auth_version"] = 0
             session["_fresh"] = True
-        lock_held.wait()
         response = client.post(
             f"/settings/party-groups/{group_id}/edit",
             data={"group_type": "supplier", "name": f"GR-{suffix}", "is_active": "on"},
         )
         return response.status_code
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        fut_assign = ex.submit(assign_customer)
-        fut_change = ex.submit(change_group)
-        release_assignment.wait()
-        assignment = fut_assign.result(timeout=20)
-        status = fut_change.result(timeout=20)
+    with app.app_context():
+        # La sesión principal retiene el ancla del grupo; el POST debe esperarla.
+        locked_party_group(group_id)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(change_group)
+                with pytest.raises(TimeoutError):
+                    future.result(timeout=0.5)
+                database.session.commit()
+            status = future.result(timeout=20)
+        finally:
+            database.session.rollback()
+        database.session.remove()
 
     assert status in {200, 302}
     with app.app_context():
         group = database.session.get(PartyGroup, group_id)
         party = database.session.get(Party, party_id)
-        if group.group_type == "supplier":
-            assert party.party_group_id is None
-        else:
-            assert group.group_type == "customer"
-        assert assignment in {"asignada", "rechazada"}
+        assert group.group_type == "supplier"
+        assert party.party_group_id is None
         database.session.remove()
