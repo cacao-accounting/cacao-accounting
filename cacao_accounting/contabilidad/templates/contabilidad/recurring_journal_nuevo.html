@@ -229,7 +229,7 @@
           <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -268,7 +268,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon">
                 <span x-text="opt.display_name"></span>
               </button>
             </template>
@@ -325,7 +325,7 @@
           <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -367,7 +367,7 @@
                 })'>
                   <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon" placeholder="{{ _('Buscar cuenta') }}">
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                    <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                    <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                   </div>
                 </div>
               </td>
@@ -428,7 +428,7 @@
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -444,7 +444,7 @@
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -460,7 +460,7 @@
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -484,7 +484,7 @@
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>

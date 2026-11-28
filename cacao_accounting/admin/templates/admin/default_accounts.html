@@ -110,7 +110,7 @@
             <span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span>
           </div>
           <template x-for="option in options" :key="option.id">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
               <span x-text="option.display_name"></span>
             </button>
           </template>

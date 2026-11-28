@@ -39,7 +39,7 @@
         <button class="ca-smart-select-option" type="button" role="option"
           :id="name + '-option-' + index" :aria-selected="index === highlightedIndex"
           :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
-          @click="selectOption(option)">
+          @click="selectOption(option)" @blur="closeSoon">
           <span x-text="option.display_name"></span>
         </button>
       </template>

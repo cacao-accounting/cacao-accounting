@@ -79,7 +79,7 @@
   <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
     <template x-for="(option, index) in options" :key="option.value">
-      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
         @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
         <span x-text="option.display_name"></span>
       </button>
@@ -339,7 +339,7 @@
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                       <template x-for="(option, index) in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
                           @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                           <span x-text="option.display_name"></span>
                         </button>
@@ -389,7 +389,7 @@
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                       <template x-for="(option, index) in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
                           @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                           <span x-text="option.display_name"></span>
                         </button>
@@ -801,7 +801,7 @@
                   <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                     <template x-for="(option, index) in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+                      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
                         @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                         <span x-text="option.display_name"></span>
                       </button>

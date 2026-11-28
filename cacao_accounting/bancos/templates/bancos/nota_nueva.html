@@ -100,7 +100,7 @@
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -118,7 +118,7 @@
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -138,7 +138,7 @@
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -172,7 +172,7 @@
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar centro de costo...') }}">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -189,7 +189,7 @@
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar unidad de negocio...') }}">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -206,7 +206,7 @@
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar proyecto...') }}">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -229,7 +229,7 @@
               <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta contable...') }}" required>
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>
@@ -245,7 +245,7 @@
               <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta contable...') }}" required>
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>

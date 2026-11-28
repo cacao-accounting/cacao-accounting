@@ -808,7 +808,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>
@@ -852,7 +852,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>
@@ -898,7 +898,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>
@@ -1004,7 +1004,7 @@
                         <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                         <template x-for="option in options" :key="option.value">
                           <button class="ca-smart-select-option" type="button"
-                            @mousedown.prevent="selectOption(option)">
+                            @click="selectOption(option)" @blur="closeSoon">
                             <span x-text="option.display_name"></span>
                           </button>
                         </template>
@@ -1045,7 +1045,7 @@
                         <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                         <template x-for="option in options" :key="option.value">
                           <button class="ca-smart-select-option" type="button"
-                            @mousedown.prevent="selectOption(option)">
+                            @click="selectOption(option)" @blur="closeSoon">
                             <span x-text="option.display_name"></span>
                           </button>
                         </template>
@@ -1099,7 +1099,7 @@
                         <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                         <template x-for="option in options" :key="option.value">
                           <button class="ca-smart-select-option" type="button"
-                            @mousedown.prevent="selectOption(option)">
+                            @click="selectOption(option)" @blur="closeSoon">
                             <span x-text="option.display_name"></span>
                           </button>
                         </template>
@@ -1199,7 +1199,7 @@
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                     <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                      <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
@@ -1239,7 +1239,7 @@
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                     <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                      <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
@@ -1279,7 +1279,7 @@
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                     <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                      <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
@@ -1319,7 +1319,7 @@
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                     <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                      <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
@@ -1373,7 +1373,7 @@
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
                     <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+                      <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>

@@ -106,7 +106,7 @@
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-company-' + index + '-listbox'" role="listbox">
                       <template x-for="(option, optIndex) in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button" role="option" :id="'party-company-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @click="selectOption(option)"><span x-text="option.display_name"></span></button>
+                        <button class="ca-smart-select-option" type="button" role="option" :id="'party-company-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button>
                       </template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -163,7 +163,7 @@
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-account-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-account-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-account-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -211,7 +211,7 @@
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-price-list-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-price-list-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-price-list-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -263,7 +263,7 @@
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-tax-rule-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-tax-rule-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-tax-rule-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -310,7 +310,7 @@
                     </div>
                     <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-tax-template-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-tax-template-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-tax-template-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>

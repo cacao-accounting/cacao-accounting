@@ -71,7 +71,7 @@
           <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>

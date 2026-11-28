@@ -821,6 +821,33 @@ describe('smart-select', function () {
     }
   });
 
+  it('keeps the menu open while focus is on an option', function () {
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'company', name: 'company' });
+    const option = { classList: { contains: (name) => name === 'ca-smart-select-option' } };
+    component.$el = { contains: (node) => node === option };
+    component.$root = { querySelector: () => null };
+    globalThis.document.activeElement = option;
+    component.open = true;
+
+    component._closeSoonHandler();
+
+    assert.strictEqual(component.open, true);
+  });
+
+  it('closes the delayed menu when focus left the component', function () {
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'company', name: 'company' });
+    component.$el = { contains: () => false };
+    component.$root = { querySelector: () => null };
+    globalThis.document.activeElement = { classList: { contains: () => false } };
+    component.open = true;
+
+    component._closeSoonHandler();
+
+    assert.strictEqual(component.open, false);
+  });
+
   it('positions the open menu with fixed viewport coordinates', function () {
     const addedListeners = [];
     const removedListeners = [];

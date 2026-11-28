@@ -491,9 +491,22 @@
         },
 
         _closeSoonHandler() {
+          if (this._focusIsInsideOption()) return;
           this.closeMenu();
           const restoredInitialLabel = this.selectedLabel && this.search === this.selectedLabel;
           this.invalid = Boolean(this.search.trim() && !this.selectedValue && !restoredInitialLabel);
+        },
+
+        _focusIsInsideOption() {
+          const root = this.$el;
+          const active = typeof document !== 'undefined' ? document.activeElement : null;
+          if (!root || !active || typeof root.contains !== 'function') return false;
+          return (
+            root.contains(active) &&
+            active.classList &&
+            typeof active.classList.contains === 'function' &&
+            active.classList.contains('ca-smart-select-option')
+          );
         },
 
         bindKeyboardNavigation() {
