@@ -65,6 +65,7 @@ def companias_caja():
     sin_compania = f"sc{suffix}"
     con_alpha = f"ca{suffix}"
     admin_alpha = f"aa{suffix}"
+    admin_sin_uca = f"as{suffix}"
 
     with application.app_context():
         database.create_all()
@@ -105,6 +106,14 @@ def companias_caja():
                     id=admin_alpha,
                     user=admin_alpha,
                     name="Admin solo Alfa",
+                    password=b"unused",
+                    classification="admin",
+                    active=True,
+                ),
+                User(
+                    id=admin_sin_uca,
+                    user=admin_sin_uca,
+                    name="Admin sin compañías",
                     password=b"unused",
                     classification="admin",
                     active=True,
@@ -290,6 +299,7 @@ def companias_caja():
             "sin_compania": sin_compania,
             "con_alpha": con_alpha,
             "admin_alpha": admin_alpha,
+            "admin_sin_uca": admin_sin_uca,
             "bank_id": banco.id,
             "gl_account_id": gl_banco_alpha.id,
             "bank_alpha": cuenta_banco_alpha.id,
@@ -409,6 +419,25 @@ def test_admin_cloud_con_uca_parcial_no_expone_datos_de_beta(companias_caja):
 
     assert client.get(f"/cash_management/bank-account/{ids['bank_alpha']}").status_code == 200
     assert client.get(f"/cash_management/bank-account/{ids['bank_beta']}").status_code == 403
+
+
+def test_admin_cloud_sin_uca_no_ve_registros_de_ninguna_compania(companias_caja):
+    """#2303: el rol admin no amplía la lectura Cloud cuando la UCA está vacía."""
+    application, ids = companias_caja
+    client = _cliente(application, ids["admin_sin_uca"])
+    marcadores = {
+        "/cash_management/bank-account/list": (ids["bank_alpha_no"], ids["bank_beta_no"]),
+        "/cash_management/petty-cash/list": (ids["alpha"], ids["beta"]),
+        "/cash_management/petty-cash-voucher/list": (ids["vale_alpha_draft_no"], ids["vale_beta_draft_no"]),
+        "/cash_management/petty-cash-expense/list": (ids["gasto_alpha_no"], ids["gasto_beta_no"]),
+    }
+
+    for path, (marcador_alfa, marcador_beta) in marcadores.items():
+        response = client.get(path)
+        assert response.status_code == 200, path
+        cuerpo = response.get_data(as_text=True)
+        assert marcador_alfa not in cuerpo, path
+        assert marcador_beta not in cuerpo, path
 
 
 def test_acciones_de_beta_se_rechazan_sin_mutar(companias_caja):
