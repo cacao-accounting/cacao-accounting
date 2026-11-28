@@ -54,7 +54,7 @@ ALIASES_DEBIT = ["debe", "debit"]
 ALIASES_CREDIT = ["haber", "credit"]
 ALIASES_ACCOUNT = ["cuenta contable", "codigo cuenta", "código cuenta", "account", "account code", "account_code"]
 ALIASES_DATE = ["date", "posting date", "posting_date"]
-ALIASES_DISCOUNT = ["discount"]
+ALIASES_DISCOUNT = ["discount", "descuento", "discount percentage", "discount_percentage", "descuento %"]
 ALIASES_DELIVERY_DATE = ["delivery date", "delivery_date"]
 ALIASES_SOURCE_WAREHOUSE = ["source warehouse", "source_warehouse", "from warehouse", "bodega salida"]
 ALIASES_TARGET_WAREHOUSE = ["target warehouse", "target_warehouse", "to warehouse", "bodega entrada"]
@@ -396,8 +396,8 @@ class LineImportSchemaRegistry:
                 {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
                 {"key": "rate", "label": LABEL_RATE, "required": True, "type": "decimal", "aliases": ALIASES_RATE},
                 {
-                    "key": "discount",
-                    "label": LABEL_DISCOUNT,
+                    "key": "discount_percentage",
+                    "label": f"{LABEL_DISCOUNT} %",
                     "required": False,
                     "type": "decimal",
                     "aliases": ALIASES_DISCOUNT,
