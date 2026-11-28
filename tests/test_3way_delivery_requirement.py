@@ -4,14 +4,19 @@
 """#1813: la modalidad 3-way exige orden y nota de entrega."""
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
 from cacao_accounting.database import (
     DeliveryNote,
+    DeliveryNoteItem,
+    DocumentRelation,
     SalesInvoice,
+    SalesInvoiceItem,
     SalesMatchingConfig,
     SalesOrder,
+    SalesOrderItem,
     database,
 )
 from cacao_accounting.ventas.services import _validate_sales_order_requirement
@@ -156,3 +161,103 @@ def test_3way_acepta_entrega_ligada_a_orden(entorno_contable_aislado):
         database.session.commit()
 
         _validate_sales_order_requirement(invoice)
+
+
+def _crear_flujo_derivado_con_lineas(order_approved: bool, suffix: str) -> tuple[SalesInvoice, SalesInvoiceItem]:
+    """Crea factura→entrega→orden con líneas y relaciones canónicas activas."""
+    order = _orden(f"SO-1813-LINE-{suffix}")
+    if not order_approved:
+        order.docstatus = 0
+    delivery = _entrega(f"DN-1813-LINE-{suffix}", order.id)
+    invoice = _crear_factura(None, f"SI-1813-LINE-{suffix}", delivery.id)
+    order_item = SalesOrderItem(
+        sales_order_id=order.id,
+        item_code="ART01",
+        item_name="Articulo Comercial",
+        qty=Decimal("1"),
+        qty_in_base_uom=Decimal("1"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("10"),
+        base_amount=Decimal("10"),
+    )
+    delivery_item = DeliveryNoteItem(
+        delivery_note_id=delivery.id,
+        item_code="ART01",
+        item_name="Articulo Comercial",
+        qty=Decimal("1"),
+        qty_in_base_uom=Decimal("1"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("10"),
+    )
+    invoice_item = SalesInvoiceItem(
+        sales_invoice_id=invoice.id,
+        item_code="ART01",
+        item_name="Articulo Comercial",
+        qty=Decimal("1"),
+        qty_in_base_uom=Decimal("1"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("10"),
+        base_amount=Decimal("10"),
+    )
+    database.session.add_all([order_item, delivery_item, invoice_item])
+    database.session.flush()
+    database.session.add_all(
+        [
+            DocumentRelation(
+                source_type="sales_order",
+                source_id=order.id,
+                source_item_id=order_item.id,
+                target_type="delivery_note",
+                target_id=delivery.id,
+                target_item_id=delivery_item.id,
+                company="cacao",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("10"),
+                amount=Decimal("10"),
+                relation_type="delivery",
+                status="active",
+            ),
+            DocumentRelation(
+                source_type="delivery_note",
+                source_id=delivery.id,
+                source_item_id=delivery_item.id,
+                target_type="sales_invoice",
+                target_id=invoice.id,
+                target_item_id=invoice_item.id,
+                company="cacao",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("10"),
+                amount=Decimal("10"),
+                relation_type="invoice",
+                status="active",
+            ),
+        ]
+    )
+    database.session.commit()
+    return invoice, invoice_item
+
+
+def test_3way_acepta_flujo_derivado_con_lineas(entorno_contable_aislado):
+    """Una factura ligada por líneas a una entrega acepta la orden derivada aprobada."""
+    with entorno_contable_aislado.app.app_context():
+        _config("3-way", require_sales_order=False)
+        invoice, invoice_item = _crear_flujo_derivado_con_lineas(True, "OK")
+
+        _validate_sales_order_requirement(invoice, [invoice_item])
+
+
+def test_3way_rechaza_orden_derivada_invalida_con_lineas(entorno_contable_aislado):
+    """La ruta derivada real rechaza una orden no aprobada pese a la entrega aprobada."""
+    with entorno_contable_aislado.app.app_context():
+        _config("3-way", require_sales_order=False)
+        invoice, invoice_item = _crear_flujo_derivado_con_lineas(False, "BAD")
+
+        with pytest.raises(ValueError, match="debe estar aprobado"):
+            _validate_sales_order_requirement(invoice, [invoice_item])
