@@ -15776,6 +15776,10 @@ msgstr "Only an entry in draft can be rejected."
 msgid "Solo se puede anular un comprobante contabilizado."
 msgstr "Only a posted entry can be cancelled."
 
+#: cacao_accounting/contabilidad/journal_service.py:433
+msgid "La revaluación cambiaria se anula desde su flujo dedicado."
+msgstr "The exchange revaluation is voided from its dedicated flow."
+
 #: cacao_accounting/contabilidad/journal_service.py:503
 msgid ""
 "Solo se puede duplicar un comprobante en borrador, rechazado o "

@@ -429,6 +429,10 @@ def cancel_submitted_journal(
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError(_("Solo se puede anular un comprobante contabilizado."))
+    from cacao_accounting.contabilidad.exchange_revaluation_service import EXCHANGE_REVALUATION_ENTITY_TYPE
+
+    if str(getattr(journal, "voucher_type", "") or "") == EXCHANGE_REVALUATION_ENTITY_TYPE:
+        raise JournalValidationError(_("La revaluación cambiaria se anula desde su flujo dedicado."))
     # Manual journal posting predates DocBase transitions and may leave this
     # flag at draft; cancel_document requires the approved state as a guard.
     journal.docstatus = 1
