@@ -29,6 +29,7 @@ from cacao_accounting.database import (
     ExchangeRevaluation,
     ExchangeRevaluationItem,
     GLEntry,
+    DocumentRelation,
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
@@ -1734,6 +1735,7 @@ def _document_carrying_value_in_ledger(
     ledger_id: str | None,
     receivable: bool,
     include_revaluation_adjustments: bool = False,
+    as_of_date: date | None = None,
 ) -> Decimal | None:
     """Valor en libros previo a la aplicacion de un documento en un libro.
 
@@ -1774,6 +1776,16 @@ def _document_carrying_value_in_ledger(
         return _decimal_value(row)
 
     document_net = _voucher_net(document_type, [document_id])
+    # #1161: las notas de crédito/débito relacionadas reducen el saldo abierto
+    # del documento, así que su GL debe formar parte del mismo valor contable.
+    document_net += _related_note_document_net(
+        company=company,
+        document_type=document_type,
+        document_id=document_id,
+        ledger_id=ledger_id,
+        party_account_id=party_account_id,
+        as_of_date=as_of_date,
+    )
     if include_revaluation_adjustments:
         document_net += _revaluation_document_net(
             company=company,
@@ -1793,6 +1805,58 @@ def _document_carrying_value_in_ledger(
     if not has_gl:
         return None
     return (_net(document_net + payments_net)).quantize(Decimal("0.0001"))
+
+
+def _related_note_document_net(
+    *,
+    company: str,
+    document_type: str,
+    document_id: str,
+    ledger_id: str,
+    party_account_id: str,
+    as_of_date: date | None = None,
+) -> Decimal:
+    """GL neto de las notas de crédito/débito relacionadas con el documento.
+
+    El saldo abierto de una factura ya descuenta las notas aplicadas; el valor
+    contable anterior debe incluir sus asientos para no generar una diferencia
+    cambiaria ficticia (#1161).
+    """
+    from sqlalchemy import func
+
+    note_types_by_source = {
+        "sales_invoice": ("sales_credit_note", "sales_debit_note", "sales_return"),
+        "purchase_invoice": ("purchase_credit_note", "purchase_debit_note"),
+    }
+    note_types = note_types_by_source.get(document_type, ())
+    if not note_types:
+        return Decimal("0")
+    relations = database.session.execute(
+        select(DocumentRelation.target_type, DocumentRelation.target_id).where(
+            DocumentRelation.source_type == document_type,
+            DocumentRelation.source_id == document_id,
+            DocumentRelation.relation_type == "invoice_reversal",
+            DocumentRelation.status == "active",
+            DocumentRelation.target_type.in_(note_types),
+        )
+    ).all()
+    total = Decimal("0")
+    for note_type in note_types:
+        note_ids = [str(target_id) for target_type, target_id in relations if target_type == note_type and target_id]
+        if not note_ids:
+            continue
+        query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+            GLEntry.company == company,
+            GLEntry.ledger_id == ledger_id,
+            GLEntry.account_id == party_account_id,
+            GLEntry.voucher_type == note_type,
+            GLEntry.voucher_id.in_(note_ids),
+            GLEntry.is_cancelled.is_(False),
+        )
+        if as_of_date is not None:
+            query = query.where(GLEntry.posting_date <= as_of_date)
+        total += _decimal_value(database.session.execute(query).scalar_one())
+    return total
 
 
 def _settlement_exchange_rate(

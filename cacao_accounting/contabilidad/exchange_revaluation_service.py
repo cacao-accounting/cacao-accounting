@@ -953,6 +953,7 @@ class ExchangeRevaluationService:
             party_account_id=candidate.account_id,
             ledger_id=ledger.id,
             receivable=candidate.normal_balance == "debit",
+            as_of_date=candidate.as_of_date,
         )
         if carrying is not None:
             return carrying
