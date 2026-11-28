@@ -20552,6 +20552,9 @@ msgstr "The payment type does not correspond to the referenced document."
 msgid "El tipo de tercero del anticipo no corresponde con la factura."
 msgstr "The advance's party type does not correspond to the invoice."
 
+msgid "El tipo de tercero del anticipo no corresponde con la factura."
+msgstr "The advance's party type does not correspond to the invoice."
+
 #: cacao_accounting/document_flow/payment.py:1293
 msgid "El documento referenciado debe existir y estar aprobado."
 msgstr "The referenced document must exist and be approved."

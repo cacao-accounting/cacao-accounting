@@ -1493,6 +1493,9 @@ def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoi
         raise _document_flow_error(_("La factura no existe."), 404)
     if invoice.docstatus != 1:
         raise _document_flow_error(_("La factura debe estar aprobada para aplicar un anticipo."), 409)
+    persisted_type = normalize_doctype(str(getattr(invoice, "document_type", "") or reference_type))
+    if persisted_type != reference_type:
+        raise _document_flow_error(_("El subtipo del documento no coincide con la referencia."), 409)
     return invoice, reference_type, party_id
 
 
@@ -1509,6 +1512,24 @@ def _advance_allocated_amount(payment_id: str) -> Decimal:
     return decimal_or_zero(allocated)
 
 
+def _validate_advance_parties(
+    payment: PaymentEntry,
+    invoice: SalesInvoice | PurchaseInvoice,
+    party_id: str | None,
+) -> None:
+    """Valida compañía, dirección y tercero del anticipo contra la factura (#1495)."""
+    if payment.company != invoice.company:
+        raise _document_flow_error(_("El anticipo y la factura pertenecen a companias distintas."), 409)
+    reference_type = "sales_invoice" if isinstance(invoice, SalesInvoice) else "purchase_invoice"
+    if not _payment_type_matches_source(str(getattr(payment, "payment_type", "") or ""), reference_type):
+        raise _document_flow_error(_("El tipo de pago no corresponde con el documento referenciado."), 409)
+    expected_party_type = "customer" if reference_type == "sales_invoice" else "supplier"
+    if str(getattr(payment, "party_type", "") or "") != expected_party_type:
+        raise _document_flow_error(_("El tipo de tercero del anticipo no corresponde con la factura."), 409)
+    if payment.party_id and party_id and payment.party_id != party_id:
+        raise _document_flow_error(_("El anticipo pertenece a otro tercero."), 409)
+
+
 def _validate_advance_allocation(
     payment: PaymentEntry,
     invoice: SalesInvoice | PurchaseInvoice,
@@ -1518,10 +1539,7 @@ def _validate_advance_allocation(
     exchange_rate: Decimal | None = None,
 ) -> tuple[Decimal, Decimal, Decimal]:
     """Valida la aplicacion del anticipo y devuelve el outstanding antes/despues."""
-    if payment.company != invoice.company:
-        raise _document_flow_error(_("El anticipo y la factura pertenecen a companias distintas."), 409)
-    if payment.party_id and party_id and payment.party_id != party_id:
-        raise _document_flow_error(_("El anticipo pertenece a otro tercero."), 409)
+    _validate_advance_parties(payment, invoice, party_id)
     allocated_before = _advance_allocated_amount(payment.id)
     payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
