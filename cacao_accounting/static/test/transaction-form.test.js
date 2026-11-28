@@ -1731,6 +1731,76 @@ describe('transaction-form', function () {
     assert.match(component.importModal.errors[0].message, /fórmulas/);
   });
 
+  it('rejects a real ExcelJS formula workbook with a cached result', async function () {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Items');
+    sheet.addRow(['Item', 'Quantity']);
+    sheet.addRow(['ITEM-1', { formula: '1+1', result: 2 }]);
+    const buffer = await workbook.xlsx.writeBuffer();
+    globalThis.ExcelJS = ExcelJS;
+
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const originalError = console.error;
+    console.error = () => {};
+
+    component.init();
+    component.importModal.schema = {
+      columns: [{ key: 'item_code', label: 'Item' }, { key: 'quantity', label: 'Quantity' }],
+    };
+    await component.handleFileUpload({
+      target: {
+        files: [{ name: 'real-formulas.xlsx', arrayBuffer: () => Promise.resolve(buffer) }],
+        value: 'real-formulas.xlsx',
+      },
+    });
+    console.error = originalError;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, []);
+    assert.strictEqual(component.importModal.errors.length, 1);
+    assert.match(component.importModal.errors[0].message, /fórmulas/);
+  });
+
+  it('accepts a real ExcelJS workbook with fixed values', async function () {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Items');
+    sheet.addRow(['Item', 'Quantity']);
+    sheet.addRow(['ITEM-2', 3]);
+    const buffer = await workbook.xlsx.writeBuffer();
+    globalThis.ExcelJS = ExcelJS;
+
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.importModal.schema = {
+      columns: [{ key: 'item_code', label: 'Item' }, { key: 'quantity', label: 'Quantity' }],
+    };
+
+    await component.handleFileUpload({
+      target: {
+        files: [{ name: 'real-values.xlsx', arrayBuffer: () => Promise.resolve(buffer) }],
+        value: 'real-values.xlsx',
+      },
+    });
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'ITEM-2', quantity: '3' }]);
+    assert.deepStrictEqual(component.importModal.errors, []);
+  });
+
   it('clears batch and serial requirements when switching to a plain item', function () {
     const create = loadTransactionForm();
     const component = create({
