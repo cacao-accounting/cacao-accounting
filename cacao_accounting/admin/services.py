@@ -73,6 +73,17 @@ ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT = "admin.config_control_presupuestario"
 DEBE_SELECCIONAR_COMPANIA_MSG = "Debe seleccionar una compania."
 
 
+def _current_read(statement, *, for_update: bool):
+    """Aplica lectura actual bajo lock, conservando el refresco del identity map.
+
+    MySQL REPEATABLE READ mantiene el snapshot de la primera lectura consistente.
+    Tras adquirir el lock de compañía hay que releer con ``FOR UPDATE`` para ver
+    lo último confirmado y no decidir sobre un estado obsoleto (#2321).
+    """
+    statement = statement.execution_options(populate_existing=True)
+    return statement.with_for_update() if for_update else statement
+
+
 def _active_system_admin_ids(exclude_user_id: str | None = None) -> list[str]:
     """Devuelve ids de administradores activos del sistema."""
     query = database.select(User.id).where(User.active.is_(True), _active_admin_filter())
@@ -81,32 +92,38 @@ def _active_system_admin_ids(exclude_user_id: str | None = None) -> list[str]:
     return list(database.session.execute(query).scalars().all())
 
 
-def _company_has_recoverable_admin(company_code: str, *, exclude_user_id: str | None = None) -> bool:
-    """Indica si la compañía conserva un administrador activo con acceso recuperable."""
+def _company_has_recoverable_admin(company_code: str, *, exclude_user_id: str | None = None, for_update: bool = False) -> bool:
+    """Indica si la compañía conserva un administrador activo con acceso recuperable.
+
+    Con ``for_update`` la membresía se lee como lectura actual: es la fila de
+    ``UserCompanyAccess`` la que cambia en una revocación concurrente y la que
+    no puede decidirse desde un snapshot viejo de MySQL (#2321).
+    """
     admin_ids = _active_system_admin_ids(exclude_user_id=exclude_user_id)
     if not admin_ids:
         return False
-    return bool(
-        database.session.execute(
-            database.select(UserCompanyAccess.id)
-            .where(
-                UserCompanyAccess.company_code == company_code,
-                UserCompanyAccess.user_id.in_(admin_ids),
-            )
-            .limit(1)
-        ).first()
+    query = (
+        database.select(UserCompanyAccess.id)
+        .where(
+            UserCompanyAccess.company_code == company_code,
+            UserCompanyAccess.user_id.in_(admin_ids),
+        )
+        .limit(1)
     )
+    return database.session.execute(_current_read(query, for_update=for_update)).first() is not None
+
+
+def _user_company_assignments(user_id: str, *, for_update: bool = False) -> dict[str, UserCompanyAccess]:
+    """Carga las asignaciones de compañía del usuario, opcionalmente bajo lock."""
+    query = database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == user_id)
+    rows = database.session.execute(_current_read(query, for_update=for_update)).scalars()
+    return {assignment.company_code: assignment for assignment in rows}
 
 
 def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
     """Replace company scope while auditing each revoked assignment."""
     target = database.session.execute(database.select(User).where(User.id == user_id).with_for_update()).scalar_one()
-    existing = {
-        assignment.company_code: assignment
-        for assignment in database.session.execute(
-            database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == user_id)
-        ).scalars()
-    }
+    existing = _user_company_assignments(user_id)
     removed = [assignment for code, assignment in existing.items() if code not in company_codes]
     added = company_codes.difference(existing)
 
@@ -119,10 +136,17 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
         # #2321: las filas de usuario no serializan revocaciones de admins
         # distintos sobre la misma compañía. El lock de ámbito se toma antes
         # de comprobar recuperadores y de borrar asignaciones; en SQLite usa
-        # BEGIN IMMEDIATE y en PostgreSQL una fila bloqueada por compañía.
+        # BEGIN IMMEDIATE y en PostgreSQL/MySQL una fila bloqueada por compañía.
         lock_default_scopes("company_admin_access", [(assignment.company_code,) for assignment in removed])
+        # La lectura previa pudo establecer un snapshot bajo REPEATABLE READ.
+        # Se revalida el estado real del usuario bajo el mismo lock.
+        existing = _user_company_assignments(user_id, for_update=True)
+        removed = [assignment for code, assignment in existing.items() if code not in company_codes]
+        added = company_codes.difference(existing)
+        if removed:
+            lock_default_scopes("company_admin_access", [(assignment.company_code,) for assignment in removed])
         for assignment in removed:
-            if not _company_has_recoverable_admin(assignment.company_code, exclude_user_id=user_id):
+            if not _company_has_recoverable_admin(assignment.company_code, exclude_user_id=user_id, for_update=True):
                 raise ValueError(
                     _(
                         "No se puede revocar el acceso a %(company)s porque dejaría la compañía sin un administrador "
