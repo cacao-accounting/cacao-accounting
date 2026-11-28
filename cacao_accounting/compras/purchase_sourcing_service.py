@@ -320,6 +320,20 @@ def _award_comparable_rate(rfq: PurchaseQuotation, offer: SupplierQuotation, lin
         raise PurchaseSourcingError(str(exc)) from exc
 
 
+def _validate_award_suppliers(company: str, offers: Sequence[SupplierQuotation], selections: dict[str, str]) -> None:
+    """Revalida la vigencia del proveedor de cada oferta seleccionada (#2319)."""
+    from cacao_accounting.compras.services import _validated_purchase_supplier
+
+    selected = {quotation_id for quotation_id in selections.values() if quotation_id}
+    for offer in offers:
+        if offer.id not in selected:
+            continue
+        try:
+            _validated_purchase_supplier(offer.supplier_id, company)
+        except ValueError as exc:
+            raise PurchaseSourcingError(str(exc)) from exc
+
+
 def create_purchase_quotation_award(
     rfq: PurchaseQuotation,
     selections: dict[str, str],
@@ -332,7 +346,8 @@ def create_purchase_quotation_award(
     reason = _normalize_authorization_reason(reason)
     lock_default_scope("purchase_quotation_award", rfq.id)
     _raise_if_terminal_award(_terminal_award(rfq.id))
-    items, _offers, manual_override_items = validate_award_request(rfq, selections, user_id, reason)
+    items, offers, manual_override_items = validate_award_request(rfq, selections, user_id, reason)
+    _validate_award_suppliers(rfq.company or "", offers, selections)
     negotiation_round = current_negotiation_round(rfq.id)
     award = PurchaseQuotationAward(
         purchase_quotation_id=rfq.id,
