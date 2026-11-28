@@ -325,3 +325,20 @@ def test_presupuesto_rechaza_filas_repetidas_excesivas():
 
     with pytest.raises(ImportReadLimitError):
         BudgetImportService()._parse_ods(contenido)
+
+
+def test_presupuesto_rechaza_producto_de_celdas_excesivo():
+    """#2348: filas por columnas puede exceder el total de celdas sin exceder filas."""
+    headers = [f"Columna {index}" for index in range(256)]
+    contenido = _ods_bytes_with(
+        headers,
+        [
+            (
+                3_907,
+                [_typed_cell("string", "dato") for _ in headers],
+            ),
+        ],
+    )
+
+    with pytest.raises(ImportReadLimitError):
+        BudgetImportService()._parse_ods(contenido)

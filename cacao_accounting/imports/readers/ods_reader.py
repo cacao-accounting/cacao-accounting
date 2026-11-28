@@ -14,6 +14,7 @@ from zipfile import ZipFile
 from cacao_accounting.imports.readers.base import BaseReader, TabularBook
 from cacao_accounting.imports.readers.limits import (
     MAX_IMPORT_ARCHIVE_BYTES,
+    MAX_IMPORT_CELLS,
     MAX_IMPORT_COLUMNS,
     MAX_IMPORT_ROWS,
     MAX_IMPORT_TEXT_CHARS,
@@ -294,6 +295,7 @@ def ods_row_repeat(row) -> int:
 def ods_rows_from_table(table, table_row_class, table_cell_class, extract_text) -> list[list[str]]:
     """Devuelve las filas y columnas expandidas de una tabla odfpy con límites."""
     rows: list[list[str]] = []
+    cells = 0
     for row in table.getElementsByType(table_row_class):
         repeat = ods_row_repeat(row)
         values: list[str] = []
@@ -303,6 +305,9 @@ def ods_rows_from_table(table, table_row_class, table_cell_class, extract_text) 
                 raise ImportReadLimitError()
             values.extend([ods_cell_value(cell, extract_text)] * cell_repeat)
         if len(rows) + repeat > MAX_IMPORT_ROWS:
+            raise ImportReadLimitError()
+        cells += len(values) * repeat
+        if cells > MAX_IMPORT_CELLS:
             raise ImportReadLimitError()
         rows.extend(values.copy() for _ in range(repeat))
     return rows
