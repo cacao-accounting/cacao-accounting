@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from decimal import Decimal
 from threading import Barrier
 from uuid import uuid4
@@ -116,7 +117,9 @@ def _seed(app, suffix: str, user_id: str) -> str:
             price_list_id=price_list.id,
             uom=f"U{suffix}",
             price=Decimal("10"),
-            min_qty=Decimal("0"),
+            min_qty=Decimal("2"),
+            valid_from=date(2026, 1, 1),
+            valid_upto=date(2026, 12, 31),
         )
         database.session.add(price)
         database.session.commit()
@@ -159,6 +162,10 @@ def test_dos_ediciones_concurrentes_no_pierden_actualizacion(tmp_path):
             final = database.session.get(ItemPrice, price_id)
             assert final is not None
             assert final.price in {Decimal("18.7500"), Decimal("19.2500")}
+            # La edición rápida solo cambia el precio: criterios y vigencia intactos.
+            assert final.min_qty == Decimal("2")
+            assert final.valid_from == date(2026, 1, 1)
+            assert final.valid_upto == date(2026, 12, 31)
         exitos = [html for status, html in results if "actualizado correctamente" in html]
         rechazos = [html for status, html in results if "El precio cambió mientras editaba" in html]
         assert len(exitos) == 1
@@ -233,7 +240,11 @@ def test_guardar_el_mismo_precio_no_reporta_conflicto(tmp_path):
     assert "actualizado correctamente" in html
     assert "El precio cambió mientras editaba" not in html
     with app.app_context():
-        assert database.session.get(ItemPrice, price_id).price == Decimal("10.0000")
+        guardado = database.session.get(ItemPrice, price_id)
+        assert guardado.price == Decimal("10.0000")
+        assert guardado.min_qty == Decimal("2")
+        assert guardado.valid_from == date(2026, 1, 1)
+        assert guardado.valid_upto == date(2026, 12, 31)
         database.session.remove()
         database.engine.dispose()
 
