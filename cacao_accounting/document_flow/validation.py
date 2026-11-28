@@ -209,6 +209,8 @@ def _validate_warehouse_assignments(items, warehouse_for_stock_items_only, purpo
             raise ValueError(
                 _("La linea del artículo %(item)s requiere una bodega de destino asignada.") % {"item": item_code}
             )
+        if purpose == "material_transfer" and source_wh and target_wh and source_wh == target_wh:
+            raise ValueError(_("La transferencia de material requiere bodegas de origen y destino distintas."))
         if not requires_source and not requires_target and not (source_wh or target_wh):
             raise ValueError(_("La linea del artículo %(item)s requiere un almacen asignado.") % {"item": item_code})
 

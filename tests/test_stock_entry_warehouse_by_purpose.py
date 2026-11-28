@@ -72,6 +72,18 @@ def test_transfer_requiere_ambas_bodegas():
         )
 
 
+def test_transfer_rechaza_la_misma_bodega():
+    """#1892: una transferencia con origen igual al destino no pasa la guarda."""
+    with pytest.raises(ValueError, match="distintas"):
+        validate_submit_prerequisites(
+            _entry("material_transfer"),
+            items=[_item(source="WH-A", target="WH-A")],
+            require_party=False,
+            require_warehouse=True,
+            require_rate_positive=True,
+        )
+
+
 def test_inflow_con_destino_pasa():
     validate_submit_prerequisites(
         _entry("material_receipt"),
