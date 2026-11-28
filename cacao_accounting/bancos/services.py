@@ -717,28 +717,8 @@ def _clear_default_petty_cash(company: str) -> None:
     database.session.flush()
 
 
-def _petty_cash_has_open_vouchers(petty_cash_id: str) -> bool:
-    """Indica si existen vales no liquidados ni cancelados para la caja."""
-    open_statuses = {"borrador", "entregado"}
-    voucher = database.session.execute(
-        database.select(PettyCashVoucher.id)
-        .filter(
-            PettyCashVoucher.petty_cash_id == petty_cash_id,
-            PettyCashVoucher.status != "anulado",
-            database.or_(
-                PettyCashVoucher.voucher_status.in_(open_statuses),
-                database.and_(PettyCashVoucher.voucher_status.is_(None), PettyCashVoucher.expense_id.is_(None)),
-            ),
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-    return voucher is not None
-
-
 def toggle_petty_cash_active(petty_cash: PettyCashAccount) -> None:
-    """Alterna el estado activo/inactivo de una caja chica (append-only, sin borrado)."""
-    if petty_cash.is_active and _petty_cash_has_open_vouchers(str(petty_cash.id)):
-        raise ValueError(_("No se puede desactivar una caja chica con vales entregados o pendientes de liquidación."))
+    """Alterna el estado activo/inactivo sin borrar vales ni su historial."""
     petty_cash.is_active = not petty_cash.is_active
     database.session.commit()
 
@@ -829,14 +809,16 @@ def petty_cash_vouchers_for_fund(petty_cash_id: str) -> list[PettyCashVoucher]:
     )
 
 
-def _validate_petty_cash_fund(petty_cash_id: str, company: str | None = None) -> PettyCashAccount:
-    """Valida que el fondo de caja chica exista y este activo."""
+def _validate_petty_cash_fund(
+    petty_cash_id: str, company: str | None = None, *, allow_inactive: bool = False
+) -> PettyCashAccount:
+    """Valida el fondo y permite inactividad solo en un flujo existente autorizado."""
     fund = database.session.get(PettyCashAccount, petty_cash_id)
     if not fund:
         raise ValueError(_("La caja chica seleccionada no existe."))
     if company and fund.company != company:
         raise ValueError(_("La caja chica seleccionada no pertenece a la compañía indicada."))
-    if not fund.is_active:
+    if not fund.is_active and not allow_inactive:
         raise ValueError(_("La caja chica seleccionada no esta activa."))
     return fund
 
@@ -1109,8 +1091,9 @@ def create_petty_cash_expense(
     remarks: str | None = None,
     actor_id: str | None = None,
     naming_series_id: str | None = None,
+    allow_inactive_fund: bool = False,
 ) -> PettyCashExpense:
-    """Crea y postea un gasto de caja chica (Dr Gasto / Cr Caja Chica)."""
+    """Crea y postea un gasto; solo el flujo de vale puede usar un fondo inactivo."""
     from cacao_accounting.approval_preflight import ensure_approval_flow_supported
 
     ensure_approval_flow_supported(company)
@@ -1118,7 +1101,7 @@ def create_petty_cash_expense(
         from datetime import date as _date
 
         posted_date = _date.today()
-    fund = _validate_petty_cash_fund(petty_cash_id, company)
+    fund = _validate_petty_cash_fund(petty_cash_id, company, allow_inactive=allow_inactive_fund and voucher_id is not None)
     _validate_petty_cash_expense_precision(amount, fund)
     _validate_petty_cash_expense_request(
         company=company,
@@ -1270,6 +1253,7 @@ def create_petty_cash_expense_from_voucher(
             voucher_id=voucher.id,
             remarks=remarks or voucher.comments or None,
             actor_id=actor_id,
+            allow_inactive_fund=True,
         )
     except Exception:
         database.session.rollback()

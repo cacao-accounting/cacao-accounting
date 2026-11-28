@@ -22,6 +22,7 @@ from cacao_accounting.bancos.services import (
     create_petty_cash_expense_from_voucher,
     create_petty_cash_voucher,
     set_petty_cash_voucher_status,
+    toggle_petty_cash_active,
 )
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
@@ -458,3 +459,41 @@ def test_liquidacion_acepta_dimensiones_propias(caja_dimensiones):
             == sum((entry.credit for entry in asientos), Decimal("0"))
             == Decimal("50.0000")
         )
+
+
+def test_vale_entregado_se_liquida_con_fondo_inactivo(caja_dimensiones):
+    """El vale existente se cierra sin reactivar el fondo para nuevas operaciones."""
+    application, ids = caja_dimensiones
+    propias = ids["dimensiones"]["cacao"]
+    with application.app_context():
+        vale = _crear_vale(ids, propias)
+        vale = set_petty_cash_voucher_status(vale, "entregado")
+        fondo = database.session.get(PettyCashAccount, ids["fondo"])
+        assert fondo is not None
+        toggle_petty_cash_active(fondo)
+
+        gasto = create_petty_cash_expense_from_voucher(
+            vale,
+            expense_account_code=ids["cuenta_gasto"],
+            cost_center_code=propias["centro"],
+            posted_date=FECHA,
+            actor_id="admin",
+        )
+
+        assert gasto.docstatus == 1
+        assert vale.voucher_status == "liquidado"
+        assert vale.expense_id == gasto.id
+        database.session.refresh(fondo)
+        assert fondo.is_active is False
+        with pytest.raises(ValueError, match="no esta activa"):
+            create_petty_cash_expense(
+                company="cacao",
+                petty_cash_id=ids["fondo"],
+                expense_account_code=ids["cuenta_gasto"],
+                concept="Gasto nuevo",
+                amount=Decimal("10"),
+                cost_center_code=propias["centro"],
+                posted_date=FECHA,
+            )
+        with pytest.raises(ValueError, match="no esta activa"):
+            _crear_vale(ids, propias)
