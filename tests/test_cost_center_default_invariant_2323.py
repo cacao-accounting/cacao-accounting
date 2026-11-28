@@ -252,3 +252,103 @@ def test_normaliza_main_historico_no_posteable(app):
         defaults = database.session.execute(database.select(CostCenter).filter_by(entity=code, default=True)).scalars().all()
         assert len(defaults) == 1
         assert defaults[0].code == "MAIN"
+
+
+def test_dos_cambios_concurrentes_dejan_un_solo_default(tmp_path, monkeypatch):
+    """#2323: dos cambios simultáneos no pueden dejar dos predeterminados."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, BrokenBarrierError
+
+    from cacao_accounting import create_app
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.contabilidad import services as cost_center_services
+    from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+
+    database_uri = f"sqlite:///{tmp_path / 'cost-centers-2323.sqlite'}"
+    settings = {
+        **configuracion,
+        "SQLALCHEMY_DATABASE_URI": database_uri,
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "TESTING": True,
+        "MODO_ESCRITORIO": True,
+    }
+    writer = create_app(settings)
+    reader = create_app(settings)
+    entity = f"X{uuid4().hex[:7].upper()}"
+    with writer.app_context():
+        from cacao_accounting.database import Currency
+
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code=entity,
+                name=entity,
+                company_name=entity,
+                tax_id=f"T{entity}",
+                currency="NIO",
+                status="activo",
+                enabled=True,
+            )
+        )
+        database.session.flush()
+        for code, is_default in (("MAIN", True), ("A", False), ("B", False)):
+            database.session.add(
+                CostCenter(
+                    entity=entity,
+                    code=code,
+                    name=code,
+                    active=True,
+                    enabled=True,
+                    default=is_default,
+                    group=False,
+                    status="activo",
+                )
+            )
+        database.session.commit()
+        target_ids = {
+            code: str(
+                database.session.execute(database.select(CostCenter.id).filter_by(entity=entity, code=code)).scalar_one()
+            )
+            for code in ("A", "B")
+        }
+
+    barrier = Barrier(2)
+    choose_barrier = Barrier(2)
+    original_choose = cost_center_services._choose_default_cost_center
+
+    def _synchronized_choose(centers, preferred_id):
+        try:
+            choose_barrier.wait(timeout=0.2)
+        except BrokenBarrierError:
+            pass
+        return original_choose(centers, preferred_id)
+
+    monkeypatch.setattr(cost_center_services, "_choose_default_cost_center", _synchronized_choose)
+
+    def _change(app, target_id: str) -> None:
+        with app.app_context():
+            barrier.wait(timeout=10)
+            _ensure_single_default_cost_center(entity, preferred_id=target_id)
+            database.session.commit()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(_change, writer, target_ids["A"]),
+            executor.submit(_change, reader, target_ids["B"]),
+        ]
+        for future in futures:
+            future.result(timeout=30)
+
+    with writer.app_context():
+        database.session.expire_all()
+        defaults = database.session.execute(database.select(CostCenter).filter_by(entity=entity, default=True)).scalars().all()
+        assert len(defaults) == 1
+        assert defaults[0].code in {"A", "B"}
+        database.session.remove()
+        database.engine.dispose()
+    with reader.app_context():
+        database.session.remove()
+        database.engine.dispose()

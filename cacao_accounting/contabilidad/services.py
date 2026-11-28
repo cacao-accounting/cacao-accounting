@@ -521,7 +521,9 @@ def _ensure_main_cost_center(entity: str, centers: list[Any]) -> Any:
 def _ensure_single_default_cost_center(entity: str, *, preferred_id: str | None = None) -> Any:
     """Garantiza exactamente un centro de costo predeterminado por compa??a."""
     from cacao_accounting.database import CostCenter
+    from cacao_accounting.default_scope import lock_default_scope
 
+    lock_default_scope("cost_center_default", entity)
     _lock_cost_center_companies((entity,))
     centers = (
         database.session.execute(
