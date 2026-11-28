@@ -233,6 +233,130 @@ def test_guarda_aplica_y_elimina_por_http(app, entorno_contable, authenticated_c
         assert database.session.get(SavedReportView, view.id) is None
 
 
+def test_vista_nueva_no_hereda_filtro_textual_ausente(app, entorno_contable):
+    """#2338: aplicar una vista guardada sin account_code limpia el valor de la URL."""
+    with app.app_context():
+        admin = _admin_id()
+        view = create_saved_view(
+            "account-movement",
+            "cacao",
+            admin,
+            f"Sin cuenta {uuid4().hex[:6]}",
+            _filters(account_code=None, voucher_number=None),
+        )
+        try:
+            restaurados = restore_filters(
+                _filters(account_code="1101", voucher_number="AST-1"),
+                view,
+            )
+            assert restaurados.account_code is None
+            assert restaurados.voucher_number is None
+            # Los filtros que sí estaban guardados se conservan.
+            assert restaurados.ledger == "DEFAULT_BOOK"
+            assert restaurados.page_size == 25
+        finally:
+            delete_saved_view(view.id, "account-movement", "cacao", admin)
+
+
+def test_vista_nueva_con_filtro_textual_lo_aplica_sobre_url_vacia(app, entorno_contable):
+    """El caso inverso: un filtro guardado se restaura aunque la URL no lo traiga."""
+    with app.app_context():
+        admin = _admin_id()
+        view = create_saved_view(
+            "account-movement",
+            "cacao",
+            admin,
+            f"Con cuenta {uuid4().hex[:6]}",
+            _filters(account_code="1101", voucher_number="AST-9"),
+        )
+        try:
+            restaurados = restore_filters(_filters(account_code=None, voucher_number=None), view)
+            assert restaurados.account_code == "1101"
+            assert restaurados.voucher_number == "AST-9"
+        finally:
+            delete_saved_view(view.id, "account-movement", "cacao", admin)
+
+
+def test_vista_heredada_conserva_filtro_de_la_url(app, entorno_contable):
+    """Una vista previa sin marca explícita no borra filtros que nunca guardó."""
+    with app.app_context():
+        admin = _admin_id()
+        view = SavedReportView(
+            report_code="account-movement",
+            company="cacao",
+            user_id=admin,
+            name=f"Heredada {uuid4().hex[:6]}",
+            filters_json='{"ledger": "DEFAULT_BOOK"}',
+            display_json="{}",
+            created_by=admin,
+            modified_by=admin,
+        )
+        database.session.add(view)
+        database.session.commit()
+        try:
+            restaurados = restore_filters(_filters(account_code="1101"), view)
+            assert restaurados.account_code == "1101"
+            assert restaurados.ledger == "DEFAULT_BOOK"
+        finally:
+            delete_saved_view(view.id, "account-movement", "cacao", admin)
+
+
+def test_http_vista_sin_filtro_textual_descarta_parametro_de_la_url(app, entorno_contable, authenticated_client):
+    """#2338: la pantalla aplicada no muestra el account_code de la URL actual."""
+    client = authenticated_client()
+    nombre = f"HTTP vacia {uuid4().hex[:6]}"
+    response = client.post(
+        "/reports/views/save?company=cacao&apply_filters=1&page_size=25",
+        data={
+            "report_code": "account-movement",
+            "company": "cacao",
+            "name": nombre,
+            "return_url": "/reports/account-movement",
+        },
+    )
+    assert response.status_code == 302
+
+    with app.app_context():
+        admin = _admin_id()
+        view = database.session.execute(
+            database.select(SavedReportView).filter_by(user_id=admin, report_code="account-movement", name=nombre)
+        ).scalar_one()
+        view_id = view.id
+    try:
+        aplicada = client.get(
+            f"/reports/account-movement?company=cacao&apply_filters=1&account_code=1101&saved_view={view_id}"
+        )
+        assert aplicada.status_code == 200
+        html = aplicada.get_data(as_text=True)
+        assert nombre in html
+        assert 'initialValue: "1101"' not in html
+    finally:
+        with app.app_context():
+            admin = _admin_id()
+            delete_saved_view(view_id, "account-movement", "cacao", admin)
+
+
+def test_http_vista_con_filtro_textual_lo_muestra_sin_parametro_en_la_url(app, entorno_contable, authenticated_client):
+    """El filtro guardado se pinta aunque la URL aplicada no lo incluya."""
+    client = authenticated_client()
+    with app.app_context():
+        view = create_saved_view(
+            "account-movement",
+            "cacao",
+            _admin_id(),
+            f"HTTP con cuenta {uuid4().hex[:6]}",
+            _filters(account_code="1101"),
+        )
+        view_id = view.id
+    try:
+        aplicada = client.get(f"/reports/account-movement?company=cacao&apply_filters=1&saved_view={view_id}")
+        assert aplicada.status_code == 200
+        assert 'initialValue: "1101"' in aplicada.get_data(as_text=True)
+    finally:
+        with app.app_context():
+            delete_saved_view(view_id, "account-movement", "cacao", _admin_id())
+
+
 def test_vista_restaura_usuarios_y_filtros_avanzados(app, entorno_contable, authenticated_client):
     """Aplicar una vista restaura autoría y panel avanzado sin query params."""
     client = authenticated_client()

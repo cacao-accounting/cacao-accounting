@@ -39,6 +39,10 @@ FILTER_FIELDS = (
 )
 BOOLEAN_FILTER_FIELDS = ("include_cancellations", "include_running_balance", "include_closing", "include_descendants")
 DISPLAY_FIELDS = ("visible_columns", "group_by", "page_size", "sort_by", "sort_dir", "show_users", "advanced")
+# #2338: marca las vistas nuevas que persisten la ausencia explícita de cada
+# filtro escalar. Las vistas heredadas sin la marca conservan el comportamiento
+# anterior para no borrar filtros que nunca guardaron.
+EXPLICIT_FILTERS_KEY = "_explicit_filters"
 
 
 class SavedReportViewError(Exception):
@@ -80,11 +84,12 @@ def _normalize_name(name: str) -> str:
 
 def _clean_filters(filters: Any) -> dict[str, Any]:
     """Extrae únicamente los filtros persistibles del reporte."""
-    payload: dict[str, Any] = {}
+    payload: dict[str, Any] = {EXPLICIT_FILTERS_KEY: True}
     for field in FILTER_FIELDS:
         value = getattr(filters, field, None)
-        if value not in (None, ""):
-            payload[field] = value
+        # #2338: la ausencia explícita de un filtro debe sobrevivir al guardado
+        # para que aplicarlo no herede el valor presente en la URL actual.
+        payload[field] = value if value not in (None, "") else None
     for field in BOOLEAN_FILTER_FIELDS:
         # #1938: persist explicit False so a saved view can override a URL/request
         # that enables a boolean filter. Old views missing a key keep request value.
@@ -125,10 +130,15 @@ def _parse_payload(view: SavedReportView) -> tuple[dict[str, Any], dict[str, Any
         raise SavedReportViewError(_("La vista guardada contiene preferencias inv?lidas."))
     # #1938: preserve legacy views that omitted boolean keys; only normalize known
     # fields present in payload, and always normalize booleans when present.
+    # #2338: una vista nueva declara explícitamente la ausencia de cada filtro
+    # escalar; las heredadas sin la marca solo aportan las claves presentes.
+    explicit = bool(filters.get(EXPLICIT_FILTERS_KEY))
     cleaned_filters: dict[str, Any] = {}
     for field in FILTER_FIELDS:
         value = filters.get(field)
-        if value not in (None, ""):
+        if explicit:
+            cleaned_filters[field] = value if value not in (None, "") else None
+        elif value not in (None, ""):
             cleaned_filters[field] = value
     for field in BOOLEAN_FILTER_FIELDS:
         if field in filters:
