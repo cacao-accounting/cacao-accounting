@@ -28561,3 +28561,6 @@ msgstr "Issue, rotate or revoke the credential used by authorized integrations. 
 
 msgid "Gestionar credencial API"
 msgstr "Manage API credential"
+
+msgid "La conciliación no puede reducir inventario sin un valor funcional mayor que cero."
+msgstr "Stock reconciliation cannot reduce inventory without a functional value greater than zero."

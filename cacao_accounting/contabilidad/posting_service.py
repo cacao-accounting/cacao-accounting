@@ -3301,6 +3301,11 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
             batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = rate * abs(qty_change)
+        # Sin capas valoradas ni tasa objetivo, el respaldo cero descontaría
+        # unidades sin contrapartida en GL. Se rechaza de forma atómica igual
+        # que en las salidas (#2259, #2290).
+        if cost_amount <= 0:
+            raise PostingError(_("La conciliación no puede reducir inventario sin un valor funcional mayor que cero."))
         line._inventory_source_layer_id = None
         line._consumed_layers = []
     line._inventory_cost_amount = cost_amount
