@@ -8,9 +8,15 @@ import io
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List
 
+from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 
-from cacao_accounting.contabilidad.budget_service import BudgetError, _parse_budget_amount
+from cacao_accounting.contabilidad.budget_service import (
+    BudgetError,
+    BudgetService,
+    _lock_budget_for_line_write,
+    _parse_budget_amount,
+)
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
@@ -23,6 +29,7 @@ from cacao_accounting.database import (
     Unit,
     database,
 )
+from cacao_accounting.imports.readers.ods_reader import ods_rows_from_table
 
 from cacao_accounting.i18n import _
 
@@ -78,7 +85,7 @@ class BudgetImportService:
 
     def _parse_csv(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo CSV."""
-        text_stream = io.StringIO(file_content.decode("utf-8"))
+        text_stream = io.StringIO(file_content.decode("utf-8-sig"))
         reader = csv.DictReader(text_stream)
         return [row for row in reader]
 
@@ -102,7 +109,7 @@ class BudgetImportService:
         return self._matrix_to_dicts(values)
 
     def _parse_ods(self, file_content: bytes) -> List[Dict[str, str]]:
-        """Parsea un archivo ODS usando odfpy con soporte para columnas repetidas."""
+        """Parsea un archivo ODS usando odfpy con soporte para repeticiones."""
         from odf.opendocument import load
         from odf.table import Table, TableRow, TableCell
         from odf.teletype import extractText
@@ -111,7 +118,7 @@ class BudgetImportService:
         tables = doc.getElementsByType(Table)
         if not tables:
             return []
-        rows = self._ods_rows(tables[0], TableRow, TableCell, extractText)
+        rows = ods_rows_from_table(tables[0], TableRow, TableCell, extractText)
         return self._matrix_to_dicts(rows)
 
     def _matrix_to_dicts(self, values_iter) -> List[Dict[str, str]]:
@@ -201,28 +208,6 @@ class BudgetImportService:
             comb,
         )
 
-    def _ods_rows(self, table, table_row_class, table_cell_class, extract_text) -> list[list[str]]:
-        rows = []
-        for row in table.getElementsByType(table_row_class):
-            rows.append(self._ods_row_values(row, table_cell_class, extract_text))
-        return rows
-
-    def _ods_row_values(self, row, table_cell_class, extract_text) -> list[str]:
-        row_values: list[str] = []
-        for cell in row.getElementsByType(table_cell_class):
-            repeat = self._ods_cell_repeat(cell)
-            row_values.extend([extract_text(cell)] * repeat)
-        return row_values
-
-    def _ods_cell_repeat(self, cell) -> int:
-        repeat = cell.getAttributeNS("urn:oasis:names:tc:opendocument:xmlns:table:1.0", "number-columns-repeated")
-        if not repeat:
-            repeat = cell.getAttribute("numbercolumnsrepeated")
-        try:
-            return int(repeat) if repeat else 1
-        except (ValueError, TypeError):
-            return 1
-
     def _normalize_headers(self, headers_row) -> list[str]:
         return [str(header).strip() if header is not None else "" for header in headers_row]
 
@@ -243,16 +228,18 @@ class BudgetImportService:
 
     def validate_import(self, budget_id: str, filename: str, file_content: bytes, user_id: str) -> BudgetImport:
         """Valida e inicializa un lote de importación en staging."""
-        rows = self.parse_file(filename, file_content)
         budget = database.session.get(Budget, budget_id)
         if not budget:
             raise BudgetError(_("Presupuesto no encontrado."))
         if budget.status != "draft":
             raise BudgetError(_("Solo se pueden importar líneas a presupuestos en borrador."))
+        rows = self.parse_file(filename, file_content)
+        if not rows:
+            raise BudgetError(_("El archivo no contiene filas de datos."))
 
-        import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
         caches = self._build_caches(budget)
         self._validate_headers(rows, caches["period_names"])
+        import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
 
         existing_lines = self._get_existing_line_combos(budget_id)
         errors, validated_lines_count = self._process_import_rows(rows, import_batch.id, caches, existing_lines)
@@ -387,15 +374,47 @@ class BudgetImportService:
             query = query.limit(limit)
         return query.all()
 
-    def insert_lines(self, import_id: str, user_id: str):
-        """Transfiere líneas de staging a BudgetLine atómicamente."""
+    def insert_lines(self, import_id: str, user_id: str, *, budget_id: str | None = None):
+        """Transfiere líneas de staging a BudgetLine atómicamente.
+
+        Cuando se indica ``budget_id`` el lote debe pertenecer a ese presupuesto;
+        así la autorización verificada sobre el presupuesto de la ruta no puede
+        reutilizarse para insertar en otro (#1488).
+        """
         batch = database.session.get(BudgetImport, import_id)
         if not batch or batch.status != "validated":
             raise BudgetError(_("Lote de importación no válido o ya procesado."))
+        if budget_id is not None and str(batch.budget_id) != str(budget_id):
+            raise BudgetError(_("El lote de importación no pertenece al presupuesto indicado."))
 
+        processing = False
         try:
+            budget = _lock_budget_for_line_write(batch.budget_id)
+            batch = database.session.execute(
+                select(BudgetImport)
+                .where(BudgetImport.id == import_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalar_one_or_none()
+            if not batch or batch.status != "validated":
+                raise BudgetError(_("Lote de importación no válido o ya procesado."))
+            processing = True
+            if not budget or batch.budget_id != budget.id or budget.status != "draft":
+                raise BudgetError(_("Solo se pueden importar líneas a presupuestos en borrador."))
+
+            budget_service = BudgetService()
             staging_lines = self.get_staged_lines(import_id=import_id, limit=0)
             for sl in staging_lines:
+                budget_service._validate_line_uniqueness(
+                    budget,
+                    {
+                        "account_id": sl.account_id,
+                        "cost_center_id": sl.cost_center_id,
+                        "business_unit_id": sl.business_unit_id,
+                        "project_id": sl.project_id,
+                        "period_id": sl.period_id,
+                    },
+                )
                 line = BudgetLine(
                     budget_id=batch.budget_id,
                     account_id=sl.account_id,
@@ -414,19 +433,30 @@ class BudgetImportService:
             database.session.query(BudgetImportLine).filter_by(import_id=import_id).delete()
             database.session.commit()
         except BudgetError:
-            database.session.rollback()
-            failed_batch = database.session.get(BudgetImport, import_id)
-            if failed_batch:
-                failed_batch.status = "failed"
-            database.session.commit()
+            if processing:
+                self._mark_validated_batch_failed(import_id)
+            else:
+                database.session.rollback()
             raise
         except SQLAlchemyError as e:
-            database.session.rollback()
-            failed_batch = database.session.get(BudgetImport, import_id)
-            if failed_batch:
-                failed_batch.status = "failed"
-            database.session.commit()
+            if processing:
+                self._mark_validated_batch_failed(import_id)
+            else:
+                database.session.rollback()
             raise BudgetError(_("Error atómico en inserción: %(error)s") % {"error": e}) from e
+
+    def _mark_validated_batch_failed(self, import_id: str) -> None:
+        """Mark a processed preview failed without overwriting a terminal state."""
+        database.session.rollback()
+        result = database.session.execute(
+            update(BudgetImport)
+            .where(BudgetImport.id == import_id, BudgetImport.status == "validated")
+            .values(status="failed")
+        )
+        if getattr(result, "rowcount", 0):
+            database.session.commit()
+        else:
+            database.session.rollback()
 
     def _parse_period_amount(self, row: dict, period_name: str) -> tuple[Decimal | None, str | None]:
         raw_value = row.get(period_name, "").strip()

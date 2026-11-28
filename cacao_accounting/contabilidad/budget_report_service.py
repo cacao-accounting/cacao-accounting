@@ -20,7 +20,12 @@ from cacao_accounting.database import (
     Project,
     database,
 )
-from cacao_accounting.reportes.services import ReportRow, PaginatedReport
+from cacao_accounting.reportes.services import (
+    PaginatedReport,
+    ReportRow,
+    account_classification_is_debit_positive,
+    normalize_account_classification,
+)
 
 
 class BudgetReportService:
@@ -55,6 +60,8 @@ class BudgetReportService:
 
         budget = database.session.get(Budget, budget_id)
         if not budget:
+            return self._empty_report()
+        if budget.status != "approved":
             return self._empty_report()
         if not company or not fiscal_year_id or not ledger_id or not budget_id:
             return self._empty_report()
@@ -230,6 +237,8 @@ class BudgetReportService:
         account_to: Optional[str],
     ) -> List[Any]:
         """Query GL entries for actual amounts."""
+        from cacao_accounting.cancellation_scope import effective_gl_scope
+
         g_query = (
             database.session.query(
                 GLEntry.account_id,
@@ -239,6 +248,7 @@ class BudgetReportService:
                 GLEntry.project_code,
                 GLEntry.accounting_period_id,
                 Accounts.classification,
+                Accounts.account_type,
                 func.sum(GLEntry.debit).label("debit"),
                 func.sum(GLEntry.credit).label("credit"),
             )
@@ -247,8 +257,7 @@ class BudgetReportService:
                 GLEntry.company == company,
                 GLEntry.ledger_id == ledger_id,
                 GLEntry.accounting_period_id.in_(period_range_ids),
-                GLEntry.is_cancelled.is_(False),
-                GLEntry.is_reversal.is_(False),
+                *effective_gl_scope(),
                 GLEntry.is_fiscal_year_closing.is_(False),
             )
         )
@@ -264,6 +273,7 @@ class BudgetReportService:
             GLEntry.project_code,
             GLEntry.accounting_period_id,
             Accounts.classification,
+            Accounts.account_type,
         ).all()
 
     def _build_period_to_group(self, all_periods: List[AccountingPeriod], granularity: str) -> Dict[str, str]:
@@ -332,10 +342,10 @@ class BudgetReportService:
         self._ensure_bucket(data_map, key)
         data_map[key]["budget"] += budget_line.amount
 
-    def _actual_amount(self, classification: Any, debit: Any, credit: Any) -> Decimal:
-        """Return the signed amount for a GL entry based on account classification."""
-        classif = classification.lower() if classification else ""
-        if classif in ("gastos", "activo", "expense", "asset"):
+    def _actual_amount(self, classification: Any, account_type: Any, debit: Any, credit: Any) -> Decimal:
+        """Return the signed amount for a GL entry using its normalized classification."""
+        resolved = normalize_account_classification(classification, account_type)
+        if account_classification_is_debit_positive(resolved):
             return debit - credit
         return credit - debit
 
@@ -419,7 +429,12 @@ class BudgetReportService:
             actual_group,
         )
         self._ensure_bucket(data_map, key)
-        data_map[key]["actual"] += self._actual_amount(actual_entry.classification, actual_entry.debit, actual_entry.credit)
+        data_map[key]["actual"] += self._actual_amount(
+            actual_entry.classification,
+            getattr(actual_entry, "account_type", None),
+            actual_entry.debit,
+            actual_entry.credit,
+        )
 
     def _build_report_rows(
         self,

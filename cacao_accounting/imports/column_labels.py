@@ -18,13 +18,14 @@ COLUMN_LABELS: dict[str, dict[str, str]] = {
     "moneda": {"es": "moneda", "en": "currency"},
     "tipo_cambio": {"es": "tipo_cambio", "en": "exchange_rate"},
     "documento_origen": {"es": "documento_origen", "en": "source_document"},
+    "linea_origen_id": {"es": "linea_origen_id", "en": "source_line_id"},
     "producto": {"es": "producto", "en": "item"},
     "uom": {"es": "unidad_medida", "en": "uom"},
     "cantidad": {"es": "cantidad", "en": "quantity"},
     "precio_unitario": {"es": "precio_unitario", "en": "unit_price"},
     "bodega": {"es": "bodega", "en": "warehouse"},
     "lote": {"es": "lote", "en": "batch"},
-    "serie": {"es": "serie", "en": "serial"},
+    "numero_serie": {"es": "serie", "en": "serial"},
     "notas": {"es": "notas", "en": "notes"},
     "proveedor": {"es": "proveedor", "en": "supplier"},
     "impuesto": {"es": "impuesto", "en": "tax"},
@@ -55,8 +56,15 @@ def localized_columns(columns: list[str], language: str | None) -> list[str]:
     return [COLUMN_LABELS.get(column, {}).get(lang, column) for column in columns]
 
 
-def canonical_columns(columns: list[str], expected: list[str]) -> list[str]:
-    """Normalize localized headers using only the adapter's expected fields."""
+def canonical_columns(columns: list[str], expected: list[str], column_aliases: dict[str, str] | None = None) -> list[str]:
+    """Normalize localized headers using only the adapter's expected fields.
+
+    Localized labels take precedence over legacy aliases so a label that is
+    legitimate for one canonical column (for example ``reference`` for
+    ``referencia``) is never redirected to a different field.
+    """
     aliases = {column: column for column in expected}
     aliases.update({label: column for column in expected for label in COLUMN_LABELS.get(column, {}).values()})
+    for alias, column in (column_aliases or {}).items():
+        aliases.setdefault(alias, column)
     return [aliases.get(column, column) for column in columns]

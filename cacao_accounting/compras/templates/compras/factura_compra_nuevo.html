@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div
@@ -9,7 +9,7 @@
 </div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -22,8 +22,34 @@
   </ol>
 </nav>
 
+{% if document_type in ('purchase_credit_note', 'purchase_debit_note') and not from_invoice_id and not edit %}
+<div class="ca-card p-3 mb-3">
+  <form method="get" class="row g-2 align-items-end">
+    <input type="hidden" name="document_type" value="{{ document_type }}">
+    <div class="col-md-9">
+      <label class="form-label" for="note_source_invoice">{{ _('Factura de compra origen') }}</label>
+      <select class="form-select" id="note_source_invoice" name="from_invoice" required>
+        <option value="">{{ _('Seleccione una factura aprobada') }}</option>
+        {% for invoice in note_source_invoices %}
+        <option value="{{ invoice.id }}">{{ invoice.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <button class="btn btn-primary w-100" type="submit">{{ _('Cargar factura') }}</button>
+    </div>
+  </form>
+  {% if not note_source_invoices %}
+  <div class="alert alert-warning mt-2 mb-0" role="alert">
+    {{ _('No hay facturas de compra aprobadas para la compañía seleccionada.') }}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
+  {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
   {% if from_receipt_id %}<input type="hidden" name="from_receipt" value="{{ from_receipt_id }}">{% endif %}
   {% if from_invoice_id %}<input type="hidden" name="from_invoice" value="{{ from_invoice_id }}">{% endif %}
@@ -75,29 +101,24 @@
       {% if document_type == 'purchase_credit_note' %}
       <div class="col-md-6">
         <label class="form-label" for="credit_note_type">{{ _('Tipo de nota de crédito') }}</label>
+        {% set tipo_credito_actual = registro.credit_note_type if edit and registro else 'commercial_adjustment' %}
         <select class="form-select" id="credit_note_type" name="credit_note_type">
-          <option value="commercial_adjustment">{{ _('Ajuste comercial') }}</option>
-          <option value="physical_return">{{ _('Devolución física') }}</option>
+          <option value="commercial_adjustment" {% if tipo_credito_actual != 'physical_return' %}selected{% endif %}>{{ _('Ajuste comercial') }}</option>
+          <option value="physical_return" {% if tipo_credito_actual == 'physical_return' %}selected{% endif %}>{{ _('Devolución física') }}</option>
         </select>
       </div>
       {% endif %}
     </div>
   </div>
 
-  {% if from_invoice_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=purchase_invoice&source_id=" ~ from_invoice_id ~ "&company=" ~ factura_origen.company,
-         source_label="Factura de Compra") }}
-  {% elif from_receipt_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company,
-         source_label="Recepción de Compra") }}
-  {% elif from_order_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_order&target_type=purchase_invoice&source_id=" ~ from_order_id ~ "&company=" ~ orden_origen.company,
-         source_label="Orden de Compra") }}
+  {% if from_invoice_id and not edit %}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=purchase_invoice&source_id=" ~ from_invoice_id ~ "&company=" ~ factura_origen.company) }}
+  {% elif from_receipt_id and not edit %}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company) }}
+  {% elif from_order_id and not edit %}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_order&target_type=purchase_invoice&source_id=" ~ from_order_id ~ "&company=" ~ orden_origen.company) }}
   {% else %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+  {{ tf_macros.transaction_grid() }}
   {% endif %}
 </form>
 

@@ -17,6 +17,12 @@ from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
     paginate,
 )
+from cacao_accounting.query_tools.document_acl import (
+    allowed_doctypes,
+    can_read_relation_amount,
+    require_document_id_read,
+    require_document_read,
+)
 from cacao_accounting.query_tools.permissions import validate_permission
 
 
@@ -55,10 +61,15 @@ def get_document_flow(
         company_id=company_id,
     )
 
+    require_document_id_read(context, document_type, document_id, company_id)
+    readable_types = allowed_doctypes(context, company_id)
+
     _page, _page_size = paginate(page, page_size)
 
     query = database.select(DocumentRelation).where(
         DocumentRelation.company == company_id,
+        DocumentRelation.source_type.in_(readable_types),
+        DocumentRelation.target_type.in_(readable_types),
         or_(
             and_(DocumentRelation.source_type == document_type, DocumentRelation.source_id == document_id),
             and_(DocumentRelation.target_type == document_type, DocumentRelation.target_id == document_id),
@@ -75,6 +86,11 @@ def get_document_flow(
         .all()
     )
 
+    amount_access = {
+        doctype: can_read_relation_amount(context, company_id, doctype)
+        for doctype in {doc for r in rows for doc in (r.source_type, r.target_type)}
+    }
+
     items = [
         {
             "id": r.id,
@@ -87,7 +103,11 @@ def get_document_flow(
             "relation_type": r.relation_type,
             "status": r.status,
             "qty": str(r.qty),
-            "amount": str(r.amount) if r.amount else None,
+            "amount": (
+                str(r.amount)
+                if r.amount is not None and amount_access[r.source_type] and amount_access[r.target_type]
+                else None
+            ),
             "company": r.company,
             "created": r.created.isoformat() if r.created else None,
         }
@@ -138,8 +158,10 @@ _DOCUMENT_SCHEMA = {
 }
 
 
-def _document_context(context: QueryContext, company_id: str) -> None:
-    validate_permission(context, "documents.reports.read", "documents", company_id)
+def _document_context(context: QueryContext, document_type: str, company_id: str) -> None:
+    """Validate the document-family scope and the owning module (#2252)."""
+    validate_permission(context, "documents.reports.read", None, company_id)
+    require_document_read(context, document_type, company_id)
 
 
 @query_tool(
@@ -151,7 +173,7 @@ def _document_context(context: QueryContext, company_id: str) -> None:
 def get_document_details_handler(
     *, context: QueryContext, company_id: str, document_type: str, document_id: str
 ) -> dict[str, Any]:
-    _document_context(context, company_id)
+    _document_context(context, document_type, company_id)
     item = get_document_details(company_id, document_type, document_id)
     return {"item": item, "found": item is not None, "provenance": {"company_id": company_id}}
 
@@ -165,7 +187,7 @@ def get_document_details_handler(
 def get_document_lines_handler(
     *, context: QueryContext, company_id: str, document_type: str, document_id: str
 ) -> dict[str, Any]:
-    _document_context(context, company_id)
+    _document_context(context, document_type, company_id)
     items = get_document_lines(company_id, document_type, document_id)
     return {
         "items": items or [],
@@ -184,6 +206,6 @@ def get_document_lines_handler(
 def get_document_status_handler(
     *, context: QueryContext, company_id: str, document_type: str, document_id: str
 ) -> dict[str, Any]:
-    _document_context(context, company_id)
+    _document_context(context, document_type, company_id)
     item = get_document_status(company_id, document_type, document_id)
     return {"item": item, "found": item is not None, "provenance": {"company_id": company_id}}

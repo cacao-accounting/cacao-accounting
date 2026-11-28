@@ -4,10 +4,6 @@
 """Utilidad para iniciar el servidor local WSGI usando Waitress."""
 
 # ---------------------------------------------------------------------------------------
-# Libreria estandar
-# ---------------------------------------------------------------------------------------
-from os import environ
-
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
@@ -29,37 +25,25 @@ app = create_app(configuracion)
 
 def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI."""
-    from cacao_accounting.database.helpers import (
-        inicia_base_de_datos,
-        verifica_coneccion_db,
-    )
+    from cacao_accounting.database.helpers import verifica_coneccion_db, verificar_esquema_base_datos
 
     log.info("Iniciando Cacao Accounting.")
-    if verifica_coneccion_db(app):
-        DATABASE = True
-    else:
-        from sqlalchemy.exc import OperationalError
+    if not verifica_coneccion_db(app):
+        log.error("No se logro conectar a la base de datos.")
+        raise SystemExit(1)
 
-        log.warning("No se logro conectar a la base de datos.")
-        log.info("Intentando inicializar base de datos.")
-        try:
-            with app.app_context():
-                inicia_base_de_datos(
-                    app,
-                    user=environ.get("CACAO_USER") or "cacao",
-                    passwd=environ.get("CACAO_PSWD") or "cacao",
-                    with_examples=False,
-                )
-            DATABASE = True
-        except OperationalError:
-            log.error("No se pudo inicilizar la base de datos.")
-            DATABASE = False
+    try:
+        with app.app_context():
+            verificar_esquema_base_datos(permitir_migrar=False)
+    except Exception as exc:
+        log.critical(str(exc))
+        raise SystemExit(1) from exc
 
-    if DATABASE:
-        try:
-            log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
-            serve(app, port=int(PORT), threads=int(THREADS))
-        except OSError:
-            log.error("Puerto {PORT} actualmente en uso.")
-    else:
-        log.error("No se logro establecer con la base de datos.")
+    try:
+        log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
+        serve(app, port=int(PORT), threads=int(THREADS))
+    except OSError as exc:
+        # Un puerto ocupado no es un arranque exitoso: el servicio no debe
+        # reportar éxito con el servidor caído (#1905).
+        log.error("Puerto {PORT} actualmente en uso.")
+        raise SystemExit(1) from exc

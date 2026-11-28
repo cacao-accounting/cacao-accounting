@@ -1,50 +1,94 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""Predicados de alcance de anulación para consultas contables.
+"""Predicados de alcance de anulaciones y reversiones en consultas contables.
 
-Centraliza los tres alcances que exige la Sección 5 del issue de períodos:
-
-- **Vista ordinaria** (``ordinary_scope``): excluye el par original anulado y su
-  contrapartida técnica. Es el alcance de los reportes que un usuario contable o
-  auditor ve en el día a día.
-- **Vista de auditoría** (``audit_scope``): incluye ambos lados y su metadata
-  para reconstruir la anulación completa; no usa ninguna exclusión.
-- **Cálculo append-only** (``append_only_scope``): suma los movimientos del
-  período sin borrar historia mediante flags. Como el par se anula dentro del
-  mismo período, excluirlo o incluirlo da el mismo saldo; se expresa de forma
-  explícita para no mezclar este alcance con el de las vistas.
+``ordinary_gl_scope`` conserva los efectos vigentes, incluidas las reversiones
+interperíodo. ``cancelled_originals_scope`` devuelve los originales anulados
+para reconstruir el efecto completo de la anulación.
 """
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 
-def ordinary_gl_scope() -> tuple[Any, Any]:
-    """Restricciones GL para la vista ordinaria: excluye originales anulados y contrapartidas."""
-    from cacao_accounting.database import GLEntry
-
-    return (GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
+def ordinary_gl_scope() -> tuple[Any, ...]:
+    """Devuelve las líneas vigentes y las reversiones interperíodo efectivas."""
+    return effective_gl_scope()
 
 
-def audit_gl_scope() -> tuple[Any, ...]:
-    """Sin restricción de anulación: la vista de auditoría incluye ambos lados."""
-    return ()
-
-
-def cancelled_originals_scope() -> tuple[Any]:
+def cancelled_originals_scope(as_of_date: date | None = None) -> tuple[Any, ...]:
     """Muestra solo los originales anulados (no las contrapartidas técnicas)."""
+    from sqlalchemy import not_
+
     from cacao_accounting.database import GLEntry
 
-    return (GLEntry.is_cancelled.is_(True),)
+    scope = [GLEntry.is_cancelled.is_(True)]
+    if as_of_date is not None:
+        scope.append(not_(_cancellation_after_cutoff(as_of_date)))
+    return tuple(scope)
 
 
-def append_only_gl_scope() -> tuple[Any, Any]:
-    """Movimientos que alimentan el cálculo del período (append-only).
+def effective_gl_scope(as_of_date: date | None = None) -> tuple[Any, ...]:
+    """Restricciones GL para reportes: originales vivos y reversiones vigentes.
 
-    El original anulado y su reverso pertenecen al mismo período y se anulan
-    entre sí, por lo que ambos se excluyen del resultado del período sin alterar
-    el saldo y sin romper la historia.
+    Excluye originales anulados y conserva las contrapartidas activas cuya
+    línea origen pertenece a **otro** período: son el efecto efectivo de una
+    reversión interperíodo (#1970). Las contrapartidas del mismo período se
+    anulan con su original y quedan fuera.
+
+    Un original cancelado con reversa **posterior** en otro período vuelve a
+    entrar: su movimiento estuvo vigente en el corte original y la contrapartida
+    ya se contabilizó en el período posterior (#2265). Una reversa fechada antes
+    del origen no es válida: se excluyen la contrapartida y el original que
+    pretendía revivir. La anulación del mismo período sigue teniendo efecto cero
+    y no se muestra en ninguno de los dos lados.
     """
-    return ordinary_gl_scope()
+    from sqlalchemy import exists, or_
+    from sqlalchemy.orm import aliased
+
+    from cacao_accounting.database import GLEntry
+
+    origen = aliased(GLEntry)
+    reversa = aliased(GLEntry)
+    reversa_posterior = exists().where(
+        reversa.reversal_of == GLEntry.id,
+        reversa.is_reversal.is_(True),
+        reversa.posting_date > GLEntry.posting_date,
+        or_(
+            reversa.accounting_period_id != GLEntry.accounting_period_id,
+            GLEntry.accounting_period_id.is_(None),
+        ),
+    )
+    reversa_ineficaz = exists().where(
+        origen.id == GLEntry.reversal_of,
+        or_(
+            origen.accounting_period_id == GLEntry.accounting_period_id,
+            GLEntry.posting_date <= origen.posting_date,
+        ),
+    )
+    return (
+        or_(GLEntry.is_cancelled.is_(False), reversa_posterior, _cancellation_after_cutoff(as_of_date)),
+        or_(GLEntry.is_reversal.is_(False), ~reversa_ineficaz),
+    )
+
+
+def _cancellation_after_cutoff(as_of_date: date | None) -> Any:
+    """Keep a cancelled original visible before its recorded effective date."""
+    from sqlalchemy import exists, select
+
+    from cacao_accounting.database import DocumentTransition, GLEntry
+
+    if as_of_date is None:
+        return GLEntry.id.is_(None)
+    return exists(
+        select(DocumentTransition.id).where(
+            DocumentTransition.company == GLEntry.company,
+            DocumentTransition.source_type == GLEntry.voucher_type,
+            DocumentTransition.source_id == GLEntry.voucher_id,
+            DocumentTransition.transition_type == "cancellation",
+            DocumentTransition.posting_date > as_of_date,
+        )
+    )

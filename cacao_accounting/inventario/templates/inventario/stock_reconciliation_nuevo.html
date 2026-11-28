@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventarios") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ _("Nueva Conciliación de Inventario") }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ titulo or _("Nueva Conciliación de Inventario") }}</li>
   </ol>
 </nav>
 
@@ -20,7 +20,7 @@
 
   <div class="ca-journal-toolbar mb-3">
     <div>
-      <h4 class="mb-1">{{ _("Nueva Conciliación de Inventario") }}</h4>
+      <h4 class="mb-1">{{ titulo or _("Nueva Conciliación de Inventario") }}</h4>
       <p class="text-muted mb-0">{{ _("Borrador") }}</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -43,7 +43,9 @@
             label=_("Compañía"),
             preload=True,
             required=True,
-            x_model="header.company"
+            x_model="header.company",
+            initial_value_expr="header.company",
+            initial_label_expr="header.company"
         ) }}
       </div>
       <div class="col-md-4">
@@ -57,12 +59,19 @@
             required_filters=["company"],
             auto_select_default=True,
             load_on_filter_change=True,
-            required=True
+            required=True,
+            x_model="header.naming_series",
+            initial_value_expr="header.naming_series",
+            initial_label_expr="header.naming_series"
         ) }}
       </div>
       <div class="col-md-4">
         <label class="form-label" for="posting_date">{{ _("Fecha") }}</label>
         <input class="form-control" type="date" id="posting_date" name="posting_date" x-model="header.posting_date" required>
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _("Observaciones") }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
       <div class="col-md-3">
         <label class="form-label" for="adjustment_account_id">{{ _("Cuenta de diferencia") }}</label>
@@ -74,7 +83,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.adjustment_account_id"
+            x_model="header.adjustment_account_id",
+            initial_value_expr="header.adjustment_account_id",
+            initial_label_expr="header.adjustment_account_id"
         ) }}
       </div>
       <div class="col-md-3">
@@ -87,7 +98,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.cost_center_code"
+            x_model="header.cost_center_code",
+            initial_value_expr="header.cost_center_code",
+            initial_label_expr="header.cost_center_code"
         ) }}
       </div>
       <div class="col-md-3">
@@ -100,7 +113,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.unit_code"
+            x_model="header.unit_code",
+            initial_value_expr="header.unit_code",
+            initial_label_expr="header.unit_code"
         ) }}
       </div>
       <div class="col-md-3">
@@ -113,7 +128,9 @@
             filter_sources=["#company"],
             required_filters=["company"],
             preload=True,
-            x_model="header.project_code"
+            x_model="header.project_code",
+            initial_value_expr="header.project_code",
+            initial_label_expr="header.project_code"
         ) }}
       </div>
     </div>
@@ -147,6 +164,7 @@
               <td>
                 <input type="hidden" :name="'item_code_' + index" x-model="line.item_code">
                 <input class="form-control form-control-sm" type="text" x-model="line.item_code" @change="loadSnapshot(line)" placeholder="{{ _('Código') }}">
+                <div class="text-danger small" x-show="line.snapshot_error" x-text="line.snapshot_error"></div>
                 <input type="hidden" :name="'uom_' + index" x-model="line.uom">
               </td>
               <td>
@@ -193,10 +211,12 @@
 function stockReconciliationForm(config = {}) {
   const configuredHeader = config.header || {};
   const configuredLines = config.lines || [];
+  const snapshotTokens = new Map();
+  const snapshotErrorMessage = "{{ _('No se pudo cargar el snapshot de inventario.') }}";
   return {
     header: {
       company: '',
-      posting_date: new Date().toISOString().slice(0, 10),
+      posting_date: globalThis.cacaoLocalIsoDate(new Date()),
       adjustment_account_id: '',
       cost_center_code: '',
       unit_code: '',
@@ -246,20 +266,53 @@ function stockReconciliationForm(config = {}) {
     },
     async loadSnapshot(line) {
       if (!this.header.company || !line.item_code || !line.warehouse) return;
+      const company = this.header.company;
+      const itemCode = line.item_code;
+      const warehouse = line.warehouse;
+      const token = (snapshotTokens.get(line.uid) || 0) + 1;
+      snapshotTokens.set(line.uid, token);
       const params = new URLSearchParams({
         company: this.header.company,
-        item_code: line.item_code,
-        warehouse: line.warehouse,
+        item_code: itemCode,
+        warehouse,
       });
-      const response = await fetch(`/api/inventory/stock-bin-snapshot?${params.toString()}`, { credentials: 'same-origin' });
-      if (!response.ok) return;
-      const snapshot = await response.json();
-      line.current_qty = Number(snapshot.actual_qty || 0);
-      line.counted_qty = line.current_qty;
-      line.current_valuation_rate = Number(snapshot.valuation_rate || 0);
-      line.target_valuation_rate = line.current_valuation_rate;
-      line.current_stock_value = Number(snapshot.stock_value || 0);
-      line.target_stock_value = line.current_stock_value;
+      try {
+        const response = await fetch(`/api/inventory/stock-bin-snapshot?${params.toString()}`, {
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('snapshot request failed');
+        const snapshot = await response.json();
+        if (snapshotTokens.get(line.uid) !== token) return;
+        if (this.header.company !== company || line.item_code !== itemCode || line.warehouse !== warehouse) {
+          this.clearSnapshot(line);
+          line.snapshot_error = snapshotErrorMessage;
+          return;
+        }
+        line.current_qty = Number(snapshot.actual_qty || 0);
+        line.counted_qty = line.current_qty;
+        line.current_valuation_rate = Number(snapshot.valuation_rate || 0);
+        line.target_valuation_rate = line.current_valuation_rate;
+        line.current_stock_value = Number(snapshot.stock_value || 0);
+        line.target_stock_value = line.current_stock_value;
+        line.snapshot_error = '';
+      } catch (error) {
+        if (snapshotTokens.get(line.uid) !== token) return;
+        if (this.header.company !== company || line.item_code !== itemCode || line.warehouse !== warehouse) {
+          this.clearSnapshot(line);
+          line.snapshot_error = snapshotErrorMessage;
+          return;
+        }
+        this.clearSnapshot(line);
+        line.snapshot_error = snapshotErrorMessage;
+      }
+    },
+    clearSnapshot(line) {
+      line.current_qty = null;
+      line.counted_qty = null;
+      line.current_valuation_rate = null;
+      line.target_valuation_rate = null;
+      line.current_stock_value = null;
+      line.target_stock_value = null;
     },
   };
 }

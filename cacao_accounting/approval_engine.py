@@ -38,6 +38,36 @@ _APPROVAL_EXECUTION: ContextVar[tuple[str, str, str, str] | None] = ContextVar("
 
 PENDING_APPROVAL_STATUS = "Pending Approval"
 PENDING_CANCELLATION_STATUS = "Pending Cancellation"
+_DRAFT_SUBMIT_DOCTYPES = frozenset(
+    {
+        "purchase_request",
+        "purchase_quotation",
+        "supplier_quotation",
+        "purchase_order",
+        "sales_request",
+        "sales_quotation",
+    }
+)
+_SALES_POSTED_SUBMIT_DOCTYPES = frozenset({"sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note"})
+_PURCHASE_POSTED_SUBMIT_DOCTYPES = frozenset({"purchase_invoice", "purchase_credit_note", "purchase_debit_note"})
+_STOCK_PAYMENT_SUBMIT_DOCTYPES = frozenset({"purchase_receipt", "payment_entry", "stock_entry", "import_landed_cost"})
+APPROVAL_SUBMIT_DOCTYPES = (
+    frozenset({"journal_entry", "sales_order", "delivery_note"})
+    | _DRAFT_SUBMIT_DOCTYPES
+    | _SALES_POSTED_SUBMIT_DOCTYPES
+    | _PURCHASE_POSTED_SUBMIT_DOCTYPES
+    | _STOCK_PAYMENT_SUBMIT_DOCTYPES
+)
+
+
+def validate_approval_submit_doctype(doctype: str) -> None:
+    """Rechaza tipos de documento sin despacho de aprobación implementado."""
+    if doctype not in APPROVAL_SUBMIT_DOCTYPES:
+        raise ValueError(
+            _("El motor de aprobación no tiene flujo de envío para el tipo de documento %(doctype)s.") % {"doctype": doctype}
+        )
+
+
 _RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
     {
         "purchase_request",
@@ -49,7 +79,20 @@ _RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
         "sales_order",
     }
 )
-_POSTED_CANCEL_DOCTYPES = frozenset({"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"})
+_POSTED_CANCEL_DOCTYPES = frozenset(
+    {
+        "purchase_receipt",
+        "purchase_invoice",
+        "delivery_note",
+        "sales_invoice",
+        "sales_return",
+        "sales_credit_note",
+        "sales_debit_note",
+        "purchase_credit_note",
+        "purchase_debit_note",
+        "import_landed_cost",
+    }
+)
 
 
 def _submit_document_and_refresh_flow(doctype: str, document: Any) -> None:
@@ -106,7 +149,6 @@ def _cancel_posted_document(
             document,
             reason=reason,
             actor_user_id=actor_user_id,
-            cancellation_date=cancellation_date,
             requested_at=requested_at,
         )
     cancel_document(
@@ -146,6 +188,7 @@ def _cancel_payment_or_stock(
     """Cancel a payment or stock entry, applying payment-specific hooks."""
     from cacao_accounting.audit_trail_service import log_cancel
     from cacao_accounting.contabilidad.posting import cancel_document
+    from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
 
     cancel_document(
         document,
@@ -155,6 +198,10 @@ def _cancel_payment_or_stock(
         requested_at=requested_at,
     )  # type: ignore[misc]
     log_cancel(document)
+    target_type = getattr(document, "document_type", None) or doctype
+    revert_relations_for_target(target_type, document.id)
+    refresh_source_caches_for_target(target_type, document.id)
+    _refresh_reversal_cache(document, target_type)
 
 
 def _deterministic_default(obj: Any) -> str:
@@ -251,6 +298,60 @@ class ApprovalEngine:
         if lock:
             query = query.with_for_update().execution_options(populate_existing=True)
         return database.session.execute(query).scalar_one_or_none()
+
+    @classmethod
+    def _request_for_action(cls, document: Any, submitted: ApprovalRequest) -> ApprovalRequest:
+        """Bajo lock, confirma que la solicitud enviada es la que rige el documento."""
+        doctype = cls._resolve_doctype(document)
+        query = (
+            select(ApprovalRequest)
+            .where(
+                ApprovalRequest.id == submitted.id,
+                ApprovalRequest.document_id == document.id,
+                ApprovalRequest.document_type == submitted.document_type,
+                ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        req = database.session.execute(query).scalar_one_or_none()
+        if req is None:
+            raise ValueError(_("La solicitud de aprobación no está pendiente."))
+        if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
+            raise ValueError(_("La solicitud de aprobación no está pendiente."))
+        return req
+
+    @staticmethod
+    def _document_has_request(document: Any, doctype: str, status: str) -> bool:
+        """Indica si el documento tiene una solicitud previa en el estado indicado."""
+        return (
+            database.session.execute(
+                select(ApprovalRequest.id).where(
+                    ApprovalRequest.document_id == document.id,
+                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+                    ApprovalRequest.status == status,
+                )
+            ).first()
+            is not None
+        )
+
+    @classmethod
+    def _request_for_approve(
+        cls, document: Any, user: Any, doctype: str, submitted: ApprovalRequest | None
+    ) -> ApprovalRequest | None:
+        """Resuelve la solicitud a decidir; ``None`` indica una aprobación histórica."""
+        # Los caminos internos sin solicitud conservan la creación implícita.
+        if submitted is not None:
+            return cls._request_for_action(document, submitted)
+
+        req = cls._pending_request(document, lock=True)
+        if req is not None:
+            return req
+        if cls._document_has_request(document, doctype, "Approved"):
+            return None
+        if cls._document_has_request(document, doctype, "Rejected"):
+            raise ValueError(_("La solicitud fue rechazada; debe solicitarse una nueva aprobación."))
+        return cls.request_approval(document, actor=user)
 
     @classmethod
     def _independent_policy(cls, document: Any, req: ApprovalRequest | None = None) -> dict[str, Any] | None:
@@ -407,14 +508,15 @@ class ApprovalEngine:
         return rules
 
     @classmethod
-    def can_approve(cls, document: Any, user: Any) -> bool:
+    def can_approve(cls, document: Any, user: Any, req: ApprovalRequest | None = None) -> bool:
         """Verifica si el usuario tiene autorización para aprobar el documento."""
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
         if not company_id:
             return True
-        req = cls._pending_request(document)
+        if req is None:
+            req = cls._pending_request(document)
         if not cls.is_enabled(company_id) and req is None:
             return True
 
@@ -506,6 +608,18 @@ class ApprovalEngine:
     @staticmethod
     def _validate_final_cancellation(doctype: str, document: Any) -> None:
         """Recheck downstream dependencies at the moment cancellation executes."""
+        if doctype == "purchase_order":
+            from cacao_accounting.compras.services import (
+                purchase_order_has_closed_source_request,
+                purchase_order_source_request_ids,
+            )
+            from cacao_accounting.document_flow import lock_document_flow_document
+
+            lock_document_flow_document("purchase_order", str(document.id))
+            for request_id in purchase_order_source_request_ids(str(document.id)):
+                lock_document_flow_document("purchase_request", request_id)
+            if purchase_order_has_closed_source_request(str(document.id)):
+                raise ValueError(_("La orden de compra pertenece a una solicitud de compra cerrada."))
         if doctype in {"sales_order", "delivery_note", "sales_invoice", "purchase_order", "purchase_receipt"}:
             from cacao_accounting.document_flow.repository import has_active_source_relations
 
@@ -549,7 +663,7 @@ class ApprovalEngine:
                 current_document=document,
             )
             return
-        if doctype not in {"sales_invoice", "sales_return"}:
+        if doctype not in {"sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note"}:
             return
         from cacao_accounting.ventas import (
             _validate_invoice_prices_against_source,
@@ -566,12 +680,18 @@ class ApprovalEngine:
             )
         _validate_sales_invoice_quantities(document.id)
         _validate_invoice_prices_against_source(document)
-        if getattr(document, "document_type", None) in {"sales_credit_note", "sales_return"}:
+        if getattr(document, "document_type", None) in {"sales_credit_note", "sales_return", "sales_debit_note"} and getattr(
+            document, "reversal_of", None
+        ):
             _validate_reversal_of(
                 document.reversal_of or "",
                 document.customer_id,
                 document.company,
-                note_amount=Decimal(str(document.grand_total or "0")),
+                note_amount=(
+                    Decimal(str(document.grand_total or "0"))
+                    if document.document_type in {"sales_credit_note", "sales_return"}
+                    else None
+                ),
                 document_type=document.document_type,
                 posting_date=document.posting_date,
                 lock_source=True,
@@ -658,12 +778,16 @@ class ApprovalEngine:
             "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
             "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
             "sales_return": (SalesInvoiceItem, "sales_invoice_id"),
+            "sales_credit_note": (SalesInvoiceItem, "sales_invoice_id"),
+            "sales_debit_note": (SalesInvoiceItem, "sales_invoice_id"),
             "purchase_request": (PurchaseRequestItem, "purchase_request_id"),
             "purchase_quotation": (PurchaseQuotationItem, "purchase_quotation_id"),
             "supplier_quotation": (SupplierQuotationItem, "supplier_quotation_id"),
             "purchase_order": (PurchaseOrderItem, "purchase_order_id"),
             "purchase_receipt": (PurchaseReceiptItem, "purchase_receipt_id"),
             "purchase_invoice": (PurchaseInvoiceItem, "purchase_invoice_id"),
+            "purchase_credit_note": (PurchaseInvoiceItem, "purchase_invoice_id"),
+            "purchase_debit_note": (PurchaseInvoiceItem, "purchase_invoice_id"),
             "stock_entry": (StockEntryItem, "stock_entry_id"),
         }
         if doctype not in item_models:
@@ -673,7 +797,15 @@ class ApprovalEngine:
         if hasattr(item_model, "is_superseded"):
             item_query = item_query.filter_by(is_superseded=False)
         items = db.session.execute(item_query).scalars().all()
-        if doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"}:
+        if doctype in {
+            "delivery_note",
+            "sales_invoice",
+            "sales_return",
+            "sales_credit_note",
+            "sales_debit_note",
+            "purchase_receipt",
+            "stock_entry",
+        }:
             from cacao_accounting.inventario.service import validate_batch_serial_draft
 
             validate_batch_serial_draft(items)
@@ -685,16 +817,19 @@ class ApprovalEngine:
             items=items,
             require_party=doctype not in {"stock_entry", "delivery_note", "purchase_request"},
             require_rate_positive=doctype not in {"delivery_note", "stock_entry", "sales_request", "purchase_request"},
-            require_amount_nonzero=doctype in {"sales_invoice", "sales_return", "purchase_invoice"},
-            require_warehouse=doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"},
+            require_amount_nonzero=doctype
+            in {"sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note", "purchase_invoice"},
+            require_warehouse=doctype
+            in {"delivery_note", "sales_invoice", "sales_return", "sales_credit_note", "purchase_receipt", "stock_entry"},
         )
-        if doctype in {"sales_order", "sales_invoice", "sales_return"}:
+        if doctype in {"sales_order", "sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note"}:
             ApprovalEngine._validate_sales_submission(doctype, document)
-        elif doctype == "purchase_invoice":
+        elif doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
             ApprovalEngine._validate_purchase_submission(document)
         elif doctype == "purchase_receipt":
-            from cacao_accounting.compras import _validate_receipt_quantities_against_po
+            from cacao_accounting.compras import _lock_receipt_purchase_orders, _validate_receipt_quantities_against_po
 
+            _lock_receipt_purchase_orders(document.id, document.purchase_order_id, document.is_return)
             _validate_receipt_quantities_against_po(document.id)
 
     @staticmethod
@@ -724,6 +859,7 @@ class ApprovalEngine:
             return None
 
         doctype = cls._resolve_doctype(document)
+        validate_approval_submit_doctype(doctype)
         amount = cls.get_document_amount(document)
 
         cls._lock_document(document)
@@ -782,6 +918,10 @@ class ApprovalEngine:
                 raise ValueError(_("Debe indicar el motivo de la anulación."))
         amount = cls.get_document_amount(document)
 
+        if base_doctype == "stock_entry":
+            from cacao_accounting.default_scope import lock_default_scope
+
+            lock_default_scope("stock_entry_duplicate", document.id)
         cls._lock_document(document)
         req = database.session.execute(
             select(ApprovalRequest)
@@ -863,6 +1003,16 @@ class ApprovalEngine:
                 if req.document_type.startswith("cancel_"):
                     actual_doc_type = req.document_type[7:]
                     actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
+                    if actual_doc is None:
+                        raise ValueError(_("El documento que se cancelaría ya no existe."))
+                    from cacao_accounting.document_flow import lock_document_flow_document
+
+                    lock_document_flow_document(actual_doc_type, str(actual_doc.id))
+                    actual_doc = database.session.execute(
+                        select(get_model_class(actual_doc_type))
+                        .where(get_model_class(actual_doc_type).id == actual_doc.id)
+                        .execution_options(populate_existing=True)
+                    ).scalar_one()
                     cls._validate_final_cancellation(actual_doc_type, actual_doc)
                     cls._execute_cancel(
                         actual_doc_type,
@@ -884,40 +1034,48 @@ class ApprovalEngine:
             _APPROVAL_EXECUTION.reset(token)
 
     @classmethod
-    def approve(cls, document: Any, user: Any, comments: str | None = None) -> bool:
-        """Aprueba el documento para el nivel actual."""
+    def approve(cls, document: Any, user: Any, comments: str | None = None, *, request: ApprovalRequest | None = None) -> bool:
+        """Aprueba el documento para el nivel actual o la solicitud indicada."""
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
+        doctype = cls._resolve_doctype(document)
+        # La orden pudo perder proveedor, actividad o membresía mientras
+        # esperaba aprobación (#1823), incluso en un flujo sin aprobadores.
+        if company_id and doctype == "purchase_order":
+            from cacao_accounting.compras.services import _validated_purchase_supplier
+
+            _validated_purchase_supplier(getattr(document, "supplier_id", None), company_id)
         if not company_id or is_desktop_mode():
             return True
-        if not cls.is_enabled(company_id) and cls._pending_request(document) is None:
+        if request is None and not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return True
 
-        doctype = cls._resolve_doctype(document)
+        validate_approval_submit_doctype(doctype)
+        if doctype in {
+            "sales_order",
+            "sales_invoice",
+            "sales_return",
+            "sales_credit_note",
+            "sales_debit_note",
+        } and not getattr(document, "is_return", False):
+            from cacao_accounting.ventas.services import lock_credit_scope
+
+            # El lock de crédito precede al lock de la solicitud de aprobación
+            # para conservar el mismo orden que el envío directo.
+            lock_credit_scope(company_id, getattr(document, "customer_id", None))
+
         amount = cls.get_document_amount(document)
 
-        req = cls._pending_request(document, lock=True)
-        if not req:
-            finished = database.session.execute(
-                select(ApprovalRequest.id).where(
-                    ApprovalRequest.document_id == document.id,
-                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                    ApprovalRequest.status == "Approved",
-                )
-            ).first()
-            if finished:
-                return True
-            req = cls.request_approval(document, actor=user)
-            if not req:
-                return True
-
+        req = cls._request_for_approve(document, user, doctype, request)
+        if req is None:
+            return True
         if req.status == "Approved":
             return True
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError(_("La solicitud de aprobación no está en estado pendiente."))
 
-        if not cls.can_approve(document, user):
+        if not cls.can_approve(document, user, req):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
 
         cls._assert_approval_snapshot(req, document)
@@ -959,7 +1117,20 @@ class ApprovalEngine:
         """Ejecuta de manera segura la submision de un documento con todos sus hooks."""
         from cacao_accounting.audit_trail_service import log_submit
 
+        validate_approval_submit_doctype(doctype)
         cls._validate_final_submission(doctype, document)
+        if doctype == "purchase_order":
+            from cacao_accounting.compras.services import (
+                purchase_order_has_closed_source_request,
+                purchase_order_source_request_ids,
+            )
+            from cacao_accounting.document_flow import lock_document_flow_document
+
+            lock_document_flow_document("purchase_order", str(document.id))
+            for request_id in purchase_order_source_request_ids(str(document.id)):
+                lock_document_flow_document("purchase_request", request_id)
+            if purchase_order_has_closed_source_request(str(document.id)):
+                raise ValueError(_("La orden de compra pertenece a una solicitud de compra cerrada."))
 
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import submit_journal
@@ -967,14 +1138,7 @@ class ApprovalEngine:
             submit_journal(document.id, commit=False, user_id=str(user.id))
             return
 
-        if doctype in {
-            "purchase_request",
-            "purchase_quotation",
-            "supplier_quotation",
-            "purchase_order",
-            "sales_request",
-            "sales_quotation",
-        }:
+        if doctype in _DRAFT_SUBMIT_DOCTYPES:
             document.docstatus = 1
             log_submit(document)
             return
@@ -997,7 +1161,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {"sales_invoice", "sales_return"}:
+        if doctype in _SALES_POSTED_SUBMIT_DOCTYPES:
             from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
@@ -1007,7 +1171,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype == "purchase_invoice":
+        if doctype in _PURCHASE_POSTED_SUBMIT_DOCTYPES:
             from cacao_accounting.compras import _persist_purchase_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
@@ -1015,9 +1179,14 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {"purchase_receipt", "payment_entry", "stock_entry"}:
+        if doctype in _STOCK_PAYMENT_SUBMIT_DOCTYPES:
             _submit_document_and_refresh_flow(doctype, document)
             log_submit(document)
+            return
+
+        raise ValueError(
+            _("El motor de aprobación no tiene flujo de envío para el tipo de documento %(doctype)s.") % {"doctype": doctype},
+        )
 
     @classmethod
     def _execute_cancel(
@@ -1067,30 +1236,27 @@ class ApprovalEngine:
             )
 
     @classmethod
-    def reject(cls, document: Any, user: Any, comments: str | None = None) -> None:
-        """Rechaza la solicitud de aprobación del documento."""
+    def reject(cls, document: Any, user: Any, comments: str | None = None, *, request: ApprovalRequest | None = None) -> None:
+        """Rechaza la solicitud de aprobación indicada o la pendiente del documento."""
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
-        if not company_id or not cls.is_enabled(company_id):
+        if not company_id:
+            return
+        if request is None and not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return
 
         doctype = cls._resolve_doctype(document)
-        req = database.session.execute(
-            select(ApprovalRequest).filter(
-                ApprovalRequest.document_id == document.id,
-                ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
-            )
-        ).scalar_one_or_none()
+        req = cls._request_for_action(document, request) if request is not None else cls._pending_request(document, lock=True)
         if not req:
             raise ValueError(_("No existe ninguna solicitud de aprobación para este documento."))
 
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError(_("La solicitud de aprobación no está pendiente."))
 
-        if not cls.can_approve(document, user):
+        if not cls.can_approve(document, user, req):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
+
         rules = cls._get_user_rules(user.id, company_id, doctype)
         rule = rules[0] if rules else None
 
@@ -1109,7 +1275,19 @@ class ApprovalEngine:
         from cacao_accounting.internal_control_service import approval_request_transition
 
         with approval_request_transition(req):
+            # Revalidar bajo el lock: otra transacción pudo aprobar/rechazar.
+            if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
+                raise ValueError(_("La solicitud de aprobación no está pendiente."))
             req.status = "Rejected"
+            if (
+                req.document_type == doctype == "journal_entry"
+                and getattr(document, "status", None) == PENDING_APPROVAL_STATUS
+            ):
+                document.status = "draft"
+                database.session.add(document)
+                from cacao_accounting.audit_trail_service import log_reject
+
+                log_reject(document)
             database.session.flush()
         if req.document_type == doctype:
             from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target

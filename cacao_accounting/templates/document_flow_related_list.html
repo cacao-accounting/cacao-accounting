@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/templates/document_flow_related_list.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     {% if spec.list_endpoint %}
@@ -64,7 +64,8 @@
         </td>
         {% endif %}
         {% if spec.total_field %}
-        <td>{{ getattr(doc, spec.total_field, '') or '' }}</td>
+        {% set total_value = getattr(doc, spec.total_field, none) %}
+        <td>{{ total_value if total_value is not none else '' }}</td>
         {% endif %}
         <td>
           {% if spec.detail_endpoint %}

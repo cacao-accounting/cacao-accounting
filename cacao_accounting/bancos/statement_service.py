@@ -5,13 +5,10 @@
 
 from __future__ import annotations
 
-import csv
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
-from io import StringIO
-from typing import Any
+from decimal import Decimal
 
 from sqlalchemy import select
 
@@ -21,6 +18,7 @@ from cacao_accounting.bancos.reconciliation_service import (
     BankCandidate,
     BankReconciliationMatch,
     BankReconciliationRequest,
+    _bank_amount,
     find_bank_reconciliation_candidates,
     reconcile_bank_items,
 )
@@ -48,29 +46,6 @@ class BankStatementError(ValueError):
 
 
 @dataclass(frozen=True)
-class BankImportRow:
-    """Fila procesada de extracto bancario."""
-
-    posting_date: date
-    reference_number: str | None
-    description: str | None
-    deposit: Decimal | None
-    withdrawal: Decimal | None
-    duplicate: bool
-    bank_transaction_id: str | None = None
-
-
-@dataclass(frozen=True)
-class BankImportResult:
-    """Resultado de importacion o preview."""
-
-    rows: list[BankImportRow]
-    imported_count: int
-    duplicate_count: int
-    auto_reconciled: list[BankAutoReconciliationResult] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class BankMatchingRun:
     """Resultado de ejecucion de una regla de matching."""
 
@@ -92,12 +67,27 @@ class BankAutoReconciliationResult:
     reconciliation_id: str | None = None
 
 
-def _find_auto_reconcile_rules(bank_account_id: str, company: str) -> list[BankMatchingRule]:
+def _rule_reference_matches(rule: BankMatchingRule, reference_number: str | None) -> bool:
+    """Indica si la referencia de la transacción satisface el filtro de la regla.
+
+    La comparación es literal e insensible a mayúsculas en todos los motores,
+    de modo que el filtro manual y el automático aplican el mismo contrato.
+    """
+    if not rule.reference_contains:
+        return True
+    return str(rule.reference_contains).casefold() in str(reference_number or "").casefold()
+
+
+def _find_auto_reconcile_rules(
+    bank_account_id: str, company: str, reference_number: str | None = None
+) -> list[BankMatchingRule]:
     """Devuelve las reglas activas de matching con auto-reconciliacion para una cuenta.
 
     Una regla aplica cuando su alcance es la cuenta específica (``bank_account_id``)
     o toda la compañía (``bank_account_id IS NULL``).  Se priorizan las
-    específicas sobre las globales ordenando por ``priority``.
+    específicas sobre las globales ordenando por ``priority``.  Si la regla
+    configura ``reference_contains``, solo participa cuando la referencia de la
+    transacción contiene ese texto (#1509), igual que en el matching manual.
     """
     query = select(BankMatchingRule).where(
         BankMatchingRule.company == company,
@@ -108,17 +98,47 @@ def _find_auto_reconcile_rules(bank_account_id: str, company: str) -> list[BankM
             BankMatchingRule.bank_account_id.is_(None),
         ),
     )
+    if database.session.get_bind().dialect.name != "sqlite":
+        # Lectura actual bajo el lock de alcance: una regla confirmada mientras
+        # la conciliación esperaba no puede quedar oculta por el snapshot.
+        query = query.with_for_update()
     rules = database.session.execute(query.order_by(BankMatchingRule.priority)).scalars().all()
-    return list(rules)
+    return [rule for rule in rules if _rule_reference_matches(rule, reference_number)]
+
+
+def _accumulate_exact_candidate(
+    seen: dict[tuple[str, str], tuple[BankCandidate, BankMatchingRule]],
+    candidate: BankCandidate,
+    rule: BankMatchingRule,
+) -> bool:
+    """Acumula un candidato exacto por destino y rechaza importes dispares.
+
+    El importe de un candidato se deriva del saldo pendiente del destino y del
+    importe bancario, no de la tolerancia de la regla. Por eso dos evaluaciones
+    del mismo destino sobre la misma transacción no deberían discrepir; el
+    rechazo protege la conciliación si el estado cambia entre evaluaciones.
+    """
+    key = (candidate.reference_type, candidate.reference_id)
+    existing = seen.get(key)
+    if existing is None:
+        seen[key] = (candidate, rule)
+        return True
+    if existing[0].amount != candidate.amount:
+        return False
+    if candidate.score > existing[0].score:
+        seen[key] = (candidate, rule)
+    return True
 
 
 def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconciliationResult:
     """Intenta conciliar automaticamente una transaccion contra un unico candidato exacto.
 
     Busca las reglas de matching activas con ``auto_reconcile`` habilitado para la
-    cuenta y compañía de la transacción.  Si una regla produce un único candidato
-    con estado ``exact`` (importe dentro de la tolerancia y saldo total pendiente
-    del destino), aplica la conciliación y devuelve el resultado auditable.
+    cuenta y compañía de la transacción.  Si la regla define ``reference_contains``,
+    también exige que la referencia de la transacción contenga ese texto (#1509).
+    Si una regla produce un único candidato con estado ``exact`` (importe dentro
+    de la tolerancia y saldo total pendiente del destino), aplica la conciliación
+    y devuelve el resultado auditable.
 
     No se concilia cuando hay más de un candidato exacto (ambigüedad) o cuando
     ninguna regla produce candidatos; en esos casos la conciliación queda a cargo
@@ -141,8 +161,29 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     if not bank_account:
         raise BankStatementError(_("La cuenta bancaria no existe."))
     company = str(bank_account.company)
+    bank_account_id = str(transaction.bank_account_id)
 
-    rules = _find_auto_reconcile_rules(transaction.bank_account_id, company)
+    # Las reglas y los candidatos deben evaluarse bajo el mismo lock que las
+    # altas de reglas; de lo contrario una regla confirmada durante la espera
+    # puede cambiar el conjunto después de la búsqueda inicial.
+    from cacao_accounting.default_scope import lock_default_scopes
+
+    lock_default_scopes("bank_auto_reconcile", [(company, None), (company, bank_account_id)])
+    transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=True, populate_existing=True)
+    if transaction is None:
+        raise BankStatementError(_("La transacción bancaria no existe."))
+    if transaction.is_reconciled:
+        return BankAutoReconciliationResult(
+            bank_transaction_id=bank_transaction_id,
+            reconciled=False,
+            rule_id=None,
+            candidate_reference_type=None,
+            candidate_reference_id=None,
+            allocated_amount=None,
+            reason="already_reconciled",
+        )
+
+    rules = _find_auto_reconcile_rules(bank_account_id, company, transaction.reference_number)
     if not rules:
         return BankAutoReconciliationResult(
             bank_transaction_id=bank_transaction_id,
@@ -154,8 +195,7 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             reason="no_active_rule",
         )
 
-    seen_candidates: dict[tuple[str, str], BankCandidate] = {}
-    best_rule: BankMatchingRule | None = None
+    seen_candidates: dict[tuple[str, str], tuple[BankCandidate, BankMatchingRule]] = {}
     for rule in rules:
         candidates = find_bank_reconciliation_candidates(
             bank_transaction_id,
@@ -164,12 +204,17 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
         )
         exact_candidates = [candidate for candidate in candidates if candidate.status == "exact"]
         if len(exact_candidates) == 1:
-            candidate = exact_candidates[0]
-            key = (candidate.reference_type, candidate.reference_id)
-            existing = seen_candidates.get(key)
-            if existing is None or candidate.score > existing.score:
-                seen_candidates[key] = candidate
-                best_rule = rule
+            # #1644: el mismo destino con importes dispares no es inequívoco.
+            if not _accumulate_exact_candidate(seen_candidates, exact_candidates[0], rule):
+                return BankAutoReconciliationResult(
+                    bank_transaction_id=bank_transaction_id,
+                    reconciled=False,
+                    rule_id=None,
+                    candidate_reference_type=None,
+                    candidate_reference_id=None,
+                    allocated_amount=None,
+                    reason="ambiguous",
+                )
         elif len(exact_candidates) > 1:
             return BankAutoReconciliationResult(
                 bank_transaction_id=bank_transaction_id,
@@ -192,8 +237,22 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             reason="no_unique_exact_match",
         )
 
-    candidate = max(seen_candidates.values(), key=lambda candidate: candidate.score)
-    transaction_amount = Decimal(str(transaction.deposit if transaction.deposit is not None else transaction.withdrawal))
+    # #1721: reglas distintas pueden aportar candidatos exactos diferentes.
+    # El contrato exige no conciliar mientras exista más de un candidato exacto
+    # distinto, aunque cada regla individualmente solo devuelva uno.
+    if len(seen_candidates) > 1:
+        return BankAutoReconciliationResult(
+            bank_transaction_id=bank_transaction_id,
+            reconciled=False,
+            rule_id=None,
+            candidate_reference_type=None,
+            candidate_reference_id=None,
+            allocated_amount=None,
+            reason="ambiguous",
+        )
+
+    candidate, best_rule = next(iter(seen_candidates.values()))
+    transaction_amount = _bank_amount(transaction)
     allocated = min(transaction_amount, candidate.amount)
     reconciliation = reconcile_bank_items(
         BankReconciliationRequest(
@@ -236,216 +295,41 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     )
 
 
-def _decimal_value(value: Any) -> Decimal:
-    if value is None or (isinstance(value, str) and value == ""):
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        if not value.is_finite():
-            raise BankStatementError(_("El monto del extracto debe ser finito: %(value)s") % {"value": value})
-        return value
-    normalized = str(value).strip().replace(" ", "")
-    if "," in normalized and "." in normalized:
-        if normalized.rfind(",") > normalized.rfind("."):
-            normalized = normalized.replace(".", "").replace(",", ".")
-        else:
-            normalized = normalized.replace(",", "")
-    elif "," in normalized:
-        decimal_part = normalized.rsplit(",", 1)[1]
-        if len(decimal_part) > 2:
-            raise InvalidOperation(_("Separador de miles ambiguo"))
-        normalized = normalized.replace(",", ".")
-    elif normalized.count(".") > 1:
-        raise InvalidOperation(_("Separador de miles ambiguo"))
-    try:
-        amount = Decimal(normalized)
-    except InvalidOperation as exc:
-        raise BankStatementError(_("El monto del extracto no es válido: %(value)s") % {"value": value}) from exc
-    if not amount.is_finite():
-        raise BankStatementError(_("El monto del extracto debe ser finito: %(value)s") % {"value": value})
-    return amount
-
-
-def _parse_date(value: str) -> date:
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
-        try:
-            from datetime import datetime
-
-            return datetime.strptime(value, fmt).date()
-        except ValueError:
-            continue
-    raise BankStatementError(_("La fecha del extracto no tiene un formato soportado."))
-
-
-def _is_duplicate(
-    *,
-    bank_account_id: str,
-    posting_date: date,
-    reference_number: str | None,
-    deposit: Decimal | None,
-    withdrawal: Decimal | None,
-) -> bool:
-    """Detect a persisted duplicate only when the statement provides an identity reference."""
-    if reference_number is None:
-        # Date and amount are not a safe identity: banks can emit multiple
-        # legitimate fees or transfers with those same values.
-        return False
-    query = select(BankTransaction).filter_by(bank_account_id=bank_account_id, posting_date=posting_date)
-    query = query.filter_by(reference_number=reference_number)
-    if deposit is not None:
-        query = query.filter_by(deposit=deposit)
-    if withdrawal is not None:
-        query = query.filter_by(withdrawal=withdrawal)
-    return database.session.execute(query).scalars().first() is not None
-
-
-def import_bank_statement(
-    file: Any,
-    mapping: dict[str, str],
-    bank_account_id: str,
-    *,
-    company: str,
-    preview: bool = False,
-) -> BankImportResult:
-    """Importa o previsualiza un extracto CSV validando la compañía de la cuenta.
-
-    Tras persistir las filas (``preview=False``) intenta la conciliación
-    automática opcional end-to-end: cada transacción importada se evalúa
-    contra las reglas activas con ``auto_reconcile`` habilitado y, cuando
-    existe un único candidato exacto dentro de las tolerancias configuradas,
-    se aplica la conciliación dejando un resultado auditable en
-    ``auto_reconciled``.
-    """
-    bank_account = database.session.get(BankAccount, bank_account_id)
-    if not bank_account:
-        raise BankStatementError(_("La cuenta bancaria no existe."))
-    if not company or bank_account.company != company:
-        raise BankStatementError(_("La cuenta bancaria no pertenece a la compañía indicada."))
-    raw = file.read() if hasattr(file, "read") else str(file)
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8-sig")
-    reader = csv.DictReader(StringIO(raw))
-    rows: list[BankImportRow] = []
-    imported = 0
-    duplicate_count = 0
-    imported_transaction_ids: list[str] = []
-    for source in reader:
-        row = _parse_bank_statement_row(source, mapping)
-        duplicate = _is_duplicate(
-            bank_account_id=bank_account_id,
-            posting_date=row.posting_date,
-            reference_number=row.reference_number,
-            deposit=row.deposit,
-            withdrawal=row.withdrawal,
-        )
-        transaction_id: str | None = None
-        if duplicate:
-            duplicate_count += 1
-        elif not preview:
-            persisted = _persist_bank_transaction(bank_account_id=bank_account_id, row=row)
-            database.session.flush()
-            transaction_id = str(persisted.id)
-            imported_transaction_ids.append(transaction_id)
-            imported += 1
-        rows.append(
-            BankImportRow(
-                posting_date=row.posting_date,
-                reference_number=row.reference_number,
-                description=row.description,
-                deposit=row.deposit,
-                withdrawal=row.withdrawal,
-                duplicate=duplicate,
-                bank_transaction_id=transaction_id,
-            )
-        )
-    auto_results: list[BankAutoReconciliationResult] = []
-    for transaction_id in imported_transaction_ids:
-        try:
-            # Savepoint: cualquier fallo de conciliación automática no revierte
-            # la importación de la fila del extracto.
-            with database.session.begin_nested():
-                auto_results.append(auto_reconcile_bank_transaction(transaction_id))
-        except Exception:  # noqa: BLE001 - la conciliación opcional nunca rompe la importación
-            auto_results.append(
-                BankAutoReconciliationResult(
-                    bank_transaction_id=transaction_id,
-                    reconciled=False,
-                    rule_id=None,
-                    candidate_reference_type=None,
-                    candidate_reference_id=None,
-                    allocated_amount=None,
-                    reason="error",
-                )
-            )
-    return BankImportResult(
-        rows=rows,
-        imported_count=imported,
-        duplicate_count=duplicate_count,
-        auto_reconciled=auto_results,
-    )
-
-
-def suggest_bank_matches(bank_transaction_id: str, **kwargs: Any) -> list[BankCandidate]:
-    """Alias publico para sugerencias de conciliacion bancaria.
-
-    Acepta los mismos parámetros de tolerancia que
-    ``find_bank_reconciliation_candidates`` (``days_tolerance``,
-    ``amount_tolerance``) para que las sugerencias respeten la
-    configuración de tolerancias cuando se solicita explícitamente.
-    """
-    return find_bank_reconciliation_candidates(bank_transaction_id, **kwargs)
-
-
 def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tuple[date, date]) -> BankMatchingRun:
-    """Ejecuta una regla y devuelve candidatos por transaccion."""
+    """Ejecuta una regla y devuelve candidatos por transaccion.
+
+    El filtro de referencia es literal e insensible a mayúsculas, el mismo que
+    aplica la auto conciliación, para que ambos modos coincidan en todos los
+    motores de base de datos (#1509).
+    """
     rule = database.session.get(BankMatchingRule, rule_id)
     if not rule or not rule.is_active:
         raise BankStatementError(_("La regla de matching no existe o esta inactiva."))
+    # #1261: una regla ligada a una cuenta no puede ejecutarse sobre otra;
+    # las reglas con bank_account_id NULL aplican a toda la compañía.
+    if rule.bank_account_id and str(rule.bank_account_id) != str(bank_account_id):
+        raise BankStatementError(_("La regla de matching está configurada para otra cuenta bancaria."))
+    account = database.session.get(BankAccount, bank_account_id)
+    if account is None:
+        raise BankStatementError(_("La cuenta bancaria indicada no existe."))
+    if account.company != rule.company:
+        raise BankStatementError(_("La cuenta bancaria no pertenece a la compañía de la regla."))
     query = (
         select(BankTransaction)
         .filter_by(bank_account_id=bank_account_id, is_reconciled=False)
         .where(BankTransaction.posting_date >= date_range[0])
         .where(BankTransaction.posting_date <= date_range[1])
     )
-    if rule.reference_contains:
-        query = query.where(BankTransaction.reference_number.contains(rule.reference_contains))
     result: dict[str, list[BankCandidate]] = {}
     for transaction in database.session.execute(query).scalars().all():
+        if not _rule_reference_matches(rule, transaction.reference_number):
+            continue
         result[transaction.id] = find_bank_reconciliation_candidates(
             transaction.id,
             days_tolerance=rule.days_tolerance,
             amount_tolerance=rule.amount_tolerance,
         )
     return BankMatchingRun(rule_id=rule_id, candidates_by_transaction=result)
-
-
-def _parse_bank_statement_row(source: dict[str, str], mapping: dict[str, str]) -> BankImportRow:
-    """Normaliza una fila de extracto y valida sus importes mínimos."""
-    posting_date = _parse_date(source[mapping["date"]])
-    reference_number = source.get(mapping.get("reference", ""), "") or None
-    description = source.get(mapping.get("description", ""), "") or None
-    deposit_value = _decimal_value(source.get(mapping.get("deposit", ""), ""))
-    withdrawal_value = _decimal_value(source.get(mapping.get("withdrawal", ""), ""))
-    deposit = deposit_value if deposit_value > 0 else None
-    withdrawal = withdrawal_value if withdrawal_value > 0 else None
-    if not deposit and not withdrawal:
-        raise BankStatementError(_("Cada fila debe tener deposito o retiro."))
-    if deposit and withdrawal:
-        raise BankStatementError(_("Cada fila debe tener deposito o retiro, no ambos."))
-    return BankImportRow(posting_date, reference_number, description, deposit, withdrawal, False)
-
-
-def _persist_bank_transaction(*, bank_account_id: str, row: BankImportRow) -> BankTransaction:
-    """Persist a statement row as a bank transaction and return it."""
-    transaction = BankTransaction(
-        bank_account_id=bank_account_id,
-        posting_date=row.posting_date,
-        reference_number=row.reference_number,
-        description=row.description,
-        deposit=row.deposit,
-        withdrawal=row.withdrawal,
-    )
-    database.session.add(transaction)
-    return transaction
 
 
 def _load_bank_reconciliation(reconciliation_id: str) -> Reconciliation:

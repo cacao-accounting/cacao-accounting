@@ -68,11 +68,24 @@
         <i class="bi bi-list"></i>
         <span class="ca-detail-actions-label">{{ _('Acciones') }}</span>
       </button>
-      <div class="dropdown-menu dropdown-menu-end">
-        {{ buttons_html | safe }}
-      </div>
+      <div class="dropdown-menu dropdown-menu-end" data-action-source=".ca-detail-actions-inline"></div>
     </div>
   </div>
+  <script>
+    (function () {
+      document.querySelectorAll('.ca-detail-actions-menu .dropdown-menu[data-action-source]').forEach(function (menu) {
+        if (menu.dataset.actionsCloned === '1') return;
+        var header = menu.closest('.ca-card-header');
+        var source = header ? header.querySelector(menu.getAttribute('data-action-source')) : null;
+        if (!source) return;
+        Array.prototype.forEach.call(source.children, function (node) {
+          if (node.classList && (node.classList.contains('modal') || node.tagName === 'SCRIPT')) return;
+          menu.appendChild(node.cloneNode(true));
+        });
+        menu.dataset.actionsCloned = '1';
+      });
+    })();
+  </script>
   <div class="row g-3 p-3">
     {% for label, value in items %}
     <div class="col-md-3 col-sm-6">
@@ -121,6 +134,8 @@
             data-rate="{{ format_money_with_currency(item.rate|default('', true) or item.basic_rate|default('', true), currency_code) }}"
             data-amount="{{ format_money_with_currency(item.amount|default(0, true), currency_code) }}"
             data-warehouse="{{ item.warehouse|default('', true) or item.source_warehouse|default('', true) or item.target_warehouse|default('', true) }}"
+            data-source-warehouse="{{ item.source_warehouse|default('', true) }}"
+            data-target-warehouse="{{ item.target_warehouse|default('', true) }}"
             data-account="{{ item.account|default('', true) }}"
             data-cost-center="{{ item.cost_center|default('', true) }}"
             data-unit="{{ item.unit|default('', true) }}"
@@ -128,7 +143,7 @@
             data-source-type="{{ item.source_type|default('', true) }}"
             data-source-id="{{ item.source_id|default('', true) }}"
             data-source-item-id="{{ item.source_item_id|default('', true) }}"
-            data-batch-no="{{ item.batch_no|default('', true) or item.batch_id|default('', true) }}"
+            data-batch-no="{{ item.batch_no|default('', true) or batch_number(item.batch_id) }}"
             data-serial-no="{{ item.serial_no|default('', true) }}"
             data-remarks="{{ item.remarks|default('', true) }}">
           <td>{{ loop.index }}</td>
@@ -233,6 +248,14 @@
   function readValue(value) {
     return value && value.trim() ? value : '-';
   }
+  function warehouseLabel(data) {
+    var source = readValue(data.sourceWarehouse);
+    var target = readValue(data.targetWarehouse);
+    if (source !== '-' && target !== '-') {
+      return source === target ? source : source + ' → ' + target;
+    }
+    return readValue(data.warehouse);
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
     var rows = Array.prototype.slice.call(document.querySelectorAll('.journal-line-row'));
@@ -249,7 +272,7 @@
       document.getElementById('line-rate').textContent = data.rate || '0';
       document.getElementById('line-amount').textContent = data.amount || '0';
       {% endif %}
-      document.getElementById('line-warehouse').textContent = readValue(data.warehouse);
+      document.getElementById('line-warehouse').textContent = warehouseLabel(data);
       document.getElementById('line-account').textContent = readValue(data.account);
       document.getElementById('line-cost-center').textContent = readValue(data.costCenter);
       document.getElementById('line-unit').textContent = readValue(data.unit);
@@ -268,12 +291,12 @@
       document.getElementById('modal-line-rate').textContent = data.rate || '0';
       document.getElementById('modal-line-amount').textContent = data.amount || '0';
       {% endif %}
-      document.getElementById('modal-line-warehouse').textContent = readValue(data.warehouse);
+      document.getElementById('modal-line-warehouse').textContent = warehouseLabel(data);
       document.getElementById('modal-line-account').textContent = readValue(data.account);
       document.getElementById('modal-line-cost-center').textContent = readValue(data.costCenter);
       document.getElementById('modal-line-unit').textContent = readValue(data.unit);
       document.getElementById('modal-line-project').textContent = readValue(data.project);
-      document.getElementById('modal-line-batch').textContent = readValue(data.batchNo || data.batchId);
+      document.getElementById('modal-line-batch').textContent = readValue(data.batchNo);
       document.getElementById('modal-line-serial-no').textContent = readValue(data.serialNo);
       document.getElementById('modal-line-source-type').textContent = readValue(data.sourceType);
       document.getElementById('modal-line-source-id').textContent = readValue(data.sourceId);

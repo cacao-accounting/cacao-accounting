@@ -5,19 +5,18 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
-from sqlalchemy import func
 
 from cacao_accounting.database import (
     PurchaseInvoice,
     database,
 )
-from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.handlers.aging import AgingQuery, get_aging_result
+from cacao_accounting.query_tools.handlers.open_documents import paginate_positive_outstanding
 from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
     paginate,
@@ -61,7 +60,8 @@ def get_payables_aging(
         required_module="purchases",
         company_id=company_id,
     )
-    cutoff_date = date.fromisoformat(as_of_date)
+    cutoff_date = parse_iso_date(as_of_date, required=True)
+    assert cutoff_date is not None
     return get_aging_result(
         AgingQuery(
             company_id=company_id,
@@ -108,29 +108,20 @@ def get_payables_open_documents(
 
     _page, _page_size = paginate(page, page_size)
 
-    query = (
-        database.select(PurchaseInvoice)
-        .where(PurchaseInvoice.company == company_id)
-        .where(PurchaseInvoice.docstatus == 1)
-        .where(PurchaseInvoice.status.in_(["open", "overdue"]))
-    )
+    query = database.select(PurchaseInvoice).where(PurchaseInvoice.company == company_id).where(PurchaseInvoice.docstatus == 1)
 
     if party_id:
         query = query.where(PurchaseInvoice.supplier_id == party_id)
 
-    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-
-    rows = (
-        database.session.execute(
-            query.order_by(PurchaseInvoice.posting_date.desc()).offset((_page - 1) * _page_size).limit(_page_size)
-        )
-        .scalars()
-        .all()
+    total, page_rows = paginate_positive_outstanding(
+        model=PurchaseInvoice,
+        query=query,
+        page=_page,
+        page_size=_page_size,
     )
 
     items = []
-    for inv in rows:
-        outstanding = compute_outstanding_amount(inv)
+    for inv, outstanding in page_rows:
         items.append(
             {
                 "id": inv.id,

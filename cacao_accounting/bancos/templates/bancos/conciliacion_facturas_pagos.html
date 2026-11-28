@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
@@ -192,7 +192,7 @@ function paymentReconciliation() {
       party_id: '',
       party_label: '',
       currency: '',
-      allocation_date: new Date().toISOString().slice(0, 10),
+      allocation_date: globalThis.cacaoLocalIsoDate(new Date()),
     },
     payments: [],
     documents: [],
@@ -246,7 +246,7 @@ function paymentReconciliation() {
         const validationResponse = await fetch('/api/line-import/validate', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' },
           credentials: 'same-origin',
-          body: JSON.stringify({ doctype: 'payment_reconciliation', context: { company_id: this.filters.company }, rows: parsed.rows }),
+          body: JSON.stringify({ doctype: 'payment_reconciliation', context: { company_id: this.filters.company, allocation_date: this.filters.allocation_date, filters: { party_type: this.filters.party_type, party_id: this.filters.party_id } }, rows: parsed.rows }),
         });
         const validation = await validationResponse.json();
         if (!validationResponse.ok || !validation.valid) {

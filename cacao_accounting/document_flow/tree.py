@@ -12,11 +12,20 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+
+from flask_login import current_user
 from werkzeug.routing import BuildError
+
+from cacao_accounting.auth.permisos import Permisos
 
 from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.document_flow.repository import (
+    document_matches_type,
+    get_document,
+    get_document_company,
+)
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.status import document_status_payload
 
 DEFAULT_MAX_DEPTH: int = 10
@@ -29,6 +38,77 @@ _PARTY_NAME_FIELDS = ("party_name", "supplier_name", "customer_name")
 # ---------------------------------------------------------------------------
 # Nodo individual
 # ---------------------------------------------------------------------------
+
+_ALTERNATE_READ_MODULES = {
+    "delivery_note": ("sales", "inventory"),
+    "purchase_order": ("purchases", "inventory"),
+    "purchase_receipt": ("purchases", "inventory"),
+}
+
+
+def _node_readable(document_type: str, document_id: str) -> bool:
+    """Indica si el usuario actual puede leer el documento relacionado (#1407).
+
+    El árbol raíz ya está autorizado por la ruta; cada nodo debe revalidar el
+    módulo dueño del documento (con los módulos alternativos de los flujos
+    operativos) y el acceso a su compañía. Sin sesión, el servicio conserva su
+    comportamiento para tareas internas.
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return True
+    if not authenticated:
+        return True
+    if getattr(current_user, "classification", None) == "admin":
+        return True
+    doctype = normalize_doctype(document_type)
+    document = get_document(doctype, document_id)
+    if document is None:
+        return False
+    # #998 QA2 B11: el nodo relacionado también respeta el subtipo lógico; un
+    # alias de nota no puede mostrar una factura común del mismo modelo.
+    if not document_matches_type(doctype, document):
+        return False
+    # El comprobante contable guarda la compañía en `entity`; el helper cubre
+    # ambos atributos (#1407, QA2 A1).
+    company = get_document_company(doctype, document_id)
+    spec = DOCUMENT_TYPES.get(doctype)
+    if spec is None:
+        return True
+    modules: tuple[str, ...] | None = _ALTERNATE_READ_MODULES.get(doctype)
+    if modules is None:
+        module = spec.permission_module or spec.module
+        if not module or module == "general":
+            return True
+        modules = (module,)
+    return any(_node_module_access(module, company) for module in modules)
+
+
+def _node_module_access(module: str, company: str | None) -> bool:
+    """Resuelve consulta del módulo y compañía una vez por petición (#1407).
+
+    El árbol puede visitar hasta ``max_nodes`` documentos; cachear por
+    ``(módulo, compañía)`` evita instanciar `Permisos` y repetir la consulta de
+    acceso para cada nodo del mismo tipo.
+    """
+    from flask import g, has_request_context
+
+    cache: dict[tuple[str, str], bool] | None = None
+    if has_request_context():
+        cache = getattr(g, "_document_tree_permissions", None)
+        if cache is None:
+            cache = {}
+            g._document_tree_permissions = cache
+        key = (module, str(company or ""))
+        if key in cache:
+            return cache[key]
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+    allowed = bool(permissions.consultar and permissions.tiene_acceso_compania(company))
+    if cache is not None:
+        cache[(module, str(company or ""))] = allowed
+    return allowed
 
 
 def get_document_node(
@@ -46,6 +126,10 @@ def get_document_node(
     doctype = normalize_doctype(document_type)
     spec = DOCUMENT_TYPES.get(doctype)
     document = get_document(doctype, document_id)
+    if document is not None and not document_matches_type(doctype, document):
+        # No se presentan metadatos de un subtipo distinto; el nodo queda con
+        # el identificador solicitado y sin datos del documento cargado.
+        document = None
 
     label = spec.label if spec and spec.label else doctype
     detail_url = _build_detail_url(spec, document_id) if spec else None
@@ -136,6 +220,8 @@ def get_upstream_tree(
         if node_counter[0] >= max_nodes:
             result.append({"max_nodes_reached": True})
             break
+        if not _node_readable(src_type, src_id):
+            continue
 
         node = get_document_node(src_type, src_id)
         node["relation_type"] = row.relation_type
@@ -209,6 +295,8 @@ def get_downstream_tree(
         if node_counter[0] >= max_nodes:
             result.append({"max_nodes_reached": True})
             break
+        if not _node_readable(tgt_type, tgt_id):
+            continue
 
         node = get_document_node(tgt_type, tgt_id)
         node["relation_type"] = row.relation_type
@@ -297,6 +385,7 @@ def build_document_flow_tree(
 
     node_counter: list[int] = [0]
     cycle_detected = False
+    max_nodes_reached = False
 
     upstream: list[dict[str, Any]] = []
     downstream: list[dict[str, Any]] = []
@@ -310,6 +399,7 @@ def build_document_flow_tree(
             max_nodes=max_nodes,
         )
         cycle_detected = cycle_detected or _has_cycle_flag(upstream)
+        max_nodes_reached = max_nodes_reached or _has_node_limit_flag(upstream)
 
     if direction in ("all", "downstream"):
         downstream = get_downstream_tree(
@@ -320,6 +410,7 @@ def build_document_flow_tree(
             max_nodes=max_nodes,
         )
         cycle_detected = cycle_detected or _has_cycle_flag(downstream)
+        max_nodes_reached = max_nodes_reached or _has_node_limit_flag(downstream)
 
     return {
         "current": current,
@@ -331,6 +422,7 @@ def build_document_flow_tree(
             "max_nodes": max_nodes,
             "node_count": node_counter[0],
             "cycle_detected": cycle_detected,
+            "max_nodes_reached": max_nodes_reached,
         },
     }
 
@@ -480,6 +572,16 @@ def _has_cycle_flag(nodes: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _has_node_limit_flag(nodes: list[dict[str, Any]]) -> bool:
+    """Indica si algún nodo representa documentos omitidos por el límite."""
+    for node in nodes:
+        if node.get("max_nodes_reached"):
+            return True
+        if _has_node_limit_flag(node.get("children") or []):
+            return True
+    return False
+
+
 def _payment_reference_documents(doctype: str, document_id: str) -> list[PaymentReference]:
     """Devuelve referencias de pago relacionadas con un documento."""
     ref_types = {doctype, _base_relation_type(doctype)}
@@ -549,6 +651,8 @@ def _append_payment_reference_node(
 
     if node_counter[0] >= max_nodes:
         result.append({"max_nodes_reached": True})
+        return
+    if not _node_readable(related_doctype, related_id):
         return
 
     node = get_document_node(related_doctype, related_id)
@@ -622,7 +726,7 @@ def _append_payment_reference_nodes(
 
     refs = _payment_entry_references(document_id)
     for ref in refs:
-        ref_type = normalize_doctype(ref.reference_type)
+        ref_type = normalize_doctype(ref.flow_source_type or ref.reference_type)
         _append_payment_reference_node(
             result,
             seen_pairs=seen_pairs,

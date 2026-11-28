@@ -4,10 +4,13 @@
 """Modulo de Compras."""
 
 import json
+from typing import Any
 
 from datetime import date
 
 from decimal import Decimal
+
+from sqlalchemy import and_
 
 from logging import getLogger
 
@@ -29,16 +32,8 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_unlinked_purchase_receipts_summary,
 )
 
-from cacao_accounting.compras.purchase_order_comparison_service import (
-    current_purchase_order_comparison_round,
-    open_purchase_order_comparison_round,
-    purchase_request_for_comparison,
-    purchase_order_comparison_rows,
-    purchase_orders_for_request,
-    purchase_order_comparison_round_orders,
-)
-
 from cacao_accounting.compras.purchase_request_comparison_service import (
+    comparison_line_base_rate,
     comparison_recommendations,
     create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
@@ -71,10 +66,6 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
-    PurchaseOrderComparison,
-    PurchaseOrderComparisonOrder,
-    PurchaseOrderComparisonRound,
-    PurchaseOrderComparisonRoundOrder,
     PurchaseOrderItem,
     PurchaseQuotation,
     PurchaseQuotationAward,
@@ -119,10 +110,13 @@ from cacao_accounting.decorators import (  # noqa: F401
     verifica_permiso,
 )
 
+from cacao_accounting.fiscal_persistence_service import calculate_document_total_with_taxes
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    assert_relation_same_party,
     get_target_line_source,
     get_create_actions,
+    lock_document_flow_document,
     refresh_source_caches_for_target,
     revert_relations_for_target,
     validate_submit_prerequisites,
@@ -140,12 +134,15 @@ from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
     apply_party_profile,
     build_party_detail_context,
+    companias_autorizadas_por_accion,
     create_party_address,
     create_party_contact,
     deactivate_party_address,
     deactivate_party_contact,
+    exigir_companias_tercero,
     generate_party_code,
     party_group_label,
+    requiere_edicion_tercero,
     toggle_party_customer_role,
     toggle_party_supplier_role as toggle_party_supplier_role,  # noqa: F401
     PartyRoleToggleError,
@@ -161,6 +158,7 @@ from cacao_accounting.party_settings import (
 from cacao_accounting.version import APPNAME
 
 from cacao_accounting.compras.services import (
+    _authorized_companies,
     _logistics_values,
     _copy_logistics,
     _landed_cost_snapshot,
@@ -169,6 +167,8 @@ from cacao_accounting.compras.services import (
     _party_or_404,
     _paginate_list,
     _require_purchase_document_access,
+    purchase_order_has_closed_source_request,
+    purchase_order_source_request_ids,
     _require_requested_purchase_company_access,
     _can_manage_purchase_receipts,
     _supplier_quotation_origin_ids,
@@ -176,7 +176,6 @@ from cacao_accounting.compras.services import (
     _validate_supplier_quotation_origin,
     _supplier_quotation_selected_company,
     _purchase_quotation_selected_company,
-    _supplier_quotation_supplier_choices,
     _supplier_quotation_catalogs,
     _supplier_quotation_transaction_config,
     _supplier_quotation_initial_source_type,
@@ -189,13 +188,11 @@ from cacao_accounting.compras.services import (
     _build_purchase_order_transaction_config,
     _purchase_order_source_type,
     _purchase_order_selected_company,
-    _purchase_order_supplier_choices,
     _purchase_order_catalogs,
     _purchase_order_transaction_config,
     _create_purchase_order_from_request,
     _update_purchase_order_from_request,
     _purchase_quotation_origin_id,
-    _purchase_quotation_supplier_choices,
     _purchase_quotation_catalogs,
     _purchase_quotation_transaction_config,
     _create_purchase_quotation_from_request,
@@ -205,10 +202,10 @@ from cacao_accounting.compras.services import (
     _set_purchase_document_totals,
     _set_purchase_receipt_totals,
     _validate_receipt_quantities_against_po,
+    _lock_receipt_purchase_orders,
     _validate_invoice_quantities_against_receipt,
     _validate_invoice_requires_supplier_link,
     _purchase_invoice_selected_company,
-    _purchase_invoice_supplier_choices,
     _purchase_invoice_source_ids,
     _purchase_invoice_document_type,
     _purchase_invoice_sources,
@@ -216,6 +213,7 @@ from cacao_accounting.compras.services import (
     _purchase_invoice_transaction_config,
     _capture_purchase_state,
     _validate_supplier_invoice_flags,
+    _validated_purchase_supplier,
     _validate_duplicate_supplier_invoice,
     _validate_purchase_reversal_of,
     _persist_purchase_reversal_relation,
@@ -223,6 +221,7 @@ from cacao_accounting.compras.services import (
     _create_purchase_invoice_from_request,
     _handle_purchase_invoice_edit_post,
     _create_import_landed_cost_from_request,
+    _update_import_landed_cost_from_request,
     _get_import_landed_cost_items,
     _get_import_landed_cost_charges,
     check_budget_control,
@@ -324,9 +323,14 @@ DOCUMENT_TYPE_LABELS: dict[str, LazyText] = {
 @login_required
 def compras_():
     """Pantalla principal del modulo de compras."""
+    from cacao_accounting.admin.services import is_system_admin_user
     from cacao_accounting.company_context import get_active_company
 
-    return render_template("compras.html", company=get_active_company())
+    return render_template(
+        "compras.html",
+        company=get_active_company(),
+        can_manage_supplier_groups=is_system_admin_user(),
+    )
 
 
 @compras.route("/purchase-order/list")
@@ -458,16 +462,25 @@ def compras_solicitud_compra(request_id: str):
 @login_required
 @verifica_permiso("purchases", "autorizar")
 def compras_solicitud_compra_close(request_id: str):
-    """Close a purchase request whose lines are compared or directly ordered."""
+    """Close a purchase request only when every line has zero pending quantity."""
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 1 or registro.status == "closed":
         abort(400)
+    lock_document_flow_document("purchase_request", registro.id)
+    registro = database.session.execute(
+        database.select(PurchaseRequest)
+        .where(PurchaseRequest.id == request_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    if registro.docstatus != 1 or registro.status == "closed":
+        abort(400)
     if not purchase_request_is_ready_to_close(registro):
         flash(
-            _("La Solicitud de Compra requiere comparativos cerrados u órdenes de compra activas para todas sus líneas."),
+            _("La Solicitud de Compra requiere cantidad pendiente cero en todas sus líneas."),
             "danger",
         )
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
@@ -501,6 +514,12 @@ def compras_solicitud_compra_editar(request_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -533,7 +552,7 @@ def compras_solicitud_compra_editar(request_id: str):
             database.session.commit()
             flash(_("Solicitud de compra actualizada correctamente."), "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
-        except (IdentifierConfigurationError, DocumentFlowError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
 
@@ -609,6 +628,8 @@ def compras_solicitud_compra_duplicar(request_id: str):
             purchase_request_id=duplicada.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
+            warehouse=item.warehouse,
             qty=item.qty,
             qty_in_base_uom=item.qty_in_base_uom,
             uom=item.uom,
@@ -734,7 +755,6 @@ def compras_cotizacion_proveedor_nueva():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = _supplier_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
-    formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
     if request.method == "POST":
         response = _create_supplier_quotation_from_request()
         if response is not None:
@@ -816,6 +836,12 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -823,12 +849,15 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
-    formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
 
     if request.method == "POST":
         _require_requested_purchase_company_access(registro)
-        return _handle_supplier_quotation_update(registro, request.form, quotation_id)
+        try:
+            return _handle_supplier_quotation_update(registro, request.form, quotation_id)
+        except ValueError as exc:
+            database.session.rollback()
+            flash_error(exc)
 
     lineas = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
@@ -916,6 +945,8 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
             supplier_quotation_id=duplicada.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
+            warehouse=item.warehouse,
             qty=item.qty,
             qty_in_base_uom=item.qty_in_base_uom,
             uom=item.uom,
@@ -1011,7 +1042,7 @@ def compras_comparativo_ofertas_lista():
         (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
         query=database.select(PurchaseRequest).where(PurchaseRequest.docstatus == 1),
     )
-    comparisons_by_request: dict[str, PurchaseRequestComparison] = {}
+    comparisons_by_request: dict[str, list[PurchaseRequestComparison]] = {}
     request_ids = [item.id for item in consulta.items]
     if request_ids:
         comparisons = database.session.execute(
@@ -1020,7 +1051,7 @@ def compras_comparativo_ofertas_lista():
             .order_by(PurchaseRequestComparison.created.desc(), PurchaseRequestComparison.id.desc())
         ).scalars()
         for comparison in comparisons:
-            comparisons_by_request.setdefault(comparison.purchase_request_id, comparison)
+            comparisons_by_request.setdefault(comparison.purchase_request_id, []).append(comparison)
     titulo = _titulo_comparativo() + " - " + APPNAME
     return render_template(
         "compras/comparativo_ofertas_lista.html",
@@ -1053,7 +1084,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
         exige_acceso_compania("purchases", purchase_request.company, "crear")
         participant_ids = request.form.getlist("supplier_quotation_ids")
         if not participant_ids or not set(participant_ids).issubset(candidate_ids):
-            flash_error("Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra.")
+            flash_error(_("Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra."))
             return redirect(
                 url_for(
                     "compras.compras_comparativo_ordenes_seleccionar",
@@ -1064,7 +1095,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
             comparison = create_purchase_request_comparison(purchase_request, participant_ids, current_user.id)
             database.session.commit()
             return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
-        except (IdentifierConfigurationError, SQLAlchemyError) as exc:
+        except (IdentifierConfigurationError, SQLAlchemyError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1178,44 +1209,36 @@ def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "crear")
     try:
-        orders = create_purchase_orders_from_comparison(comparison)
+        orders = create_purchase_orders_from_comparison(comparison, current_user.id)
         database.session.commit()
         flash(_("Se crearon {} Órdenes de Compra correctamente.").format(len(orders)), "success")
-    except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
+    except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
 
 
-@compras.route("/request-for-quotation/comparison/<comparison_id>/round", methods=["POST"])
-@modulo_activo("purchases")
-@login_required
-@verifica_permiso("purchases", "autorizar")
-def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
-    """Open an authorized immutable round with an explicit order snapshot."""
-    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
-    if not comparison:
-        abort(404)
-    exige_acceso_compania("purchases", comparison.company, "autorizar")
-    purchase_request = purchase_request_for_comparison(comparison)
-    if not purchase_request:
-        abort(404)
-    assert purchase_request is not None
-    candidate_orders = purchase_orders_for_request(purchase_request)
-    candidate_ids = {order.id for order in candidate_orders}
-    participant_ids = set(request.form.getlist("participant_ids"))
-    if not participant_ids.issubset(candidate_ids):
-        flash_error("Seleccione únicamente órdenes de compra de la misma Solicitud de Compra.")
-        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
-    try:
-        round_record = open_purchase_order_comparison_round(comparison, purchase_request, participant_ids, current_user.id)
-        database.session.commit()
-        flash(_("Nueva ronda de negociación abierta."), "success")
-        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id, round_id=round_record.id))
-    except (ValueError, SQLAlchemyError) as exc:
-        database.session.rollback()
-        flash_error(exc)
-        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
+def _purchase_action_permissions() -> dict[str, bool]:
+    """Devuelve las acciones de compras disponibles para el usuario actual."""
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("purchases"), usuario=current_user.id)
+    return {
+        "can_create": bool(permissions.administrador or permissions.crear),
+        "can_authorize": bool(permissions.administrador or permissions.autorizar),
+    }
+
+
+def _can_view_purchase_prices(company: str | None) -> bool:
+    """Return whether the current user may view purchase prices for a company."""
+    if not company:
+        return False
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("purchases"), usuario=current_user.id)
+    return bool(permissions.administrador or (permissions.consultar and permissions.tiene_acceso_compania(company)))
 
 
 def _render_request_comparison_view(request_comparison: PurchaseRequestComparison):
@@ -1242,10 +1265,23 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         .scalars()
         .all()
     )
+    request_has_lines = (
+        database.session.execute(
+            database.select(PurchaseRequestItem.id)
+            .where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+            .limit(1)
+        ).first()
+        is not None
+    )
+    recommendations_error = None
     try:
         recommendations = comparison_recommendations(request_comparison)
-    except ValueError:
+    except ValueError as exc:
         recommendations = []
+        recommendations_error = str(exc)
+    from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
+    functional_currency = company_functional_currency(purchase_request.company) if purchase_request else None
     return render_template(
         "compras/comparativo_solicitud.html",
         comparison=request_comparison,
@@ -1254,80 +1290,12 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         recommendations=recommendations,
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
+        request_has_lines=request_has_lines,
+        recommendations_error=recommendations_error,
+        functional_currency=functional_currency,
+        **_purchase_action_permissions(),
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
         titulo=_titulo_comparativo() + " - " + (request_comparison.document_no or request_comparison.id or ""),
-    )
-
-
-def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested_round_id: str | None):
-    """Render view for persisted order comparison."""
-    exige_acceso_compania("purchases", comparison.company, "consultar")
-    purchase_request = purchase_request_for_comparison(comparison)
-    selected_round = None
-    if requested_round_id:
-        selected_round = database.session.get(PurchaseOrderComparisonRound, requested_round_id)
-        if not selected_round or selected_round.comparison_id != comparison.id:
-            abort(404)
-    else:
-        selected_round = current_purchase_order_comparison_round(comparison.id)
-    participant_rows: list[PurchaseOrderComparisonRoundOrder | PurchaseOrderComparisonOrder] = (
-        list(purchase_order_comparison_round_orders(selected_round.id)) if selected_round else []
-    )
-    if not participant_rows:
-        participant_rows = list(
-            database.session.execute(
-                database.select(PurchaseOrderComparisonOrder)
-                .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
-                .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
-            )
-            .scalars()
-            .all()
-        )
-    orders: list[PurchaseOrder] = []
-    for row in participant_rows:
-        order = database.session.get(PurchaseOrder, row.purchase_order_id)
-        if order is not None:
-            orders.append(order)
-    for order in orders:
-        _require_purchase_document_access(order)
-    base_order = database.session.get(PurchaseOrder, comparison.base_purchase_order_id)
-    if not base_order:
-        abort(404)
-    order_items = {
-        order.id: list(
-            database.session.execute(
-                database.select(PurchaseOrderItem)
-                .where(PurchaseOrderItem.purchase_order_id == order.id)
-                .order_by(PurchaseOrderItem.id)
-            )
-            .scalars()
-            .all()
-        )
-        for order in orders
-    }
-    comparison_rows = purchase_order_comparison_rows(orders, order_items)
-    rounds = list(
-        database.session.execute(
-            database.select(PurchaseOrderComparisonRound)
-            .where(PurchaseOrderComparisonRound.comparison_id == comparison.id)
-            .order_by(PurchaseOrderComparisonRound.round_number.desc())
-        )
-        .scalars()
-        .all()
-    )
-    participant_order_ids = {row.purchase_order_id for row in participant_rows}
-    return render_template(
-        "compras/comparativo_ordenes.html",
-        comparison=comparison,
-        purchase_request=purchase_request,
-        base_order=base_order,
-        orders=orders,
-        comparison_rows=comparison_rows,
-        candidate_orders=purchase_orders_for_request(purchase_request) if purchase_request else [],
-        participant_order_ids=participant_order_ids,
-        rounds=rounds,
-        selected_round=selected_round,
-        titulo=_titulo_comparativo() + " - " + (comparison.id or ""),
     )
 
 
@@ -1335,14 +1303,11 @@ def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ordenes(comparison_id: str):
-    """Display a persisted order comparison, with legacy offer fallback."""
-    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
+    """Display a persisted purchase-request comparison."""
+    comparison = database.session.get(PurchaseRequestComparison, comparison_id)
     if comparison is None:
-        request_comparison = database.session.get(PurchaseRequestComparison, comparison_id)
-        if request_comparison:
-            return _render_request_comparison_view(request_comparison)
         abort(404)
-    return _render_order_comparison_view(comparison, request.args.get("round_id"))
+    return _render_request_comparison_view(comparison)
 
 
 @compras.route("/request-for-quotation/<rfq_id>/offers")
@@ -1363,16 +1328,17 @@ def compras_comparativo_ofertas(rfq_id: str):
     offer_lines = {
         offer.id: {item.id: offer_line_for_item(offer.id, item, rfq_items) for item in rfq_items} for offer in offers
     }
-    award = database.session.execute(
-        database.select(PurchaseQuotationAward)
-        .filter_by(purchase_quotation_id=rfq_id)
-        .order_by(PurchaseQuotationAward.created.desc())
-    ).scalar_one_or_none()
-    award_lines = (
-        database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars().all()
-        if award
-        else []
+    base_rates = _rfq_offer_base_rates(registro, offers, rfq_items, offer_lines)
+    award = (
+        database.session.execute(
+            database.select(PurchaseQuotationAward)
+            .filter_by(purchase_quotation_id=rfq_id)
+            .order_by(PurchaseQuotationAward.created.desc())
+        )
+        .scalars()
+        .first()
     )
+    award_lines = _purchase_award_lines(award, registro)
     titulo = _titulo_comparativo() + " - " + (registro.document_no or rfq_id)
     return render_template(
         "compras/comparativo_ofertas.html",
@@ -1380,14 +1346,63 @@ def compras_comparativo_ofertas(rfq_id: str):
         offers=offers,
         rfq_items=rfq_items,
         offer_lines=offer_lines,
+        base_rates=base_rates,
         sourcing_config=get_purchase_sourcing_config(),
         is_purchase_manager=is_purchase_manager(current_user.id),
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
         award=award,
         award_lines=award_lines,
         negotiation_round=current_negotiation_round(rfq_id),
+        **_purchase_action_permissions(),
         titulo=titulo,
     )
+
+
+def _rfq_offer_base_rates(
+    registro: PurchaseQuotation,
+    offers: list[SupplierQuotation],
+    rfq_items: list[PurchaseQuotationItem],
+    offer_lines: dict[str, dict[str, SupplierQuotationItem | None]],
+) -> dict[str, dict[str, Decimal | None]]:
+    """Calcula la tarifa comparable en moneda base para el comparativo."""
+    base_rates: dict[str, dict[str, Decimal | None]] = {}
+    for offer in offers:
+        base_rates[offer.id] = {}
+        for item in rfq_items:
+            line = offer_lines[offer.id][item.id]
+            if line is None:
+                base_rates[offer.id][item.id] = None
+                continue
+            try:
+                base_rates[offer.id][item.id] = comparison_line_base_rate(
+                    offer, line, registro.company or "", registro.posting_date
+                )
+            except ValueError:
+                base_rates[offer.id][item.id] = line.rate or Decimal("0")
+    return base_rates
+
+
+def _purchase_award_lines(
+    award: PurchaseQuotationAward | None, registro: PurchaseQuotation
+) -> list[tuple[PurchaseQuotationAwardItem, SupplierQuotation | None, str | None]]:
+    """Load awarded lines with supplier names only from this RFQ and company."""
+    if award is None:
+        return []
+
+    statement = (
+        database.select(PurchaseQuotationAwardItem, SupplierQuotation, Party.name)
+        .outerjoin(
+            SupplierQuotation,
+            and_(
+                SupplierQuotation.id == PurchaseQuotationAwardItem.supplier_quotation_id,
+                SupplierQuotation.company == registro.company,
+                SupplierQuotation.purchase_quotation_id == registro.id,
+            ),
+        )
+        .outerjoin(Party, Party.id == SupplierQuotation.supplier_id)
+        .where(PurchaseQuotationAwardItem.award_id == award.id)
+    )
+    return [tuple(row) for row in database.session.execute(statement).all()]
 
 
 @compras.route("/request-for-quotation/<rfq_id>/negotiation-round", methods=["POST"])
@@ -1404,7 +1419,7 @@ def compras_comparativo_abrir_ronda(rfq_id: str):
         open_negotiation_round(rfq_id, current_user.id)
         database.session.commit()
         flash(_("Nueva ronda de negociación abierta."), "success")
-    except PurchaseSourcingError as exc:
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
@@ -1431,7 +1446,7 @@ def compras_comparativo_ofertas_adjudicar(rfq_id: str):
         database.session.commit()
         flash(_("Comparativo confirmado y finalizado correctamente."), "success")
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
-    except PurchaseSourcingError as exc:
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
@@ -1452,7 +1467,7 @@ def compras_comparativo_ofertas_cerrar(rfq_id: str):
         close_purchase_quotation_comparison(registro, current_user.id, reason)
         database.session.commit()
         flash(_("Comparativo cerrado manualmente con justificación."), "success")
-    except PurchaseSourcingError as exc:
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
@@ -1468,13 +1483,17 @@ def compras_comparativo_colocar_ordenes(rfq_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "crear")
-    award = database.session.execute(
-        database.select(PurchaseQuotationAward)
-        .filter_by(purchase_quotation_id=rfq_id)
-        .order_by(PurchaseQuotationAward.created.desc())
-    ).scalar_one_or_none()
+    award = (
+        database.session.execute(
+            database.select(PurchaseQuotationAward)
+            .filter_by(purchase_quotation_id=rfq_id)
+            .order_by(PurchaseQuotationAward.created.desc())
+        )
+        .scalars()
+        .first()
+    )
     if not award or award.status != "finalized":
-        flash_error(PurchaseSourcingError("El comparativo debe estar finalizado antes de colocar las órdenes."))
+        flash_error(PurchaseSourcingError(_("El comparativo debe estar finalizado antes de colocar las órdenes.")))
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
     try:
         orders = _create_purchase_orders_from_award(award)
@@ -1568,6 +1587,7 @@ def compras_factura_compra_nota_debito_lista():
         new_button_label=_("Nueva Nota de Débito"),
         page_caption=_("Listado de notas de débito de compra."),
         new_document_type=PURCHASE_DEBIT_NOTE,
+        document_type=PURCHASE_DEBIT_NOTE,
     )
 
 
@@ -1595,6 +1615,7 @@ def compras_factura_compra_nota_credito_lista():
         new_button_label=_("Nueva Nota de Crédito"),
         page_caption=_("Listado de notas de crédito de compra."),
         new_document_type=PURCHASE_CREDIT_NOTE,
+        document_type=PURCHASE_CREDIT_NOTE,
     )
 
 
@@ -1617,12 +1638,25 @@ def compras_factura_compra_nota_credito_nueva():
 @compras.route("/supplier/list")
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "consultar")
 def compras_proveedor_lista():
     """Listado de proveedores."""
+    from cacao_accounting.party_management import filtrar_parties_por_companias
+
+    authorized = _authorized_companies(("purchases",))
+    requested_company = request.args.get("company")
+    if requested_company:
+        # #1828: mismo contrato que las listas documentales: el parámetro debe
+        # estar autorizado y acota el resultado, en vez de ignorarse.
+        exige_acceso_compania("purchases", requested_company, "consultar")
+        authorized = {requested_company}
     consulta = _paginate_list(
         Party,
         (Party.code, Party.name, Party.comercial_name, Party.tax_id),
-        database.select(Party).filter(Party.is_supplier.is_(True)),
+        filtrar_parties_por_companias(
+            database.select(Party).filter(Party.is_supplier.is_(True)),
+            authorized,
+        ),
         include_status=False,
     )
     titulo = _("Listado de Proveedores") + " - " + APPNAME
@@ -1672,6 +1706,7 @@ def compras_reconciliation_panel():
 @compras.route("/supplier/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "crear")
 def compras_proveedor_nuevo():
     """Formulario para crear un nuevo proveedor."""
     from cacao_accounting.compras.forms import FormularioProveedor
@@ -1679,11 +1714,20 @@ def compras_proveedor_nuevo():
 
     formulario = FormularioProveedor()
     titulo = _("Nuevo Proveedor") + " - " + APPNAME
-    company_choices = obtener_lista_entidades_por_id_razonsocial()
-
-    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
+    allowed_companies = set(companias_autorizadas_por_accion("purchases", "crear"))
+    company_choices = [
+        choice for choice in obtener_lista_entidades_por_id_razonsocial() if str(choice[0]) in allowed_companies
+    ]
+    requested_company = request.values.get("company")
+    if requested_company and requested_company not in allowed_companies:
+        abort(403)
+    selected_company = requested_company or (company_choices[0][0] if company_choices else None)
+    if selected_company is None:
+        abort(403)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="supplier")
     if request.method == "POST":
+        if any(company not in allowed_companies for company in request.form.getlist("company") if company):
+            abort(403)
         return _handle_supplier_create(request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -1692,6 +1736,8 @@ def compras_proveedor_nuevo():
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="crear",
         group_label=party_group_label(request.form.get("party_group_id") or None),
     )
 
@@ -1701,17 +1747,28 @@ def compras_proveedor_nuevo():
 @login_required
 def compras_proveedor(supplier_id):
     """Detalle de proveedor."""
+    from cacao_accounting.party_management import tercero_tiene_vinculo_autorizado
+
     registro = database.session.execute(database.select(Party).filter_by(id=supplier_id, is_supplier=True)).first()
     if not registro:
         abort(404)
+    # #1525: el detalle solo se muestra si el usuario consulta compras en una
+    # de las compañías vinculadas al tercero.
+    authorized_companies = _authorized_companies(("purchases",))
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, authorized_companies):
+        abort(403)
     titulo = registro[0].name + " - " + APPNAME
-    detail = build_party_detail_context(registro[0])
+    detail = build_party_detail_context(registro[0], authorized_companies)
     return render_template(
         "compras/proveedor.html",
         registro=registro[0],
         detail=detail,
-        company_settings_rows=party_company_settings_rows(registro[0].id, None, role="supplier"),
+        company_settings_rows=party_company_settings_rows(
+            registro[0].id, None, role="supplier", authorized_companies=authorized_companies
+        ),
         company_settings_form_action=url_for("compras.compras_proveedor_configuracion_compania", supplier_id=registro[0].id),
+        company_scope_module="purchases",
+        company_scope_action="editar",
         titulo=titulo,
     )
 
@@ -1722,6 +1779,10 @@ def compras_proveedor(supplier_id):
 def compras_proveedor_configuracion_compania(supplier_id: str):
     """Crea o actualiza la configuracion por compania de un proveedor."""
     _party_or_404(supplier_id)
+    # #1280: presentes y omitidas exigen edición por compañía antes de mutar.
+    from cacao_accounting.party_management import exigir_companias_tercero
+
+    exigir_companias_tercero(supplier_id, "purchases", request.form.getlist("company"))
     try:
         upsert_party_company_settings_rows(supplier_id, "supplier", request.form)
         database.session.commit()
@@ -1736,6 +1797,7 @@ def compras_proveedor_configuracion_compania(supplier_id: str):
 @compras.route("/supplier/<supplier_id>/edit", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "editar")
 def compras_proveedor_editar(supplier_id: str):
     """Formulario para editar un proveedor."""
     from cacao_accounting.compras.forms import FormularioProveedor
@@ -1746,12 +1808,24 @@ def compras_proveedor_editar(supplier_id: str):
     ).scalar_one_or_none()
     if not proveedor:
         abort(404)
+    requiere_edicion_tercero(proveedor.id, "purchases")
     formulario = FormularioProveedor(obj=proveedor)
     titulo = _("Editar Proveedor") + " - " + APPNAME
-    company_choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
+    allowed_companies = set(companias_autorizadas_por_accion("purchases", "editar"))
+    company_choices = [
+        choice for choice in obtener_lista_entidades_por_id_razonsocial() if str(choice[0]) in allowed_companies
+    ]
+    requested_company = request.values.get("company")
+    if requested_company and requested_company not in allowed_companies:
+        abort(403)
+    selected_company = requested_company or (company_choices[0][0] if company_choices else None)
+    if selected_company is None:
+        abort(403)
+    company_settings_rows = party_company_settings_rows(
+        proveedor.id, selected_company, role="supplier", authorized_companies=allowed_companies
+    )
     if request.method == "POST":
+        exigir_companias_tercero(proveedor.id, "purchases", request.form.getlist("company"))
         return _handle_supplier_update(proveedor, request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -1762,6 +1836,8 @@ def compras_proveedor_editar(supplier_id: str):
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="editar",
         group_label=party_group_label(proveedor.party_group_id),
     )
 
@@ -1772,6 +1848,9 @@ def compras_proveedor_editar(supplier_id: str):
 def compras_proveedor_contacto_crear(supplier_id: str):
     """Crea un contacto para un proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         create_party_contact(supplier_id, request.form)
         database.session.commit()
@@ -1788,6 +1867,9 @@ def compras_proveedor_contacto_crear(supplier_id: str):
 def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
     """Edita un contacto de proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         update_party_contact(supplier_id, link_id, request.form)
         database.session.commit()
@@ -1804,8 +1886,13 @@ def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
 def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
     """Desactiva un contacto de proveedor."""
     _party_or_404(supplier_id)
-    deactivate_party_contact(supplier_id, link_id)
-    database.session.commit()
+    requiere_edicion_tercero(supplier_id, "purchases")
+    try:
+        deactivate_party_contact(supplier_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Contacto desactivado correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
@@ -1816,6 +1903,9 @@ def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
 def compras_proveedor_direccion_crear(supplier_id: str):
     """Crea una direccion para un proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         create_party_address(supplier_id, request.form)
         database.session.commit()
@@ -1832,6 +1922,9 @@ def compras_proveedor_direccion_crear(supplier_id: str):
 def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
     """Edita una direccion de proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         update_party_address(supplier_id, link_id, request.form)
         database.session.commit()
@@ -1848,8 +1941,13 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
 def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     """Desactiva una direccion de proveedor."""
     _party_or_404(supplier_id)
-    deactivate_party_address(supplier_id, link_id)
-    database.session.commit()
+    requiere_edicion_tercero(supplier_id, "purchases")
+    try:
+        deactivate_party_address(supplier_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
@@ -1869,9 +1967,6 @@ def compras_orden_compra_nuevo():
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -1885,6 +1980,9 @@ def compras_orden_compra_nuevo():
     supplier_quotation_origen = (
         database.session.get(SupplierQuotation, from_supplier_quotation_id) if from_supplier_quotation_id else None
     )
+    for origen in (solicitud_origen, rfq_origen, supplier_quotation_origen):
+        if origen is not None:
+            _require_purchase_document_access(origen, "consultar")
     titulo = _("Nueva Orden de Compra") + " - " + APPNAME
     if request.method == "POST":
         response = _create_purchase_order_from_request(request.form)
@@ -1956,7 +2054,6 @@ def compras_orden_compra_editar(order_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = _purchase_order_selected_company(registro.company)
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
-    formulario.supplier_id.choices = _purchase_order_supplier_choices()
     items_disponibles, uoms_disponibles = _purchase_order_catalogs()
 
     if request.method == "POST":
@@ -2007,6 +2104,7 @@ def _copy_active_document_relations(
         target_item_id = item_ids.get(relation.target_item_id) if relation.target_item_id else None
         if relation.target_item_id and target_item_id is None:
             continue
+        assert_relation_same_party(relation.source_type, relation.source_id, relation.target_type, target_id)
         database.session.add(
             DocumentRelation(
                 source_type=relation.source_type,
@@ -2121,9 +2219,10 @@ def compras_solicitud_cotizacion_nueva():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = _purchase_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
-    formulario.supplier_id.choices = _purchase_quotation_supplier_choices()
     from_request_id = _purchase_quotation_origin_id()
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    if solicitud_origen is not None:
+        _require_purchase_document_access(solicitud_origen, "consultar")
     source_currency = effective_currency(solicitud_origen) if solicitud_origen else None
     items_disponibles, uoms_disponibles = _purchase_quotation_catalogs()
     titulo = _("Nueva Solicitud de Cotización") + " - " + APPNAME
@@ -2194,6 +2293,12 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -2201,9 +2306,6 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -2298,6 +2400,8 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
             purchase_quotation_id=duplicada.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
+            warehouse=item.warehouse,
             qty=item.qty,
             qty_in_base_uom=item.qty_in_base_uom,
             uom=item.uom,
@@ -2400,6 +2504,21 @@ def compras_orden_compra_submit(order_id: str):
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
+    lock_document_flow_document("purchase_order", order_id)
+    source_request_ids = purchase_order_source_request_ids(order_id)
+    for source_request_id in source_request_ids:
+        lock_document_flow_document("purchase_request", source_request_id)
+    registro = database.session.execute(
+        database.select(PurchaseOrder)
+        .where(PurchaseOrder.id == order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    if registro.docstatus != 0:
+        abort(400)
+    if source_request_ids and purchase_order_has_closed_source_request(order_id):
+        flash(_("No se puede aprobar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     try:
         items = (
             database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id))
@@ -2410,6 +2529,7 @@ def compras_orden_compra_submit(order_id: str):
             item_obj = database.session.execute(database.select(Item).filter_by(code=item.item_code)).scalar_one_or_none()
             if not item_obj or not item_obj.is_active or not item_obj.is_purchase_item:
                 raise ValueError(_("El item %(item)s no está habilitado para compra.") % {"item": item.item_code})
+        _validated_purchase_supplier(registro.supplier_id, registro.company)
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         check_budget_control(
             company=registro.company,
@@ -2447,6 +2567,21 @@ def compras_orden_compra_cancel(order_id: str):
     exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    lock_document_flow_document("purchase_order", order_id)
+    source_request_ids = purchase_order_source_request_ids(order_id)
+    for source_request_id in source_request_ids:
+        lock_document_flow_document("purchase_request", source_request_id)
+    registro = database.session.execute(
+        database.select(PurchaseOrder)
+        .where(PurchaseOrder.id == order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    if registro.docstatus != 1:
+        abort(400)
+    if source_request_ids and purchase_order_has_closed_source_request(order_id):
+        flash(_("No se puede cancelar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     if has_active_source_relations("purchase_order", order_id):
         flash(_("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
@@ -2485,6 +2620,65 @@ def _receipt_available_source_types(is_return: bool) -> list[dict[str, str]]:
     if is_return:
         return [{"value": "purchase_receipt", "label": _("Recepción original")}]
     return [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}]
+
+
+def _receipt_return_line_source(receipt: PurchaseReceipt, item: PurchaseReceiptItem) -> dict[str, str]:
+    """Rebuild the validated source-line metadata omitted from return relations."""
+    if not receipt.reversal_of:
+        return {}
+    source = database.session.get(PurchaseReceipt, receipt.reversal_of)
+    if not source or source.docstatus != 1 or source.is_return or source.company != receipt.company:
+        return {}
+    source_items = (
+        database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(
+                purchase_receipt_id=source.id,
+                item_code=item.item_code,
+                is_superseded=False,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    matching_items = [line for line in source_items if line.rate == item.rate]
+    source_item = (matching_items or source_items or [None])[0]
+    if source_item is None:
+        return {}
+    return {
+        "source_type": "purchase_receipt",
+        "source_id": source.id,
+        "source_item_id": source_item.id,
+    }
+
+
+def _receipt_edit_line_source(receipt: PurchaseReceipt, item: PurchaseReceiptItem) -> dict[str, str]:
+    """Return source metadata for an editable receipt line."""
+    if receipt.is_return:
+        return _receipt_return_line_source(receipt, item)
+    return get_target_line_source("purchase_receipt", item.id)
+
+
+def _receipt_edit_initial_line(
+    item: PurchaseReceiptItem,
+    source: dict[str, str],
+    hide_source_prices: bool,
+) -> dict[str, str]:
+    """Build an edit line while omitting confidential source amounts when needed."""
+    line = {
+        "receipt_item_id": item.id,
+        "item_code": item.item_code,
+        "item_name": item.item_name,
+        "qty": str(item.qty),
+        "uom": item.uom or "",
+        "warehouse": item.warehouse or "",
+        "batch_id": item.batch_id or "",
+        "serial_no": item.serial_no or "",
+        **source,
+    }
+    if not hide_source_prices:
+        line["rate"] = str(item.rate or 0)
+        line["amount"] = str(item.amount or 0)
+    return line
 
 
 def _receipt_catalogs(
@@ -2534,6 +2728,8 @@ def _receipt_transaction_config(
     company_id: str | None,
     is_return: bool,
     from_order_id: str | None,
+    show_pricing: bool,
+    hide_pricing_for_source_types: list[str],
     items: list[dict[str, object]],
     uoms: list[dict[str, str]],
     bodegas: list[dict[str, str]],
@@ -2553,10 +2749,36 @@ def _receipt_transaction_config(
         "items": items,
         "uoms": uoms,
         "warehouses": bodegas,
+        "showPricing": show_pricing,
+        "showPricingForManual": True,
+        "hidePricingForSourceTypes": hide_pricing_for_source_types,
+        "sourcePricingFromApi": True,
         "initialSourceType": initial_source_type,
         "availableSourceTypes": _receipt_available_source_types(is_return),
         "initialHeader": initial_header,
     }
+
+
+def _resolve_receipt_origins(
+    from_order_id: str | None,
+    from_receipt_id: str | None,
+) -> tuple[PurchaseOrder | None, PurchaseReceipt | None, str | None]:
+    """Carga y valida las fuentes de una recepción o devolución."""
+    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
+    recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
+    for origen in (orden_origen, recepcion_origen):
+        if origen is not None:
+            _require_purchase_document_access(origen, "consultar")
+
+    if from_order_id and from_receipt_id:
+        if orden_origen is None or recepcion_origen is None:
+            abort(404)
+        if recepcion_origen.purchase_order_id != orden_origen.id:
+            abort(400, description=_("La recepción de origen no pertenece a la orden indicada."))
+        # La devolución usa una sola fuente: la recepción original. La orden
+        # solo se valida como vínculo, no para precargar líneas (#2148).
+        from_order_id = None
+    return orden_origen, recepcion_origen, from_order_id
 
 
 @compras.route("/purchase-receipt/new", methods=["GET", "POST"])
@@ -2573,14 +2795,13 @@ def compras_recepcion_nuevo():
 
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
-    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
-    recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
+    orden_origen, recepcion_origen, from_order_id = _resolve_receipt_origins(from_order_id, from_receipt_id)
 
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
+    if selected_company:
+        exige_acceso_compania("inventory", selected_company, "crear")
+    can_view_purchase_prices = _can_view_purchase_prices(selected_company)
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles, uoms_disponibles, bodegas_disponibles = _receipt_catalogs(selected_company)
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
     titulo = (_("Nueva Devolución de Recepción") if is_return else _("Nueva Recepción de Compra")) + " - " + APPNAME
@@ -2594,6 +2815,8 @@ def compras_recepcion_nuevo():
         company_id=company_id,
         is_return=is_return,
         from_order_id=from_order_id,
+        show_pricing=(not from_order_id and not is_return) or can_view_purchase_prices,
+        hide_pricing_for_source_types=[] if can_view_purchase_prices else ["purchase_order", "purchase_receipt"],
         items=items_disponibles,
         uoms=uoms_disponibles,
         bodegas=bodegas_disponibles,
@@ -2625,16 +2848,22 @@ def compras_recepcion(receipt_id):
     """Detalle de recepción de compra."""
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
-        registro = database.session.execute(
-            database.select(PurchaseReceipt).filter_by(document_no=receipt_id)
-        ).scalar_one_or_none()
+        # El número documental no es único entre compañías; resolver dentro
+        # del alcance autorizado evita 500 y fugas entre compañías.
+        authorized = _authorized_companies(("purchases", "inventory"))
+        query = database.select(PurchaseReceipt).filter_by(document_no=receipt_id)
+        query = query.where(PurchaseReceipt.company.in_(authorized)) if authorized else query.where(database.false())
+        candidatos = database.session.execute(query).scalars().all()
+        if len(candidatos) > 1:
+            abort(409)
+        registro = candidatos[0] if candidatos else None
     if not registro:
         abort(404)
     _require_purchase_document_access(registro)
     items = database.session.execute(
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
     ).all()
-    create_actions = get_create_actions("purchase_receipt", receipt_id)
+    create_actions = get_create_actions("purchase_receipt", registro.id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or registro.id) + " - " + APPNAME
     return render_template(
@@ -2673,9 +2902,6 @@ def compras_recepcion_editar(receipt_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {
             "code": item.code,
@@ -2698,9 +2924,18 @@ def compras_recepcion_editar(receipt_id: str):
         _require_requested_purchase_company_access(registro)
         return _handle_purchase_receipt_edit_post(registro)
 
-    lineas = database.session.execute(
-        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
-    ).scalars()
+    lineas = list(
+        database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
+        ).scalars()
+    )
+    can_view_purchase_prices = _can_view_purchase_prices(registro.company)
+    line_sources = {item.id: _receipt_edit_line_source(registro, item) for item in lineas}
+    has_purchase_order_source = bool(registro.purchase_order_id) or any(
+        source.get("source_type") == "purchase_order" for source in line_sources.values()
+    )
+    hide_source_prices = not can_view_purchase_prices and bool(registro.is_return or has_purchase_order_source)
+    is_return = bool(registro.is_return)
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
@@ -2708,29 +2943,21 @@ def compras_recepcion_editar(receipt_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
+        "showPricing": not hide_source_prices,
+        "showPricingForManual": not hide_source_prices,
+        "hidePricingForSourceTypes": [] if can_view_purchase_prices else ["purchase_order", "purchase_receipt"],
+        "sourcePricingFromApi": True,
+        "initialSourceType": "purchase_receipt" if is_return else "purchase_order" if registro.purchase_order_id else "",
+        "availableSourceTypes": _receipt_available_source_types(is_return),
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
+            "currency": registro.transaction_currency or "",
             "remarks": registro.remarks or "",
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
         },
-        "initialLines": [
-            {
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "qty": str(item.qty),
-                "uom": item.uom or "",
-                "rate": str(item.rate or 0),
-                "amount": str(item.amount or 0),
-                "warehouse": item.warehouse or "",
-                "batch_id": item.batch_id or "",
-                "serial_no": item.serial_no or "",
-                **get_target_line_source("purchase_receipt", item.id),
-            }
-            for item in lineas
-        ],
+        "initialLines": [_receipt_edit_initial_line(item, line_sources[item.id], hide_source_prices) for item in lineas],
     }
     return render_template(
         "compras/recepcion_nuevo.html",
@@ -2791,6 +3018,7 @@ def compras_recepcion_duplicar(receipt_id: str):
             purchase_receipt_id=duplicada.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
             qty=item.qty,
             uom=item.uom,
             qty_in_base_uom=item.qty_in_base_uom,
@@ -2834,6 +3062,7 @@ def compras_recepcion_submit(receipt_id: str):
             .scalars()
             .all()
         )
+        _lock_receipt_purchase_orders(receipt_id, registro.purchase_order_id, registro.is_return)
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         from cacao_accounting.inventario.service import validate_batch_serial_draft
 
@@ -2915,6 +3144,55 @@ def compras_recepcion_cancel(receipt_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
 
+def _note_source_invoices(company: str | None, companies: list[str] | None = None) -> list[dict[str, str]]:
+    """Facturas aprobadas que pueden originar una nota de crédito o débito (#1795)."""
+    consulta = database.select(PurchaseInvoice).where(
+        PurchaseInvoice.docstatus == 1,
+        PurchaseInvoice.document_type == PURCHASE_INVOICE,
+        PurchaseInvoice.is_return.is_(False),
+    )
+    if company:
+        consulta = consulta.where(PurchaseInvoice.company == company)
+    elif companies:
+        consulta = consulta.where(PurchaseInvoice.company.in_(companies))
+    else:
+        return []
+    facturas = (
+        database.session.execute(consulta.order_by(PurchaseInvoice.posting_date.desc(), PurchaseInvoice.document_no).limit(50))
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": factura.id,
+            "label": " — ".join(
+                filter(
+                    None,
+                    [
+                        factura.document_no or factura.id,
+                        factura.supplier_name or "",
+                        str(factura.posting_date or ""),
+                    ],
+                )
+            ),
+        }
+        for factura in facturas
+    ]
+
+
+def _note_source_invoices_for_form(
+    document_type: str,
+    from_invoice_id: str | None,
+    company_id: str | None,
+    company_choices: list[tuple[str, str]],
+) -> list[dict[str, str]]:
+    """Candidatas para el selector de factura origen de una nota (#1795)."""
+    if document_type not in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE} or from_invoice_id:
+        return []
+    authorized_companies = [code for code, _label in company_choices if code]
+    return _note_source_invoices(company_id or None, authorized_companies)
+
+
 @compras.route("/purchase-invoice/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2929,7 +3207,6 @@ def compras_factura_compra_nuevo():
 
     selected_company = _purchase_invoice_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
-    formulario.supplier_id.choices = _purchase_invoice_supplier_choices()
     source_ids = _purchase_invoice_source_ids()
     from_order_id = source_ids["from_order_id"]
     from_receipt_id = source_ids["from_receipt_id"]
@@ -2953,6 +3230,9 @@ def compras_factura_compra_nuevo():
         items=items_disponibles,
         uoms=uoms_disponibles,
         company_id=company_id,
+    )
+    note_source_invoices = _note_source_invoices_for_form(
+        document_type, from_invoice_id, company_id, formulario.company.choices
     )
     if from_order_id or from_receipt_id or from_invoice_id:
         initial_source_type = "purchase_invoice"
@@ -2989,6 +3269,7 @@ def compras_factura_compra_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        note_source_invoices=note_source_invoices,
     )
 
 
@@ -3017,6 +3298,59 @@ def compras_factura_compra(invoice_id):
     )
 
 
+def _purchase_invoice_edit_sources(registro: PurchaseInvoice) -> dict[str, Any]:
+    """Resuelve la factura y los enlaces inmutables de una nota en edición."""
+    document_type = registro.document_type or PURCHASE_INVOICE
+    sources = {
+        "document_type": document_type,
+        "factura_origen": None,
+        "orden_origen": None,
+        "recepcion_origen": None,
+        "from_order_id": None,
+        "from_receipt_id": None,
+        "from_invoice_id": None,
+    }
+    if document_type not in ("purchase_credit_note", "purchase_debit_note") or not registro.reversal_of:
+        return sources
+    factura_origen = database.session.get(PurchaseInvoice, registro.reversal_of)
+    if factura_origen is None:
+        return sources
+    _require_purchase_document_access(factura_origen, "consultar")
+    from_order_id = registro.purchase_order_id or factura_origen.purchase_order_id
+    from_receipt_id = registro.purchase_receipt_id or factura_origen.purchase_receipt_id
+    sources.update(
+        factura_origen=factura_origen,
+        orden_origen=database.session.get(PurchaseOrder, from_order_id) if from_order_id else None,
+        recepcion_origen=database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None,
+        from_order_id=from_order_id,
+        from_receipt_id=from_receipt_id,
+        from_invoice_id=factura_origen.id,
+    )
+    return sources
+
+
+def _configure_purchase_note_edit_header(
+    transaction_config: dict[str, Any],
+    registro: PurchaseInvoice,
+    factura_origen: PurchaseInvoice | None,
+) -> None:
+    """Fija compañía y moneda de la nota según su factura origen."""
+    if factura_origen is None:
+        return
+    source_currency = effective_currency(factura_origen) or registro.transaction_currency or ""
+    transaction_config["initialSourceType"] = "purchase_invoice"
+    transaction_config["flowLockedFields"] = ["company", "currency"]
+    transaction_config["initialHeader"] = {
+        "company": factura_origen.company or "",
+        "posting_date": str(registro.posting_date or ""),
+        "currency": source_currency,
+        "transaction_currency": source_currency,
+        "remarks": registro.remarks or "",
+        "party": factura_origen.supplier_id or "",
+        "party_label": factura_origen.supplier_name or "",
+    }
+
+
 @compras.route("/purchase-invoice/<invoice_id>/edit", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -3042,9 +3376,6 @@ def compras_factura_compra_editar(invoice_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {
             "code": item.code,
@@ -3065,6 +3396,14 @@ def compras_factura_compra_editar(invoice_id: str):
     lineas = database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id, is_superseded=False)
     ).scalars()
+    edit_sources = _purchase_invoice_edit_sources(registro)
+    document_type = edit_sources["document_type"]
+    factura_origen = edit_sources["factura_origen"]
+    orden_origen = edit_sources["orden_origen"]
+    recepcion_origen = edit_sources["recepcion_origen"]
+    from_order_id = edit_sources["from_order_id"]
+    from_receipt_id = edit_sources["from_receipt_id"]
+    from_invoice_id = edit_sources["from_invoice_id"]
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_INVOICE,
         "viewKey": "draft",
@@ -3079,6 +3418,7 @@ def compras_factura_compra_editar(invoice_id: str):
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
+            "currency": registro.transaction_currency or "",
             "remarks": registro.remarks or "",
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
@@ -3098,7 +3438,7 @@ def compras_factura_compra_editar(invoice_id: str):
             for item in lineas
         ],
     }
-    document_type = registro.document_type or PURCHASE_INVOICE
+    _configure_purchase_note_edit_header(transaction_config, registro, factura_origen)
     formulario.is_return.data = False
     return render_template(
         "compras/factura_compra_nuevo.html",
@@ -3106,12 +3446,12 @@ def compras_factura_compra_editar(invoice_id: str):
         titulo=_("Editar Factura de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
-        orden_origen=None,
-        recepcion_origen=None,
-        factura_origen=None,
-        from_order_id=None,
-        from_receipt_id=None,
-        from_invoice_id=None,
+        orden_origen=orden_origen,
+        recepcion_origen=recepcion_origen,
+        factura_origen=factura_origen,
+        from_order_id=from_order_id,
+        from_receipt_id=from_receipt_id,
+        from_invoice_id=from_invoice_id,
         document_type=document_type,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
@@ -3161,6 +3501,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     )
     total = Decimal("0")
     item_ids: dict[str, str] = {}
+    items_duplicados: list[PurchaseInvoiceItem] = []
     for item in database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=origen.id, is_superseded=False)
     ).scalars():
@@ -3168,6 +3509,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
             purchase_invoice_id=duplicada.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
             qty=item.qty,
             qty_in_base_uom=item.qty_in_base_uom,
             uom=item.uom,
@@ -3183,15 +3525,18 @@ def compras_factura_compra_duplicar(invoice_id: str):
         database.session.add(linea)
         database.session.flush()
         item_ids[item.id] = linea.id
+        items_duplicados.append(linea)
         total += item.amount or Decimal("0")
     duplicada.total = total
     exchange_rate = Decimal(str(duplicada.exchange_rate or 1))
     base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
     duplicada.base_total = base_total
-    duplicada.grand_total = total
-    duplicada.base_grand_total = base_total
-    duplicada.outstanding_amount = total
-    duplicada.base_outstanding_amount = base_total
+    grand_total = calculate_document_total_with_taxes(duplicada, total, items_duplicados)
+    base_grand_total = (grand_total * exchange_rate).quantize(Decimal("0.0001"))
+    duplicada.grand_total = grand_total
+    duplicada.base_grand_total = base_grand_total
+    duplicada.outstanding_amount = grand_total
+    duplicada.base_outstanding_amount = base_grand_total
     relation_target_type = (
         duplicada.document_type if duplicada.document_type in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE} else PURCHASE_INVOICE
     )
@@ -3252,6 +3597,9 @@ def compras_factura_compra_submit(invoice_id: str):
                 document_type=registro.document_type,
                 posting_date=registro.posting_date,
                 lock_source=True,
+                transaction_currency=registro.transaction_currency,
+                order_id=registro.purchase_order_id,
+                receipt_id=registro.purchase_receipt_id,
             )
         from cacao_accounting.approval_engine import ApprovalEngine
 
@@ -3372,7 +3720,8 @@ def compras_import_landed_cost_nuevo():
     formulario = FormularioImportLandedCost()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
 
-    selected_company = request.values.get("company") or (
+    submitted_values = request.form if request.method == "POST" else request.args
+    selected_company = submitted_values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
     formulario.naming_series.choices = _series_choices("import_landed_cost", selected_company)
@@ -3381,11 +3730,17 @@ def compras_import_landed_cost_nuevo():
     invoice_origen = None
     if from_invoice_id:
         invoice_origen = database.session.get(PurchaseInvoice, from_invoice_id)
+        if invoice_origen is not None:
+            _require_purchase_document_access(invoice_origen, "consultar")
 
     titulo = _("Nuevo Costo de Importacion") + " - " + APPNAME
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
 
     transaction_config = {
+        "initialHeader": {
+            "company": submitted_values.get("company", selected_company) or "",
+            "posting_date": submitted_values.get("posting_date", str(date.today())) or "",
+        },
         "columns": [
             {"key": "item_code", "label": "Articulo", "type": "select", "required": True},
             {"key": "item_name", "label": "Nombre", "type": "text", "readonly": True},
@@ -3399,10 +3754,16 @@ def compras_import_landed_cost_nuevo():
             "?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" + (from_invoice_id or "")
         ),
         "source_label": str(FACTURA_COMPRA_LABEL),
+        "enableDimensions": True,
     }
 
     if request.method == "POST":
-        response = _create_import_landed_cost_from_request()
+        try:
+            response = _create_import_landed_cost_from_request()
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_("No se pudo crear el costo de importación: %(error)s") % {"error": exc}, "danger")
+            response = None
         if response is not None:
             return response
 
@@ -3415,6 +3776,84 @@ def compras_import_landed_cost_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+    )
+
+
+@compras.route("/import-landed-cost/<landed_cost_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost_editar(landed_cost_id: str):
+    """Edita un costo de importación en borrador (#1752)."""
+    from cacao_accounting.compras.forms import FormularioImportLandedCost
+
+    registro = database.session.get(ImportLandedCost, landed_cost_id)
+    if not registro:
+        abort(404)
+    _require_purchase_document_access(registro, "editar")
+    exige_acceso_compania("purchases", registro.company, "editar")
+    if registro.docstatus != 0:
+        flash(_("Solo se puede editar un costo de importación en borrador."), "danger")
+        return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
+
+    formulario = FormularioImportLandedCost(obj=registro)
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.naming_series.choices = _series_choices("import_landed_cost", registro.company)
+    titulo = _("Editar Costo de Importación") + " - " + APPNAME
+    items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
+
+    if request.method == "POST":
+        response = _update_import_landed_cost_from_request(registro)
+        if response is not None:
+            return response
+
+    items = _get_import_landed_cost_items(landed_cost_id)
+    cargos = _get_import_landed_cost_charges(landed_cost_id)
+    transaction_config = {
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty or ""),
+                "uom": item.uom or "",
+                "rate": str(item.rate or ""),
+                "amount": str(item.amount or ""),
+            }
+            for item in items
+        ],
+        "columns": [
+            {"key": "item_code", "label": "Articulo", "type": "select", "required": True},
+            {"key": "item_name", "label": "Nombre", "type": "text", "readonly": True},
+            {"key": "qty", "label": "Cantidad", "type": "number", "required": True},
+            {"key": "uom", "label": "UOM", "type": "select"},
+            {"key": "rate", "label": "Tasa", "type": "number"},
+            {"key": "amount", "label": "Monto", "type": "number"},
+        ],
+        "enableDimensions": True,
+    }
+    cargos_payload = [
+        {
+            "concept": charge.concept,
+            "amount": str(charge.amount or ""),
+            "charge_type": charge.charge_type or "",
+            "account_id": charge.account_id or "",
+        }
+        for charge in cargos
+    ]
+    return render_template(
+        "compras/import_landed_cost_editar.html",
+        form=formulario,
+        titulo=titulo,
+        registro=registro,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+        charges=cargos_payload,
     )
 
 
@@ -3525,6 +3964,11 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
 @login_required
 def compras_proveedor_habilitar_cliente(supplier_id: str):
     """Habilita un proveedor como cliente."""
+    # #1282: el rol concedido pertenece a Ventas; la transición exige
+    # edición del módulo destino, no solo del módulo de origen.
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "sales")
     try:
         toggle_party_customer_role(supplier_id, enable=True, user_id=current_user.id)
         database.session.commit()
@@ -3541,6 +3985,11 @@ def compras_proveedor_habilitar_cliente(supplier_id: str):
 @login_required
 def compras_proveedor_deshabilitar_cliente(supplier_id: str):
     """Deshabilita el rol de cliente de un proveedor."""
+    # #1282: el rol concedido pertenece a Ventas; la transición exige
+    # edición del módulo destino, no solo del módulo de origen.
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "sales")
     try:
         toggle_party_customer_role(supplier_id, enable=False, user_id=current_user.id)
         database.session.commit()

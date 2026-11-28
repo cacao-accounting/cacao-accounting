@@ -47,8 +47,44 @@ from cacao_accounting.i18n import LazyText, _, _l
 if TYPE_CHECKING:
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
 
+
 _MSG_MONTO_MAYOR_CERO = _l("El monto aplicado debe ser mayor que cero.")
 _MSG_TASA_PAGO_POSITIVA = _l("Se requiere una tasa positiva entre la moneda del documento y la del pago.")
+_MSG_TASA_PAGO_NO_DISPONIBLE = _l(
+    "No existe una tasa registrada para la moneda del documento y la del pago en la fecha de conciliación."
+)
+
+
+def _require_available_reconciliation_rate(
+    document_currency: str,
+    payment_currency: str,
+    declared_rate: Decimal,
+    allocation_date: date,
+) -> Decimal:
+    """Resuelve la tasa vigente y bloquea la conciliación si no existe.
+
+    AGENTS.md exige multimoneda real contra la moneda del libro y bloquear el
+    registro cuando falta la tasa. Por eso la tasa efectiva es la **resuelta**
+    para el par y la fecha (directa o inversa), no una tasa arbitraria
+    declarada por el cliente: una tasa declarada distinta no debe determinar el
+    importe AR/AP. Se exige una tasa declarada positiva para dejar explícita la
+    intención de conversión, pero el valor aplicado sale del catálogo histórico.
+    """
+    if not document_currency or not payment_currency or document_currency == payment_currency:
+        return Decimal("1")
+    if declared_rate <= 0:
+        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
+    from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+
+    try:
+        resolved_rate = _lookup_exchange_rate(document_currency, payment_currency, allocation_date)
+    except Exception as exc:
+        raise _document_flow_error(_MSG_TASA_PAGO_NO_DISPONIBLE, 409) from exc
+    if resolved_rate <= 0:
+        raise _document_flow_error(_MSG_TASA_PAGO_NO_DISPONIBLE, 409)
+    return resolved_rate
+
+
 _MSG_PAGO_EXCEDE_SALDO = _l("El monto aplicado excede el saldo disponible del pago.")
 
 MAX_RECONCILIATION_LINES = 100
@@ -296,7 +332,7 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
         select(PaymentReference)
         .join(
             DocumentRelation,
-            DocumentRelation.target_item_id == PaymentReference.id,
+            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_id == PaymentEntry.id),
         )
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
@@ -318,34 +354,10 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             PaymentEntry.posting_date <= as_of_date,
         )
     references = list(database.session.execute(relation_query).scalars().all())
-
-    physical_reference_type = "purchase_invoice" if document_type.startswith("purchase_") else "sales_invoice"
-    fallback_query = (
-        select(PaymentReference)
-        .outerjoin(
-            DocumentRelation,
-            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
-        )
-        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
-        .where(
-            PaymentReference.reference_type == physical_reference_type,
-            PaymentReference.reference_id == document_id,
-            _document_active_at_cutoff(PaymentEntry, as_of_date),
-            PaymentEntry.company == document.company,
-            or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
-            DocumentRelation.id.is_(None),
-        )
-    )
-    if as_of_date is not None:
-        fallback_query = fallback_query.where(
-            or_(
-                PaymentReference.allocation_date.is_(None),
-                PaymentReference.allocation_date <= as_of_date,
-            ),
-            PaymentEntry.posting_date <= as_of_date,
-        )
-    legacy_references = list(database.session.execute(fallback_query).scalars().all())
-    return references + legacy_references
+    # #1304: DocumentRelation es el vínculo canónico. Una referencia huérfana
+    # (sin relación activa) no representa una aplicación del subledger y no
+    # debe alterar el saldo financiero.
+    return references
 
 
 def compute_outstanding_amount(
@@ -362,6 +374,9 @@ def compute_outstanding_amount(
     """
     if as_of_date is None:
         as_of_date = date.today()
+    posting_date = getattr(document, "posting_date", None)
+    if posting_date is not None and posting_date > as_of_date:
+        return Decimal("0")
     from cacao_accounting.database import ARAPLedgerEntry
 
     document_type = normalize_doctype(str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "")))
@@ -506,6 +521,45 @@ def _compute_cash_consumed_from_reference(
     return cash_consumed, str(relation_status) if relation_status else None
 
 
+def _payment_allocation_sign(payment: PaymentEntry) -> Decimal:
+    """Signo del saldo documental de un pago según su dirección (#1143).
+
+    Debe coincidir con ``arap_ledger_service._payment_party_sign``: un pago a
+    proveedor o cobro de cliente abre en negativo (liquida), mientras un
+    reembolso de proveedor o pago a cliente abre en positivo.
+    """
+    receive = str(getattr(payment, "payment_type", "") or "").lower() == "receive"
+    if str(getattr(payment, "party_type", "") or "").lower() == "customer":
+        return Decimal("-1") if receive else Decimal("1")
+    return Decimal("1") if receive else Decimal("-1")
+
+
+def list_active_payment_references(payment: PaymentEntry) -> list[PaymentReference]:
+    """Devuelve referencias con relación canónica activa y ambos endpoints válidos."""
+    query = (
+        select(PaymentReference)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == PaymentEntry.id)
+            & (
+                DocumentRelation.source_type
+                == func.coalesce(func.nullif(PaymentReference.flow_source_type, ""), PaymentReference.reference_type)
+            )
+            & (DocumentRelation.source_id == PaymentReference.reference_id),
+        )
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
+            PaymentReference.payment_id == payment.id,
+            PaymentEntry.company == payment.company,
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == payment.company),
+        )
+    )
+    return list(database.session.execute(query).scalars().all())
+
+
 def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     """Calcula el saldo no aplicado (abierto) de un pago."""
     if getattr(payment, "docstatus", 0) == 2:
@@ -522,7 +576,9 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
         )
     ).scalar_one_or_none()
     if ledger_balance is not None:
-        remaining = -decimal_or_zero(ledger_balance)
+        # #1143: la apertura normal abre en negativo y el reembolso en positivo;
+        # el remanente se orienta con el signo de la dirección del pago.
+        remaining = _payment_allocation_sign(payment) * decimal_or_zero(ledger_balance)
         represented_reference_ids = set(
             database.session.execute(
                 select(ARAPLedgerEntry.reference_id).where(
@@ -546,11 +602,17 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
             PaymentReference.payment_amount,
             DocumentRelation.status,
         )
-        .outerjoin(
+        .join(
             DocumentRelation,
-            (DocumentRelation.target_item_id == PaymentReference.id) & (DocumentRelation.target_type == "payment_entry"),
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == payment.id),
         )
-        .where(PaymentReference.payment_id == payment.id)
+        .where(
+            PaymentReference.payment_id == payment.id,
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == payment.company),
+        )
     ).all()
     if not reference_rows:
         return payment_total
@@ -576,16 +638,30 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
 
 
 def _pending_payment_reference_amount(payment: PaymentEntry, represented_reference_ids: set[Any]) -> Decimal:
-    """Suma referencias AR/AP pendientes sin contar referencias a órdenes."""
+    """Suma referencias AR/AP pendientes con relación canónica activa.
+
+    Una referencia revertida, cancelada o huérfana no consume efectivo del pago
+    aunque todavía no tenga un evento ``allocation`` en AR/AP (#1304, #1404).
+    """
     pending_reference_rows = database.session.execute(
         select(
+            PaymentReference.id,
             PaymentReference.flow_source_type,
             PaymentReference.reference_type,
             PaymentReference.payment_amount,
             PaymentReference.allocated_amount,
-        ).where(
+        )
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == payment.id),
+        )
+        .where(
             PaymentReference.payment_id == payment.id,
             ~PaymentReference.reference_id.in_(represented_reference_ids or {"__none__"}),
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == payment.company),
         )
     ).all()
     return sum(
@@ -988,6 +1064,7 @@ def _discount_allocation_line(
     document: Any,
     values: _ReconciliationLineValues,
     available: Decimal,
+    allocation_date: date,
 ) -> Any:
     """Build a payment allocation line for discounts or exchange differences."""
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
@@ -995,12 +1072,12 @@ def _discount_allocation_line(
     payment_currency = str(getattr(payment, "currency", None) or "")
     document_currency = _document_transaction_currency(document) or payment_currency
     requested_rate = raw_line.get("payment_exchange_rate") or raw_line.get("exchange_rate")
-    if payment_currency == document_currency:
+    if document_currency == payment_currency:
         effective_rate = Decimal("1")
     else:
-        effective_rate = decimal_or_zero(requested_rate)
-        if effective_rate <= 0:
-            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
+        effective_rate = _require_available_reconciliation_rate(
+            document_currency, payment_currency, decimal_or_zero(requested_rate), allocation_date
+        )
     consumed = _cash_consumed(values.allocated, values.discount, values.gain_loss) * effective_rate
     if consumed > available + Decimal("0.01"):
         raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
@@ -1029,17 +1106,18 @@ def _apply_standard_reconciliation_allocation(
     available: Decimal,
     outstanding: Decimal,
     reconciliation_id: str,
-) -> Any:
+) -> tuple[AllocationLine, bool]:
     """Plan and persist a standard AR/AP allocation through the allocation engine."""
     from cacao_accounting.contabilidad.arap_allocation import (
         ARAPOpenItem,
         AllocationRequest,
         OpenItemResolver,
         apply_allocation,
+        load_existing_allocation_fingerprints,
         plan_allocation,
     )
 
-    allocation_line = _plan_reconciliation_allocation(
+    allocation_line, replayed = _plan_reconciliation_allocation(
         raw_line=raw_line,
         payment=payment,
         document=document,
@@ -1048,6 +1126,7 @@ def _apply_standard_reconciliation_allocation(
         outstanding=outstanding,
         allocated=values.allocated,
         available=available,
+        allocation_date=allocation_ctx.allocation_date,
     )
     resolver = OpenItemResolver(
         [
@@ -1074,6 +1153,7 @@ def _apply_standard_reconciliation_allocation(
             )
         ],
         resolver=resolver,
+        existing_keys=load_existing_allocation_fingerprints(payment.id),
     )
     apply_allocation(
         plan,
@@ -1090,7 +1170,7 @@ def _apply_standard_reconciliation_allocation(
             reconciliation_id=reconciliation_id,
         ),
     )
-    return allocation_line
+    return allocation_line, replayed
 
 
 def _process_reconciliation_line(
@@ -1123,7 +1203,9 @@ def _process_reconciliation_line(
         outstanding=outstanding,
     )
     if values.discount or values.gain_loss:
-        allocation_line = _discount_allocation_line(raw_line, payment, document, values, payment_remaining[values.payment_id])
+        allocation_line = _discount_allocation_line(
+            raw_line, payment, document, values, payment_remaining[values.payment_id], allocation_date
+        )
         _persist_reconciliation_allocation(
             raw_line=raw_line,
             payment=payment,
@@ -1136,7 +1218,7 @@ def _process_reconciliation_line(
             reconciliation_id=reconciliation_id,
         )
     else:
-        allocation_line = _apply_standard_reconciliation_allocation(
+        allocation_line, replayed = _apply_standard_reconciliation_allocation(
             raw_line=raw_line,
             payment=payment,
             document=document,
@@ -1149,6 +1231,8 @@ def _process_reconciliation_line(
             outstanding=outstanding,
             reconciliation_id=reconciliation_id,
         )
+        if replayed:
+            return
     payment_remaining[values.payment_id] -= allocation_line.source_amount
 
 
@@ -1162,7 +1246,8 @@ def _plan_reconciliation_allocation(
     outstanding: Decimal,
     allocated: Decimal,
     available: Decimal,
-) -> AllocationLine:
+    allocation_date: date,
+) -> tuple[AllocationLine, bool]:
     """Valida una línea con el motor AR/AP y devuelve importes en ambas monedas."""
     from cacao_accounting.contabilidad.arap_allocation import (
         ARAPOpenItem,
@@ -1170,6 +1255,7 @@ def _plan_reconciliation_allocation(
         AllocationOverpaymentError,
         AllocationRequest,
         OpenItemResolver,
+        load_existing_allocation_fingerprints,
         plan_allocation,
     )
 
@@ -1186,9 +1272,9 @@ def _plan_reconciliation_allocation(
     if document_currency == payment_currency:
         effective_rate = Decimal("1")
     else:
-        if requested_rate is None:
-            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
-        effective_rate = decimal_or_zero(requested_rate)
+        effective_rate = _require_available_reconciliation_rate(
+            document_currency, payment_currency, decimal_or_zero(requested_rate), allocation_date
+        )
     resolver = OpenItemResolver(
         [
             ARAPOpenItem(
@@ -1212,16 +1298,24 @@ def _plan_reconciliation_allocation(
                 )
             ],
             resolver=resolver,
+            existing_keys=load_existing_allocation_fingerprints(payment.id),
         )
     except AllocationError as exc:
         message = str(exc)
         if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
             message = str(_MSG_PAGO_EXCEDE_SALDO)
         raise _document_flow_error(message, 409) from exc
-    line = plan.lines[0]
+    if plan.lines:
+        line = plan.lines[0]
+        replayed = False
+    elif plan.replayed_lines:
+        line = plan.replayed_lines[0]
+        replayed = True
+    else:  # pragma: no cover - el planner solo omite líneas en un replay validado
+        raise _document_flow_error(_("La asignación del pago no produjo una línea."), 409)
     if line.source_amount > available + Decimal("0.01"):
         raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
-    return line
+    return line, replayed
 
 
 def _persist_reconciliation_allocation(
@@ -1251,6 +1345,7 @@ def _persist_reconciliation_allocation(
         model_type,
         document_id,
         allocation_ctx,
+        allocation_line,
     )
     if getattr(payment, "docstatus", 0) == 1:
         from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
@@ -1293,28 +1388,13 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
         raise _document_flow_error(_("El documento referenciado debe existir y estar aprobado."), 404)
     if getattr(document, "company", None) != company:
         raise _document_flow_error(_("El documento referenciado no pertenece a la misma compañía."), 409)
+    actual_type = normalize_doctype(str(getattr(document, "document_type", "") or ""))
+    if actual_type != normalize_doctype(flow_source_type):
+        raise _document_flow_error(_("El subtipo del documento no coincide con la referencia."), 409)
     expected_party_type, expected_party_id = _payment_reference_party(document, flow_source_type)
     if expected_party_type != party_type or expected_party_id != party_id:
         raise _document_flow_error(_("El documento referenciado no coincide con el tercero."), 409)
     return document
-
-
-def _validate_payment_currency_match(payment: Any, document: Any, *, infer_missing: bool = False) -> None:
-    """CAS-03: Valida que la moneda del pago coincida con la moneda del documento referenciado."""
-    payment_currency = getattr(payment, "currency", None)
-    document_currency = _document_transaction_currency(document)
-    if infer_missing and not payment_currency and document_currency:
-        payment.currency = document_currency
-        payment.transaction_currency = document_currency
-        payment_currency = document_currency
-    if payment_currency and document_currency and payment_currency != document_currency:
-        raise _document_flow_error(
-            _(
-                "La moneda del pago ({0}) no coincide con la moneda del documento referenciado "
-                "({1}). No se permiten aplicaciones cruzadas de moneda."
-            ).format(payment_currency, document_currency),
-            409,
-        )
 
 
 def _check_duplicate_application(payment_id: str, flow_source_type: str, document_id: str) -> None:
@@ -1351,7 +1431,11 @@ def _create_payment_reference_and_relation(
     model_type: str,
     document_id: str,
     allocation_ctx: PaymentAllocationContext,
+    allocation_line: AllocationLine,
 ) -> None:
+    """Persist the reference together with its idempotency key and fingerprint (#1836)."""
+    from cacao_accounting.contabilidad.arap_allocation import allocation_fingerprint
+
     physical_type = _payment_candidate_physical_type(flow_source_type)
     outstanding_after = allocation_ctx.outstanding - allocation_ctx.allocated
     reference = PaymentReference(
@@ -1380,6 +1464,8 @@ def _create_payment_reference_and_relation(
         discount_amount=allocation_ctx.discount,
         gain_loss_amount=allocation_ctx.gain_loss,
         notes=raw_line.get("notes"),
+        idempotency_key=allocation_line.idempotency_key,
+        allocation_fingerprint=(allocation_fingerprint(allocation_line) if allocation_line.idempotency_key else None),
     )
     database.session.add(reference)
     database.session.flush()
@@ -1441,20 +1527,47 @@ def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoi
         raise _document_flow_error(_("La factura no existe."), 404)
     if invoice.docstatus != 1:
         raise _document_flow_error(_("La factura debe estar aprobada para aplicar un anticipo."), 409)
+    persisted_type = normalize_doctype(str(getattr(invoice, "document_type", "") or reference_type))
+    if persisted_type != reference_type:
+        raise _document_flow_error(_("El subtipo del documento no coincide con la referencia."), 409)
     return invoice, reference_type, party_id
 
 
 def _advance_allocated_amount(payment_id: str) -> Decimal:
-    """Sum active advance applications, excluding reverted document relations."""
+    """Suma aplicaciones de anticipo con relación documental activa."""
     allocated = database.session.execute(
         select(func.coalesce(func.sum(func.coalesce(PaymentReference.payment_amount, PaymentReference.allocated_amount)), 0))
-        .outerjoin(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == payment_id),
+        )
         .where(
             PaymentReference.payment_id == payment_id,
-            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
+            DocumentRelation.status == "active",
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == PaymentReference.company),
         )
     ).scalar_one()
     return decimal_or_zero(allocated)
+
+
+def _validate_advance_parties(
+    payment: PaymentEntry,
+    invoice: SalesInvoice | PurchaseInvoice,
+    party_id: str | None,
+) -> None:
+    """Valida compañía, dirección y tercero del anticipo contra la factura (#1495)."""
+    if payment.company != invoice.company:
+        raise _document_flow_error(_("El anticipo y la factura pertenecen a companias distintas."), 409)
+    reference_type = "sales_invoice" if isinstance(invoice, SalesInvoice) else "purchase_invoice"
+    if not _payment_type_matches_source(str(getattr(payment, "payment_type", "") or ""), reference_type):
+        raise _document_flow_error(_("El tipo de pago no corresponde con el documento referenciado."), 409)
+    expected_party_type = "customer" if reference_type == "sales_invoice" else "supplier"
+    if str(getattr(payment, "party_type", "") or "") != expected_party_type:
+        raise _document_flow_error(_("El tipo de tercero del anticipo no corresponde con la factura."), 409)
+    if payment.party_id and party_id and payment.party_id != party_id:
+        raise _document_flow_error(_("El anticipo pertenece a otro tercero."), 409)
 
 
 def _validate_advance_allocation(
@@ -1466,10 +1579,7 @@ def _validate_advance_allocation(
     exchange_rate: Decimal | None = None,
 ) -> tuple[Decimal, Decimal, Decimal]:
     """Valida la aplicacion del anticipo y devuelve el outstanding antes/despues."""
-    if payment.company != invoice.company:
-        raise _document_flow_error(_("El anticipo y la factura pertenecen a companias distintas."), 409)
-    if payment.party_id and party_id and payment.party_id != party_id:
-        raise _document_flow_error(_("El anticipo pertenece a otro tercero."), 409)
+    _validate_advance_parties(payment, invoice, party_id)
     allocated_before = _advance_allocated_amount(payment.id)
     payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
@@ -1507,6 +1617,8 @@ def apply_advance_to_invoice(
         raise _document_flow_error(_("El pago/anticipo no existe."), 404)
     if payment.docstatus != 1:
         raise _document_flow_error(_("El pago/anticipo debe estar aprobado."), 409)
+    if not payment.is_advance:
+        raise _document_flow_error(_("El pago no está marcado como anticipo."), 409)
     invoice, reference_type, party_id = _load_advance_invoice(invoice_id)
     outstanding, outstanding_after, effective_rate = _validate_advance_allocation(
         payment, invoice, party_id, amount, allocation_date, exchange_rate
@@ -1853,21 +1965,26 @@ def _create_advance_settlement_lines(
         )
 
 
-def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
+def _create_payment_target(payload: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
     """Crea un pago generico desde facturas fuente."""
     company = payload.get("company") or payload.get("company_id")
     from cacao_accounting.decorators import exige_acceso_compania
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, parse_posting_date
 
     # La autorización del documento origen no concede por sí sola permiso
     # para crear documentos del módulo bancario.
     exige_acceso_compania("cash", company, "crear", allow_unauthenticated=True)
-    posting_date = payload.get("posting_date")
+    try:
+        posting_date = parse_posting_date(payload.get("posting_date"))
+    except IdentifierConfigurationError as exc:
+        raise _document_flow_error(str(exc), 400) from exc
     bank_account = _load_payment_bank_account(payload)
     payment = _build_payment_target_payment(company, posting_date, payload)
     assign_payment_identifier(payment, bank_account, posting_date, payload)
     total = _apply_payment_target_lines(payment, company, payload)
     _update_payment_target_amounts(payment, total)
-    database.session.commit()
+    if commit:
+        database.session.commit()
     return _payment_target_result(payment)
 
 
@@ -1912,20 +2029,21 @@ def _resolve_payment_target_gl_accounts(company: str | None, payload: dict[str, 
     aplicar aquí la misma garantía: cada pata usa la cuenta GL de su cuenta
     bancaria y ambas cuentas pertenecen a la compañía del pago.
     """
-    if str(payload.get("payment_type") or "") != "internal_transfer":
+    payment_type = str(payload.get("payment_type") or "")
+    source_id = payload.get("bank_account_id")
+    source_bank = _load_payment_target_bank_account(company, source_id)
+    if payment_type != "internal_transfer":
         return None, None
 
     from cacao_accounting.database import BankAccount
 
-    source_id = payload.get("bank_account_id")
     target_id = payload.get("target_bank_account_id")
-    source_bank = database.session.get(BankAccount, source_id) if source_id else None
     target_bank = database.session.get(BankAccount, target_id) if target_id else None
     if not source_bank or not target_bank:
         raise _document_flow_error(_("La transferencia interna requiere cuentas bancarias válidas."), 409)
     if source_bank.id == target_bank.id:
         raise _document_flow_error(_("La cuenta bancaria de origen y destino deben ser distintas."), 409)
-    if company and (source_bank.company != company or target_bank.company != company):
+    if company and target_bank.company != company:
         raise _document_flow_error(_("Las cuentas bancarias deben pertenecer a la compañía del pago."), 409)
 
     source_account_id = payload.get("paid_from_account_id") or source_bank.gl_account_id
@@ -1937,6 +2055,18 @@ def _resolve_payment_target_gl_accounts(company: str | None, payload: dict[str, 
     if payload.get("paid_to_account_id") and payload["paid_to_account_id"] != target_bank.gl_account_id:
         raise _document_flow_error(_("La cuenta contable de destino no coincide con la cuenta bancaria."), 409)
     return str(source_account_id), str(target_account_id)
+
+
+def _load_payment_target_bank_account(company: str | None, bank_account_id: Any) -> Any:
+    """Load an optional payment account and verify its company ownership."""
+    from cacao_accounting.database import BankAccount
+
+    if not bank_account_id:
+        return None
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account or not company or bank_account.company != company:
+        raise _document_flow_error(_("La cuenta bancaria debe pertenecer a la compañía del pago."), 409)
+    return bank_account
 
 
 def assign_payment_identifier(
@@ -1998,10 +2128,10 @@ def _payment_target_exchange_rate(payment: PaymentEntry, invoice: Any, selected:
     if allocated_currency == document_currency:
         return Decimal("1")
     requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
-    effective_rate = decimal_or_zero(requested_rate)
-    if effective_rate <= 0:
-        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
-    return effective_rate
+    allocation_date = getattr(payment, "posting_date", None) or date.today()
+    return _require_available_reconciliation_rate(
+        document_currency, allocated_currency, decimal_or_zero(requested_rate), allocation_date
+    )
 
 
 def _apply_payment_target_line(
@@ -2025,7 +2155,7 @@ def _apply_payment_target_line(
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
     _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding, effective_rate)
-    return allocated
+    return (allocated * effective_rate).quantize(Decimal("0.0001"))
 
 
 def _validate_payment_target_allocation(allocated: Decimal, outstanding: Decimal) -> None:
@@ -2046,18 +2176,36 @@ def _persist_payment_target_allocation(
     exchange_rate: Decimal = Decimal("1"),
 ) -> None:
     """Persist the payment reference and document relation for an allocation."""
+    document_currency = _document_transaction_currency(invoice) or getattr(payment, "currency", None)
+    payment_currency = getattr(payment, "currency", None) or document_currency
+    payment_amount = (allocated * exchange_rate).quantize(Decimal("0.0001"))
+    document_rate = _document_exchange_rate(invoice)
+    payment_rate = _document_exchange_rate(payment)
+    base_allocated_amount = (allocated * document_rate).quantize(Decimal("0.0001"))
+    base_payment_amount = (payment_amount * payment_rate).quantize(Decimal("0.0001"))
     reference = PaymentReference(
         payment_id=payment.id,
-        reference_type=reference_type,
+        reference_type=_payment_candidate_physical_type(reference_type),
+        flow_source_type=reference_type,
         reference_id=reference_id,
+        reference_document_no=getattr(invoice, "document_no", None) or reference_id,
+        reference_date=_payment_candidate_date(invoice),
+        party_type=payment.party_type,
+        party_id=payment.party_id,
+        company=getattr(payment, "company", None),
+        currency=document_currency,
         total_amount=getattr(invoice, "grand_total", None),
         outstanding_amount=outstanding,
+        outstanding_amount_after=outstanding - allocated,
         allocated_amount=allocated,
-        payment_currency=getattr(payment, "currency", None),
-        payment_amount=allocated * exchange_rate,
+        payment_currency=payment_currency,
+        payment_amount=payment_amount,
         payment_exchange_rate=exchange_rate,
+        base_allocated_amount=base_allocated_amount,
+        base_payment_amount=base_payment_amount,
+        fx_difference_amount=base_allocated_amount - base_payment_amount,
         allocation_date=payment.posting_date,
-        exchange_rate=getattr(payment, "exchange_rate", None),
+        exchange_rate=document_rate,
         discount_amount=getattr(payment, "discount_amount", None),
         gain_loss_amount=getattr(payment, "gain_loss_amount", None),
         difference_amount=None,
@@ -2087,7 +2235,7 @@ def _persist_payment_target_allocation(
             payment,
             invoice,
             document_amount=allocated,
-            payment_amount=allocated * exchange_rate,
+            payment_amount=payment_amount,
             allocation_date=getattr(payment, "posting_date", None) or date.today(),
             reference_type=reference_type,
         )

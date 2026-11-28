@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% set acceso = permisos(modulo=id_modulo("cash"), usuario=usuario.id) %}
 {% import "macros.html" as macros %}
 
 {%- if TESTING -%}
@@ -17,15 +18,18 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h5 class="ca-card-title"><i class="bi bi-cash-coin"></i> {{ _('Cajas Chicas') }}</h5>
+    {% if acceso.crear and creatable_companies %}
     <a href="{{ url_for('bancos.caja_chica_nuevo') }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% endif %}
   </div>
   <table class="ca-table">
     <caption style="display: none;">{{ _('Listado de cajas chicas.') }}</caption>
     <thead>
       <tr>
         <th scope="col">{{ _('Caja') }}</th>
+        <th scope="col">{{ _('Compañía') }}</th>
         <th scope="col">{{ _('Responsable') }}</th>
         <th scope="col">{{ _('Fondo') }}</th>
         <th scope="col">{{ _('Moneda') }}</th>
@@ -43,11 +47,12 @@
           <a class="fw-bold" href="{{ url_for('bancos.caja_chica', pc_id=item.id) }}">{{ item.name }}</a>
           {% if item.is_default %}<span class="badge text-bg-secondary">{{ _('Predeterminada') }}</span>{% endif %}
         </td>
+        <td>{{ item.company or '-' }}</td>
         <td>{{ responsables.get(item.custodian_id) or item.custodian_id or '-' }}</td>
         <td>{{ item.float_amount }}</td>
         <td>{{ item.currency or '-' }}</td>
-        <td>{{ saldos.get(item.id, 0) }}</td>
-        <td>{{ saldos.get(item.id, 0) - vales_abiertos.get(item.id, 0) }}</td>
+        <td>{{ saldos.get(item.id) if saldos.get(item.id) is not none else '-' }}</td>
+        <td>{{ esperados.get(item.id) if esperados.get(item.id) is not none else '-' }}</td>
         <td>{{ vales_abiertos.get(item.id, 0) }}</td>
         <td>{{ pendientes.get(item.id, 0) }}</td>
         <td>
@@ -60,7 +65,7 @@
       </tr>
       {%- else %}
       <tr>
-        <td colspan="8" class="text-center text-muted">{{ _('No hay cajas chicas registradas.') }}</td>
+        <td colspan="10" class="text-center text-muted">{{ _('No hay cajas chicas registradas.') }}</td>
       </tr>
       {%- endfor %}
     </tbody>

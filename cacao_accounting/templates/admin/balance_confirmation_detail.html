@@ -65,7 +65,6 @@
               {% if confirmation.response_comment %}
                 <div class="ca-kv-item"><label>{{ _('Comentario / Explicación') }}</label><p class="text-dark bg-white border rounded p-2">"{{ confirmation.response_comment }}"</p></div>
               {% endif %}
-              <div class="ca-kv-item"><label>{{ _('Hash del Snapshot Confirmado') }}</label><p class="small text-muted text-break"><code>{{ confirmation.snapshot_hash }}</code></p></div>
             </div>
           </div>
         {% endif %}
@@ -78,7 +77,11 @@
         <h5 class="ca-card-title mb-0"><i class="bi bi-list-columns me-1"></i> {{ _('Partidas Incluidas en Snapshot') }}</h5>
       </div>
       <div class="p-4">
-        {% if snapshot["items"] %}
+        <div class="alert {% if snapshot_valid %}alert-success{% else %}alert-danger{% endif %} py-2" role="status">
+          {{ _('Integridad del snapshot verificada.') if snapshot_valid else _('No se pudo verificar la integridad del snapshot; su contenido se ocultó.') }}
+        </div>
+        <p class="small text-muted text-break">{{ _('Hash SHA-256 almacenado') }}: <code>{{ confirmation.snapshot_hash or _('No disponible') }}</code></p>
+        {% if snapshot_valid and snapshot.get("items") %}
           <div class="table-responsive">
             <table class="table table-bordered table-striped align-middle">
               <caption class="visually-hidden">{{ _('Partidas Incluidas en Snapshot') }}</caption>
@@ -94,7 +97,7 @@
                 </tr>
               </thead>
               <tbody>
-                {% for item in snapshot["items"] %}
+                {% for item in snapshot.get("items", []) %}
                   <tr>
                     <td>{{ item.document_type }}</td>
                     <td class="fw-bold">{{ item.document_no }}</td>
@@ -112,7 +115,7 @@
           <div class="ca-card bg-light p-3 mt-3">
             <h6 class="fw-bold mb-2"><i class="bi bi-wallet2 me-1"></i> {{ _('Totales por Moneda') }}</h6>
             <div class="row">
-              {% for currency, total_val in snapshot["totals"].items() %}
+              {% for currency, total_val in snapshot.get("totals", {}).items() %}
                 <div class="col-md-6 mb-2">
                   <span class="text-muted small">{{ _('Total Pendiente') }} ({{ currency }}):</span>
                   <strong class="fs-5 ms-2 {% if total_val|float < 0 %}text-danger{% else %}text-primary{% endif %}">
@@ -122,7 +125,7 @@
               {% endfor %}
             </div>
           </div>
-        {% else %}
+        {% elif snapshot_valid %}
           <p class="text-center text-muted py-4"><i class="bi bi-info-circle me-1"></i> {{ _('El snapshot no contiene partidas abiertas.') }}</p>
         {% endif %}
       </div>
@@ -143,14 +146,14 @@
               <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send-fill me-1"></i> {{ _('Enviar por Correo') }}</button>
             </form>
           {% elif confirmation.status in ('sent', 'viewed') %}
-            <form method="POST" action="{{ url_for('balance_confirmations.reenviar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit="return confirm('{{ _("¿Está seguro de que desea reenviar la confirmación? Esto invalidará el código y enlace anterior.") }}');">
+            <form method="POST" action="{{ url_for('balance_confirmations.reenviar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit='return confirm({{ _("¿Está seguro de que desea reenviar la confirmación? Esto invalidará el código y enlace anterior.")|tojson }});'>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-arrow-repeat me-1"></i> {{ _('Reenviar Confirmación') }}</button>
             </form>
           {% endif %}
 
           {% if confirmation.status not in ('confirmed', 'disputed', 'cancelled', 'expired') %}
-            <form method="POST" action="{{ url_for('balance_confirmations.cancelar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit="return confirm('{{ _("¿Está seguro de que desea cancelar esta solicitud? Se desactivarán todos los accesos externos.") }}');">
+            <form method="POST" action="{{ url_for('balance_confirmations.cancelar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit='return confirm({{ _("¿Está seguro de que desea cancelar esta solicitud? Se desactivarán todos los accesos externos.")|tojson }});'>
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline-danger w-100"><i class="bi bi-x-circle me-1"></i> {{ _('Cancelar Solicitud') }}</button>
             </form>

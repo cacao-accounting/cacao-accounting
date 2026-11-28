@@ -13,8 +13,19 @@ from cacao_accounting.contabilidad import services as _services
 from cacao_accounting.contabilidad.routes import (  # noqa: F401
     contabilidad as contabilidad,
 )
+from cacao_accounting.audit_trail_service import log_submit  # noqa: F401
 
 _MODULES = (_services, _routes)
+
+# Contrato histórico de la fachada: el import wildcard debe exponer los
+# símbolos públicos que el módulo monolítico ofrecía, incluido `log_submit`.
+__all__ = sorted(
+    {
+        "contabilidad",
+        "log_submit",
+        *(name for module in _MODULES for name in dir(module) if not name.startswith("_")),
+    }
+)
 
 
 def __getattr__(name: str) -> Any:

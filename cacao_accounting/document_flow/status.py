@@ -84,10 +84,26 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
 
     from cacao_accounting.database import ApprovalRequest, database
 
-    req = database.session.execute(
-        database.select(ApprovalRequest).filter_by(document_type=doctype, document_id=document.id)
-    ).scalar_one_or_none()
-    if req and req.status.startswith("Pending"):
+    pending_requests = (
+        database.session.execute(
+            database.select(ApprovalRequest)
+            .where(
+                ApprovalRequest.document_type.in_((doctype, f"cancel_{doctype}")),
+                ApprovalRequest.document_id == document.id,
+                ApprovalRequest.status.startswith("Pending"),
+            )
+            .order_by(ApprovalRequest.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    if pending_requests:
+        # La solicitud de anulación usa el tipo ``cancel_<doctype>``; si
+        # convive con una aprobación, la anulación gobierna el badge.
+        req = next(
+            (item for item in pending_requests if item.status.startswith("Pending Cancel")),
+            pending_requests[0],
+        )
         if req.status == "Pending Approval":
             return _status("pending_approval", _("Pendiente de Aprobación"), "orange")
         elif req.status == "Pending Cancellation" or req.status.startswith("Pending Cancel"):
@@ -171,11 +187,29 @@ def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
 
 def _primary_flow_progress(doctype: str, document: Any) -> FlowProgress | None:
     """Devuelve el flujo operativo que debe gobernar el estado principal."""
-    target_types = _primary_flow_targets(doctype)
+    target_types = _flow_targets_for_document(doctype, document)
     progress = _find_flow_progress_with_activity(doctype, document.id, target_types)
     if progress:
         return progress
     return _find_flow_progress_with_total(doctype, document.id, target_types)
+
+
+def _flow_targets_for_document(doctype: str, document: Any) -> list[str]:
+    """Ajusta los destinos primarios según la naturaleza de las líneas."""
+    targets = _primary_flow_targets(doctype)
+    if doctype != "purchase_order" or "purchase_receipt" not in targets:
+        return targets
+    from cacao_accounting.database import Item, database
+
+    item_codes = {str(item.item_code) for item in get_document_items(doctype, document.id) if getattr(item, "item_code", None)}
+    if not item_codes:
+        return targets
+    requires_receipt = (
+        database.session.query(Item).filter(Item.code.in_(item_codes), Item.is_stock_item.is_(True)).first() is not None
+    )
+    if requires_receipt:
+        return targets
+    return [target for target in targets if target != "purchase_receipt"]
 
 
 def _primary_flow_targets(doctype: str) -> list[str]:
@@ -190,13 +224,13 @@ def _primary_flow_targets(doctype: str) -> list[str]:
         "supplier_quotation": ["purchase_order"],
         "sales_order": ["delivery_note", "sales_invoice"],
         "delivery_note": ["sales_invoice"],
-        "sales_request": ["sales_quotation"],
+        "sales_request": ["sales_quotation", "sales_order"],
         "sales_quotation": ["sales_order"],
     }.get(doctype, [])
 
 
 def _find_flow_progress_with_activity(doctype: str, source_id: str, target_types: list[str]) -> FlowProgress | None:
-    return _first_matching_flow_progress(doctype, source_id, target_types, _flow_progress_has_pending)
+    return _first_matching_flow_progress(doctype, source_id, target_types, _flow_progress_has_activity)
 
 
 def _find_flow_progress_with_total(doctype: str, source_id: str, target_types: list[str]) -> FlowProgress | None:
@@ -218,8 +252,9 @@ def _first_matching_flow_progress(
     return None
 
 
-def _flow_progress_has_pending(progress: FlowProgress) -> bool:
-    return progress.pending_qty > 0
+def _flow_progress_has_activity(progress: FlowProgress) -> bool:
+    """Indica si el flujo ya tiene consumo o cierre efectivo."""
+    return progress.processed_qty > 0 or progress.closed_qty > 0
 
 
 def _flow_progress_has_total(progress: FlowProgress) -> bool:
@@ -242,7 +277,9 @@ def _flow_progress(source_type: str, source_id: str, target_type: str) -> FlowPr
             source_id,
             item.id,
             target_type,
-            exclude_draft_targets=True,
+            # La solicitud queda consumida al convertirse en orden, aunque la
+            # orden siga en borrador (#1621).
+            exclude_draft_targets=not (source_type == "sales_request" and target_type == "sales_order"),
         )
         closed += decimal_or_zero(getattr(state, "closed_qty", 0)) if state else Decimal("0")
     pending = total - processed - closed

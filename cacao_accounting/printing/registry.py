@@ -41,6 +41,7 @@ from cacao_accounting.printing.context import (
     build_withholding_certificate_print_context,
     build_withholding_certificate_sample_context,
     build_purchase_invoice_print_context,
+    build_purchase_invoice_sample_context,
     build_purchase_order_print_context,
     build_purchase_order_sample_context,
     build_purchase_receipt_print_context,
@@ -167,7 +168,7 @@ def init_printing_registry() -> None:
         "invoice",
         _PERM_PURCHASES_VIEW,
         build_purchase_invoice_print_context,
-        build_sales_invoice_sample_context,
+        build_purchase_invoice_sample_context,
         PURCHASE_INVOICE_PRINT_SCHEMA,
         snippets,
     )
@@ -178,7 +179,7 @@ def init_printing_registry() -> None:
         "invoice",
         _PERM_PURCHASES_VIEW,
         build_purchase_invoice_print_context,
-        build_sales_invoice_sample_context,
+        build_purchase_invoice_sample_context,
         PURCHASE_INVOICE_PRINT_SCHEMA,
         snippets,
     )
@@ -189,7 +190,7 @@ def init_printing_registry() -> None:
         "invoice",
         _PERM_PURCHASES_VIEW,
         build_purchase_invoice_print_context,
-        build_sales_invoice_sample_context,
+        build_purchase_invoice_sample_context,
         PURCHASE_INVOICE_PRINT_SCHEMA,
         snippets,
     )

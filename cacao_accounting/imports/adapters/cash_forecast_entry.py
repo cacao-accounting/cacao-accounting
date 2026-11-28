@@ -3,13 +3,29 @@
 
 """Adaptador para importación de entradas de pronóstico de caja."""
 
-from datetime import date
 from decimal import Decimal
 from typing import List, Dict, Any
 
+from cacao_accounting.bancos.cash_forecast_service import validate_forecast_entry_date
 from cacao_accounting.database import CashForecast, CashForecastEntry, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
+
+
+def _finite_amount(value: Any) -> Decimal:
+    """Convierte el monto del pronóstico y rechaza valores no finitos."""
+    raw_amount = value if value not in (None, "") else "0"
+    return coerce_decimal(raw_amount, "monto", positive=True, max_fractional_digits=4)
+
+
+def _text(value: Any, default: str = "") -> str:
+    """Normaliza celdas vacías de XLSX/ODS sin convertirlas en "None"."""
+    if value is None:
+        return default
+    text = str(value)
+    return text if text.strip() else default
 
 
 class CashForecastEntryAdapter(BaseImportAdapter):
@@ -29,20 +45,23 @@ class CashForecastEntryAdapter(BaseImportAdapter):
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single cash forecast entry row."""
         errors = super().validate_row(row_data)
-        forecast = database.session.get(CashForecast, str(row_data.get("forecast_id", "")))
+        forecast = database.session.get(CashForecast, _text(row_data.get("forecast_id")))
         if forecast is None:
             errors.append(f"Pronóstico no encontrado: {row_data.get('forecast_id')}")
+        elif str(forecast.status or "") != "Draft":
+            errors.append(f"El pronóstico {forecast.id} no está en estado Borrador.")
         if self._normalize_entry_type(row_data.get("type")) is None:
             errors.append(_("El tipo debe ser Income o Expense."))
         try:
-            Decimal(str(row_data.get("amount") or 0))
-        except (ValueError, TypeError):
-            errors.append(f"Monto inválido: {row_data.get('amount')}")
+            _finite_amount(row_data.get("amount"))
+        except ValueError as exc:
+            errors.append(str(exc))
         try:
-            if isinstance(row_data.get("estimated_date"), str):
-                date.fromisoformat(row_data["estimated_date"])
-        except (ValueError, TypeError):
-            errors.append(f"Fecha inválida: {row_data.get('estimated_date')}")
+            estimated_date = parse_import_date(row_data.get("estimated_date"), field="fecha estimada")
+            if forecast is not None:
+                validate_forecast_entry_date(forecast, estimated_date)
+        except (ValueError, TypeError) as exc:
+            errors.append(str(exc) or f"Fecha inválida: {row_data.get('estimated_date')}")
         return errors
 
     @staticmethod
@@ -59,33 +78,33 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         errors: list[str] = []
         checked_forecasts: dict[str, CashForecast | None] = {}
         for row in document_data:
-            forecast_id = str(row.get("forecast_id", ""))
+            forecast_id = _text(row.get("forecast_id"))
             if forecast_id not in checked_forecasts:
                 checked_forecasts[forecast_id] = database.session.get(CashForecast, forecast_id)
             forecast = checked_forecasts[forecast_id]
             if forecast and forecast.company != company_id:
                 errors.append(f"El pronóstico {forecast_id} pertenece a la compañía {forecast.company}, no a {company_id}.")
+            if forecast and str(forecast.status or "") != "Draft":
+                errors.append(f"El pronóstico {forecast_id} no está en estado Borrador.")
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Build cash forecast entries from the imported data."""
         entries = []
         for row in document_data:
-            estimated_date = row.get("estimated_date")
-            if isinstance(estimated_date, str):
-                estimated_date = date.fromisoformat(estimated_date)
+            estimated_date = parse_import_date(row.get("estimated_date"), field="fecha estimada")
             entry_type = self._normalize_entry_type(row.get("type"))
             if entry_type is None:
                 raise ValueError(_("El tipo debe ser Income o Expense."))
             entries.append(
                 {
-                    "forecast_id": str(row.get("forecast_id", "")),
+                    "forecast_id": _text(row.get("forecast_id")),
                     "type": entry_type,
-                    "concept": str(row.get("concept", "")).strip(),
-                    "currency": str(row.get("currency", "NIO")).strip(),
-                    "amount": Decimal(str(row.get("amount", 0))),
+                    "concept": _text(row.get("concept")),
+                    "currency": _text(row.get("currency"), "NIO"),
+                    "amount": _finite_amount(row.get("amount")),
                     "estimated_date": estimated_date,
-                    "notes": str(row.get("notes", "")).strip(),
+                    "notes": _text(row.get("notes")),
                     "created_by": context.get("created_by"),
                     "company_id": context.get("company_id"),
                 }
@@ -104,6 +123,15 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                     _("El pronóstico %(forecast)s pertenece a la compañía %(owner)s, no a %(company)s.")
                     % {"forecast": forecast.id, "owner": forecast.company, "company": company_id}
                 )
+            validate_forecast_entry_date(forecast, entry_data["estimated_date"])
+            # #1049: revalidar el estado inmediatamente antes de persistir; el
+            # pronóstico pudo aprobarse después de la validación del lote.
+            if str(forecast.status or "") != "Draft":
+                raise ValueError(_("El pronóstico %(forecast)s no está en estado Borrador.") % {"forecast": forecast.id})
+            # #1050: la regla amount > 0 también se aplica al persistir, por si
+            # el documento se construyó fuera del flujo de validación.
+            if _finite_amount(entry_data.get("amount")) <= 0:
+                raise ValueError(_("El monto debe ser mayor que cero."))
             entry = CashForecastEntry(
                 forecast_id=entry_data["forecast_id"],
                 type=entry_data["type"],

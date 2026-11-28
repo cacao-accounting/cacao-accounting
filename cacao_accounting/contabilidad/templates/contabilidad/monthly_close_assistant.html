@@ -65,7 +65,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>
@@ -107,7 +107,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>
@@ -210,7 +210,7 @@
             {% if template.id in applied_ids %}
             <span class="badge text-bg-success">{{ _('Aplicada') }}</span>
             {% else %}
-            <span class="badge text-bg-warning">{{ _('Pendiente') }}</span>
+            <span class="badge {% if template.id in pending_ids %}text-bg-info{% else %}text-bg-warning{% endif %}">{{ _('Pendiente') }}</span>
             {% endif %}
           </td>
         </tr>

@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
@@ -24,6 +24,17 @@
   <div class="p-4">
     <form method="post" id="form-proyecto" class="row g-3" x-data="{ budgetCurrency: {{ (budget_currency_code or '')|tojson }}, isCapitalizable: {{ 'true' if form.capitalizable.data else 'false' }} }">
       {{ form.csrf_token }}
+      {% if form.errors %}
+      <div class="col-12">
+        <div class="alert alert-danger py-2 mb-0">
+          <ul class="mb-0">
+            {% for field_errors in form.errors.values() %}
+              {% for error in field_errors %}<li>{{ error }}</li>{% endfor %}
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label" for="id-proyecto">{{ _('Código') }} <span class="text-danger">*</span></label>
         {{ form.id(class="form-control form-control-sm", id="id-proyecto", required=True) }}
@@ -50,11 +61,17 @@
               clear: {{ _("Limpiar")|tojson }}
             }
           })'>
-          <input type="hidden" name="entidad" id="entidad_hidden" x-model="selectedValue">
+          <input
+            type="hidden"
+            name="entidad"
+            id="entidad_hidden"
+            x-model="selectedValue"
+            @change="$dispatch('hierarchy-company-changed', { company: $event.target.value })"
+          >
           <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="option in options" :key="option.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
                 <span x-text="option.display_name"></span>
               </button>
             </template>
@@ -63,7 +80,17 @@
       </div>
       <div class="col-md-12">
         <label class="form-label" for="parent_id">{{ _('Proyecto Padre') }}</label>
-        {{ form.parent_id(class="form-select form-select-sm", id="parent_id") }}
+        <div x-data='hierarchyParentSelect({
+            endpoint: {{ url_for("contabilidad.hierarchy_parent_options", node_type="project")|tojson }},
+            action: {{ ("editar" if edit else "crear")|tojson }},
+            excludeId: {{ (parent_exclude_id|default(""))|tojson }},
+            errorMessage: {{ _("No se pudieron cargar las opciones jerárquicas. Intente de nuevo.")|tojson }},
+            placeholder: {{ _("— Ninguno —")|tojson }}
+          })'
+          @hierarchy-company-changed.window="refresh($event.detail.company)">
+          {{ form.parent_id(class="form-select form-select-sm", id="parent_id", **{"x-ref": "parent"}) }}
+          <div class="form-text text-danger" role="alert" x-cloak x-show="error" x-text="error"></div>
+        </div>
       </div>
       <div class="col-md-6">
         <label class="form-label" for="presupuesto">{{ _('Presupuesto') }}</label>

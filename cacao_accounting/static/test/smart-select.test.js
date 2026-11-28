@@ -194,6 +194,132 @@ describe('smart-select', function () {
     assert.strictEqual(fetchCalls, 0);
   });
 
+  it('clears an import naming series when the record type changes', async function () {
+    const environment = createEnvironment();
+    const { window, document } = environment;
+    const recordType = document.createElement('select');
+    recordType.id = 'import-record-type';
+    for (const value of ['sales_invoice', 'purchase_order']) {
+      const option = document.createElement('option');
+      option.value = value;
+      recordType.appendChild(option);
+    }
+    recordType.value = 'sales_invoice';
+    document.body.appendChild(recordType);
+    const calls = [];
+    window.fetch = (url) => {
+      calls.push(url);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) });
+    };
+    const component = environment.factory({
+      endpoint: '/api/search-select',
+      doctype: 'naming_series',
+      name: 'sequence_id',
+      filters: { entity_type: { selector: '#import-record-type' } },
+      filterSources: ['#import-record-type'],
+      requiredFilters: ['entity_type'],
+      loadOnFilterChange: true,
+      initialValue: 'SER-SALES',
+    });
+    component.init();
+    component.options = [{ value: 'SER-SALES' }];
+    recordType.value = 'purchase_order';
+    recordType.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flushPromises();
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.options.length, 0);
+    assert.strictEqual(calls.length, 1);
+    assert.ok(calls[0].includes('entity_type=purchase_order'));
+    window.close();
+  });
+
+  it('clears the selected value and copied model when its company filter changes', async function () {
+    const environment = createEnvironment();
+    const { window, document } = environment;
+    const company = document.createElement('input');
+    company.id = 'party-company-0';
+    company.value = 'alpha';
+    document.body.appendChild(company);
+
+    const row = {
+      company: 'alpha',
+      accountId: 'AR-ALPHA',
+      accountLabel: 'Receivable Alpha',
+    };
+    const component = environment.factory({
+      doctype: 'account',
+      name: 'receivable_account_id',
+      initialValue: row.accountId,
+      initialLabel: row.accountLabel,
+      filters: { company: () => row.company },
+      filterSources: ['#party-company-0'],
+      requiredFilters: ['company'],
+      onClear: () => {
+        row.accountId = '';
+        row.accountLabel = '';
+      },
+    });
+    component.init();
+
+    row.company = 'beta';
+    company.value = 'beta';
+    company.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flushPromises();
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.selectedLabel, '');
+    assert.deepStrictEqual(row, { company: 'beta', accountId: '', accountLabel: '' });
+    window.close();
+  });
+
+  it('removes external filter listeners when a component is destroyed', async function () {
+    const environment = createEnvironment();
+    const { window, document } = environment;
+    const company = document.createElement('select');
+    company.id = 'company';
+    for (const value of ['cacao', 'alpha']) {
+      const option = document.createElement('option');
+      option.value = value;
+      company.appendChild(option);
+    }
+    company.value = 'cacao';
+    document.body.appendChild(company);
+    let fetchCalls = 0;
+    window.fetch = () => {
+      fetchCalls += 1;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) });
+    };
+    for (let index = 0; index < 4; index += 1) {
+      const stale = environment.factory({
+        doctype: 'book',
+        name: 'book_id',
+        filters: { company: { selector: '#company' } },
+        filterSources: ['#company'],
+        requiredFilters: ['company'],
+        loadOnFilterChange: true,
+      });
+      stale.init();
+      stale.destroy();
+    }
+    const active = environment.factory({
+      doctype: 'book',
+      name: 'book_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      requiredFilters: ['company'],
+      loadOnFilterChange: true,
+    });
+    active.init();
+    company.value = 'alpha';
+    company.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flushPromises();
+
+    assert.strictEqual(fetchCalls, 1);
+    active.destroy();
+    window.close();
+  });
+
   it('auto-selects default naming series when company changes and filter is present', async function () {
     let fetchCalls = 0;
     const companyElement = {
@@ -270,6 +396,153 @@ describe('smart-select', function () {
     component.onInput({ target: { value: 'otra' } });
 
     assert.strictEqual(component.selectedValue, 'cacao');
+  });
+
+  it('does not call onSelect for values offered to a locked selector', function () {
+    let selected = null;
+    const create = loadSmartSelect();
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      locked: true,
+      initialValue: 'cacao',
+      onSelect: (option) => {
+        selected = option;
+      },
+    });
+
+    component.selectOptionFromValues('cafe', 'Cafe SA', { value: 'cafe', display_name: 'Cafe SA' });
+
+    assert.strictEqual(component.selectedValue, 'cacao');
+    assert.strictEqual(selected, null);
+  });
+
+  it('keeps typed or pasted text after the selected-value watcher clears the old option', function () {
+    const events = [];
+    const hiddenInput = {
+      value: 'cust-old',
+      dispatchEvent: (event) => events.push(event.type),
+    };
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'party', name: 'party_id', initialValue: 'cust-old' });
+    let watchSelectedValue;
+    component.$root = {
+      classList: { toggle() {} },
+      querySelector: () => hiddenInput,
+    };
+    component.$watch = (property, callback) => {
+      if (property === 'selectedValue') watchSelectedValue = callback;
+    };
+    component.selectedLabel = 'Old Customer';
+    component.search = 'Old Customer';
+    component.init();
+
+    component.onInput({ target: { value: 'New Customer' } });
+    watchSelectedValue('');
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.search, 'New Customer');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change']);
+
+    component.selectedValue = 'cust-old';
+    component.selectedLabel = 'Old Customer';
+    component.search = 'Old Customer';
+    component.onInput({ target: { value: 'Pasted Customer' } });
+    watchSelectedValue('');
+
+    assert.strictEqual(component.search, 'Pasted Customer');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change', 'input', 'change']);
+  });
+
+  it('clears copied consumer state when typing invalidates or explicitly clears a selection', function () {
+    const create = loadSmartSelect();
+    const model = { accountCode: '1101', accountLabel: 'Cash' };
+    const component = create({
+      doctype: 'account',
+      initialValue: model.accountCode,
+      initialLabel: model.accountLabel,
+      onClear: () => {
+        model.accountCode = '';
+        model.accountLabel = '';
+      },
+    });
+
+    component.onInput({ target: { value: 'Expense' } });
+
+    assert.deepStrictEqual(model, { accountCode: '', accountLabel: '' });
+    assert.strictEqual(component.search, 'Expense');
+
+    model.accountCode = '5201';
+    model.accountLabel = 'Expense';
+    component.selectedValue = '5201';
+    component.selectedLabel = 'Expense';
+    component.clearSelection();
+
+    assert.deepStrictEqual(model, { accountCode: '', accountLabel: '' });
+    assert.strictEqual(component.search, '');
+  });
+
+  it('clears an initial value without a resolved label when typing empties the field', function () {
+    const events = [];
+    const hiddenInput = {
+      value: 'cust-old',
+      dispatchEvent: (event) => events.push(event.type),
+    };
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'party', name: 'party_id', initialValue: 'cust-old' });
+    component.$root = { classList: { toggle() {} }, querySelector: () => hiddenInput };
+    component.init();
+
+    component.onInput({ target: { value: '' } });
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change']);
+
+    component.selectedValue = 'cust-old';
+    component.selectedLabel = '';
+    hiddenInput.value = 'cust-old';
+    events.length = 0;
+
+    component.onInput({ target: { value: 'Cust' } });
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change']);
+  });
+
+  it('notifies dependent selectors when typing invalidates a selected filter', function () {
+    const companyInput = {
+      value: 'cacao',
+      listeners: {},
+      addEventListener(eventName, handler) {
+        (this.listeners[eventName] ||= []).push(handler);
+      },
+      removeEventListener() {},
+      dispatchEvent(event) {
+        for (const handler of this.listeners[event.type] || []) handler(event);
+      },
+    };
+    const create = loadSmartSelect({ elements: { '#company': companyInput } });
+    const company = create({ doctype: 'company', name: 'company', initialValue: 'cacao' });
+    company.$root = { querySelector: () => companyInput, classList: { toggle() {} } };
+    company.selectedLabel = 'Cacao SA';
+    company.search = 'Cacao SA';
+    const sequence = create({
+      doctype: 'naming_series',
+      name: 'sequence_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      initialValue: 'SER-CACAO',
+    });
+    sequence.init();
+
+    company.onInput({ target: { value: 'Ca' } });
+
+    assert.strictEqual(sequence.selectedValue, '');
+    assert.strictEqual(sequence.options.length, 0);
   });
 
   it('selectOption updates hidden input and dispatches input/change events', function () {
@@ -575,6 +848,33 @@ describe('smart-select', function () {
       globalThis.setTimeout = originalSetTimeout;
       globalThis.clearTimeout = originalClearTimeout;
     }
+  });
+
+  it('keeps the menu open while focus is on an option', function () {
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'company', name: 'company' });
+    const option = { classList: { contains: (name) => name === 'ca-smart-select-option' } };
+    component.$el = { contains: (node) => node === option };
+    component.$root = { querySelector: () => null };
+    globalThis.document.activeElement = option;
+    component.open = true;
+
+    component._closeSoonHandler();
+
+    assert.strictEqual(component.open, true);
+  });
+
+  it('closes the delayed menu when focus left the component', function () {
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'company', name: 'company' });
+    component.$el = { contains: () => false };
+    component.$root = { querySelector: () => null };
+    globalThis.document.activeElement = { classList: { contains: () => false } };
+    component.open = true;
+
+    component._closeSoonHandler();
+
+    assert.strictEqual(component.open, false);
   });
 
   it('positions the open menu with fixed viewport coordinates', function () {

@@ -18,15 +18,30 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275 AS python-builder
 
 RUN microdnf install -y --nodocs --best --refresh \
-       python3.12 python3.12-pip python3.12-cryptography \
+       python3.12 python3.12-pip python3.12-devel python3.12-cryptography \
+       gcc libpq-devel \
     && microdnf clean all
 
 WORKDIR /build
 COPY requirements.txt .
+# En UBI9/RHEL `pip --prefix` separa purelib (`lib/.../site-packages`) de
+# platlib (`lib64/.../site-packages`): los paquetes puros van a `lib` y las
+# extensiones compiladas (psycopg-c) a `lib64`. Ambos árboles se copian a la
+# imagen final y ambos están en `sys.path`, por eso NO se unifican con symlink.
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt 
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install \
         "Flask-Limiter[redis]==3.8.0" "flask-caching==2.4.0" \
-        "python-magic==0.4.27" "redis==7.4.0" "pg8000==1.31.5" "PyMySQL==1.1.3" \
+        "python-magic==0.4.27" "redis==7.4.0" "PyMySQL==1.1.3"
+
+# Paso de compilación explícito del driver PostgreSQL por defecto (psycopg 3).
+# Se instala siempre desde el sdist de `psycopg-c` para compilar la extensión C
+# contra libpq (`pg_config` viene de `libpq-devel`). Se verifica que el backend
+# C queda activo: si la compilación falla o cae al backend Python/binary, el
+# build falla aquí y no en runtime.
+RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install \
+        --no-binary psycopg-c "psycopg[c]==3.3.9" \
+    && PYTHONPATH=/install/lib/python3.12/site-packages:/install/lib64/python3.12/site-packages \
+       /usr/bin/python3.12 -c "from psycopg import pq; assert pq.__impl__ == 'c', pq.__impl__" \
     && find /install -type d \( \
         -name "test" -o -name "tests" -o -name "testing" \
         -o -name "benchmark" -o -name "benchmarks" -o -name "examples" \
@@ -51,15 +66,20 @@ ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/
 RUN chmod +x /usr/bin/tini \
     && microdnf install -y --nodocs --best --refresh \
        python3.12 python3.12-cryptography \
+       libpq \
        pango libxml2 libxslt file-libs \
     && microdnf clean all
 
 COPY --from=python-builder /install/lib/python3.12/site-packages /usr/lib/python3.12/site-packages
 COPY --from=python-builder /install/lib64/python3.12/site-packages /usr/lib64/python3.12/site-packages
+# Verifica en la imagen final que la extensión C compilada resuelve su backend.
+RUN /usr/bin/python3.12 -c "from psycopg import pq; assert pq.__impl__ == 'c', pq.__impl__"
 COPY --from=python-builder /install/bin /usr/local/bin
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 
-RUN useradd -r -s /bin/false appuser
+RUN useradd -r -s /bin/false -d /home/appuser -m appuser \
+    && mkdir -p /config /data /etc/caddy \
+    && chown -R appuser:appuser /config /data
 
 WORKDIR /app
 
@@ -78,6 +98,11 @@ USER appuser
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
+# Caddy (no root) escribe su configuración y certificados en estos directorios;
+# son las rutas que expone la imagen oficial de Caddy.
+ENV HOME=/home/appuser
+ENV XDG_CONFIG_HOME=/config
+ENV XDG_DATA_HOME=/data
 ENV FLASK_APP="cacao_accounting"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

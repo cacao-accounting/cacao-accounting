@@ -2,6 +2,7 @@
 {% block contenido %}
 <div class="ca-page-header"><h4>{{ _("Plantillas de Impuestos") }}</h4></div>
 <form method="post" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="row g-2">
     <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
     <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}"></div>
@@ -14,6 +15,6 @@
 <table class="table table-sm">
   <caption>{{ _("Lista de plantillas de impuestos y cargos") }}</caption>
   <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Tipo") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Líneas") }}</th></tr></thead>
-  <tbody>{% for template in templates %}<tr><td>{{ template.name }}</td><td>{{ template.template_type }}</td><td>{{ template.company or "" }}</td><td><a href="{{ url_for('admin.items_plantilla_impuesto', template_id=template.id) }}">{{ _("Editar") }}</a></td></tr>{% endfor %}</tbody>
+  <tbody>{% set type_labels = {'buying': _('Compra'), 'selling': _('Venta')} %}{% for template in templates %}<tr><td>{{ template.name }}</td><td>{{ type_labels.get(template.template_type, template.template_type) }}</td><td>{{ template.company or "" }}</td><td><a href="{{ url_for('admin.items_plantilla_impuesto', template_id=template.id) }}">{{ _("Editar") }}</a></td></tr>{% endfor %}</tbody>
 </table>
 {% endblock %}

@@ -5,7 +5,7 @@
 {% if TESTING %}<div
   data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada.html">
 </div>{% endif %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -20,7 +20,8 @@
   <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
 </a>
 {% endif %}
-{% if registro.docstatus in [0, 1] %}
+{% set _status_info = document_status_info('stock_entry', registro) %}
+{% if registro.docstatus in [0, 1] and _status_info.code != 'pending_cancellation' %}
 <form method="post" action="{{ url_for('inventario.inventario_entrada_duplicar', entry_id=registro.id) }}"
   class="d-inline">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -38,20 +39,22 @@
 {{ macros.detail_nav_buttons(
             url_for('inventario.inventario_entrada_lista'),
             url_for('inventario.inventario_entrada_nuevo')) }}
-{{ macros.document_print_button("stock_entry", registro.id) }}
+{{ macros.document_print_button("stock_entry", registro.id, company=registro.company) }}
 {{ macros.document_create_actions("stock_entry", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Movimiento de Inventario'),
-    registro.docstatus,
+    _status_info,
     buttons,
     [
       (_('Número'), registro.document_no),
-      (_('Propósito'), registro.purpose),
+      (_('Propósito'), stock_entry_purpose_label(registro.purpose)),
       (_('Compañía'), registro.company),
       (_('Fecha'), registro.posting_date),
+      (_('Bodega Origen'), registro.from_warehouse),
+      (_('Bodega Destino'), registro.to_warehouse),
       (_('Monto Total'), format_money_with_currency(registro.total_amount, currency_code)),
       (_('Moneda'), currency_code),
       (_('Observaciones'), registro.remarks)

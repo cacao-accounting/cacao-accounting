@@ -27,7 +27,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
-from cacao_accounting.reportes.services import normalize_account_classification_value
+from cacao_accounting.reportes.services import normalize_account_classification
 from cacao_accounting.i18n import _
 
 ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin"})
@@ -114,6 +114,8 @@ def _convert_to_ledger_currency(
 
 
 def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = None) -> dict[str, Decimal]:
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     query = (
         select(GLEntry, Accounts)
         .outerjoin(Accounts, (Accounts.id == GLEntry.account_id) & (Accounts.entity == company))
@@ -121,8 +123,7 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
             GLEntry.company == company,
             GLEntry.posting_date >= start,
             GLEntry.posting_date <= end,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
+            *effective_gl_scope(end),
             GLEntry.is_fiscal_year_closing.is_(False),
         )
     )
@@ -131,7 +132,10 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
         query = query.where(GLEntry.ledger_id == effective_ledger)
     totals = {"income": Decimal("0"), "cost": Decimal("0"), "expense": Decimal("0")}
     for entry, account in database.session.execute(query).all():
-        classification = normalize_account_classification_value(getattr(account, "classification", None)) or ""
+        classification = normalize_account_classification(
+            getattr(account, "classification", None),
+            getattr(account, "account_type", None),
+        )
         amount = _decimal(entry.credit) - _decimal(entry.debit)
         if classification in {"ingreso", "income"}:
             totals["income"] += amount
@@ -143,8 +147,15 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
     return totals
 
 
+def _validate_period(start: date, end: date) -> None:
+    """Rechaza un rango invertido antes de consultar o devolver vacío."""
+    if start > end:
+        raise ValueError(_("La fecha inicial no puede ser posterior a la fecha final."))
+
+
 def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
     """Calculate one approved metric for a company and date range."""
+    _validate_period(start, end)
     if metric not in ALLOWED_METRICS:
         raise ValueError(_("Métrica no permitida: %(metric)s") % {"metric": metric})
     if metric == "sales":
@@ -226,15 +237,30 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
     all invoice-based totals are converted to the ledger currency so that
     metrics are expressed in a single, explicit currency.
     """
+    _validate_period(start, end)
     base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     ledger_currency = base_currency
+    ledger_id: str | None = None
     if ledger:
-        book = database.session.execute(select(Book).where(Book.entity == company, Book.code == ledger)).scalars().first()
+        # #1130: el libro debe pertenecer a la compañía; no se acepta un ID
+        # ajeno ni un identificador inexistente para etiquetar los KPI con una
+        # moneda que no corresponde a los movimientos consultados.
+        book = (
+            database.session.execute(
+                select(Book).where(
+                    Book.entity == company,
+                    (Book.code == ledger) | (Book.id == ledger),
+                )
+            )
+            .scalars()
+            .first()
+        )
         if book is None:
-            book = database.session.get(Book, ledger)
-        if book is not None and book.currency:
+            raise ValueError(_("El libro indicado no existe para la compañía solicitada."))
+        ledger_id = str(book.id)
+        if book.currency:
             ledger_currency = book.currency
-    gl = _gl_totals(company, start, end, ledger_id=ledger)
+    gl = _gl_totals(company, start, end, ledger_id=ledger_id)
     _needs_conversion = ledger_currency and base_currency and ledger_currency != base_currency
     _target = ledger_currency if _needs_conversion else base_currency
 
@@ -293,6 +319,7 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
             "income": gl["income"],
             "cost": gl["cost"],
             "expenses": gl["expense"],
+            "gross_margin": gl["income"] - gl["cost"],
             "net_income": gl["net_income"],
             "accounts_receivable": ar,
             "accounts_payable": ap,
@@ -327,6 +354,7 @@ def compare_periods(
 
 def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[str, Any]]:
     """Return monthly values for one approved metric."""
+    _validate_period(start, end)
     if metric not in ALLOWED_METRICS:
         raise ValueError(_("Métrica no permitida: %(metric)s") % {"metric": metric})
     buckets: list[tuple[date, date]] = []
@@ -350,6 +378,7 @@ def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[st
 
 def get_concentration(company: str, dimension: str, start: date, end: date, limit: int = 10) -> list[dict[str, Any]]:
     """Return the largest contributors for an approved dimension."""
+    _validate_period(start, end)
     if dimension not in ALLOWED_DIMENSIONS:
         raise ValueError(_("Dimensión no permitida: %(dimension)s") % {"dimension": dimension})
     totals = _concentration_totals(company, dimension, start, end)

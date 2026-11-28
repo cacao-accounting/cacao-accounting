@@ -7,6 +7,9 @@ from typing import List, Dict, Any
 from ulid import ULID
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import Party, database, CompanyParty
+from cacao_accounting.party_identity import find_party_by_tax_id, normalize_tax_id
+from cacao_accounting.i18n import _
+from cacao_accounting.party_management import find_party_group_by_name
 
 
 class VendorAdapter(BaseImportAdapter):
@@ -15,15 +18,48 @@ class VendorAdapter(BaseImportAdapter):
     columns = ["nombre", "nombre_comercial", "identificacion_fiscal", "clasificacion", "grupo"]
     required_columns = ["nombre"]
 
+    def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
+        """Rechaza una identificación fiscal ya registrada (#1051)."""
+        errors = super().validate_row(row_data)
+        tax_id = row_data.get("identificacion_fiscal")
+        if normalize_tax_id(tax_id) and find_party_by_tax_id(tax_id) is not None:
+            errors.append(_("La identificación fiscal %(tax_id)s ya está registrada para otro tercero.") % {"tax_id": tax_id})
+        group_name = str(row_data.get("grupo") or "").strip()
+        if group_name and find_party_group_by_name(group_name, "supplier") is None:
+            errors.append(
+                _('El grupo "%(grupo)s" no existe, no está activo o no corresponde al tercero.') % {"grupo": group_name}
+            )
+        clasificacion = str(row_data.get("clasificacion") or "").strip()
+        if clasificacion and clasificacion not in ("natural", "juridical"):
+            errors.append(
+                _('La clasificación "%(clasificacion)s" debe ser natural o juridical.')
+                % {"clasificacion": row_data.get("clasificacion")}
+            )
+        return errors
+
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Construye un objeto Party de tipo proveedor."""
         row = document_data[0]
+        group_name = str(row.get("grupo") or "").strip()
+        group = find_party_group_by_name(group_name, "supplier") if group_name else None
+        if group_name and group is None:
+            raise ValueError(
+                _('El grupo "%(grupo)s" no existe, no está activo o no corresponde al tercero.') % {"grupo": group_name}
+            )
+        clasificacion = str(row.get("clasificacion") or "").strip()
+        if clasificacion and clasificacion not in ("natural", "juridical"):
+            raise ValueError(
+                _('La clasificación "%(clasificacion)s" debe ser natural o juridical.')
+                % {"clasificacion": row.get("clasificacion")}
+            )
         proveedor = Party(
             code=str(ULID()),
             is_supplier=True,
             name=row.get("nombre"),
             comercial_name=row.get("nombre_comercial"),
             tax_id=row.get("identificacion_fiscal"),
+            party_group_id=group.id if group else None,
+            person_type=clasificacion or None,
             is_active=True,
         )
         return {"party": proveedor, "company_id": context.get("company_id")}
@@ -32,6 +68,10 @@ class VendorAdapter(BaseImportAdapter):
         """Guarda el proveedor y lo vincula a la compañía."""
         proveedor = document["party"]
         company_id = document["company_id"]
+        if find_party_by_tax_id(proveedor.tax_id) is not None:
+            raise ValueError(
+                _("La identificación fiscal %(tax_id)s ya está registrada para otro tercero.") % {"tax_id": proveedor.tax_id}
+            )
         database.session.add(proveedor)
         database.session.flush()
         from cacao_accounting.party_management import generate_party_code

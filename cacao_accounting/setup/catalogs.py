@@ -161,8 +161,13 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
         "invalid_regional": "Complete los datos regionales correctamente.",
         "invalid_currency": "La moneda seleccionada no existe o no está activa.",
         "invalid_company": "Complete los datos de la empresa correctamente.",
+        "invalid_fiscal_range": "La fecha final no puede ser anterior a la fecha de inicio.",
         "catalog_required": "Seleccione un catálogo de cuentas existente.",
         "setup_complete": "Configuración inicial completada.",
+        "petty_cash_not_created": (
+            "No hay una cuenta de caja chica activa y habilitada; el fondo "
+            "predeterminado no se creó. Configúrela y créelo manualmente."
+        ),
         "select_catalog": "Seleccione un catálogo existente",
         "use_existing_catalog": "Usar catálogo contable preexistente",
         "create_empty_catalog": "Crear catálogo contable en cero",
@@ -206,8 +211,13 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
         "invalid_regional": "Complete the regional details correctly.",
         "invalid_currency": "The selected currency does not exist or is not active.",
         "invalid_company": "Complete the company details correctly.",
+        "invalid_fiscal_range": "The end date cannot be earlier than the start date.",
         "catalog_required": "Select an existing chart of accounts.",
         "setup_complete": "Initial setup completed.",
+        "petty_cash_not_created": (
+            "No active and enabled petty cash account exists; the default fund "
+            "was not created. Configure it and create the fund manually."
+        ),
         "select_catalog": "Select an existing chart",
         "use_existing_catalog": "Use an existing chart of accounts",
         "create_empty_catalog": "Create an empty chart of accounts",

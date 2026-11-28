@@ -12,34 +12,33 @@ from cacao_accounting.database import ComprobanteContable, ComprobanteContableDe
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
 
 
-def add_journal(journal: ComprobanteContable, lines: list[ComprobanteContableDetalle]) -> ComprobanteContable:
-    """Persist a manual journal entry and its lines."""
+def add_journal(
+    journal: ComprobanteContable,
+    lines: list[ComprobanteContableDetalle],
+    *,
+    commit: bool = True,
+) -> ComprobanteContable:
+    """Persist a manual journal entry and its lines.
+
+    ``commit=False`` deja el comprobante en la transacción del llamador para
+    que pueda conservar bloqueos y confirmar al final de una operación mayor.
+    """
     database.session.add(journal)
     database.session.flush()
     for line in lines:
         line.transaction = JOURNAL_TRANSACTION_TYPE
         line.transaction_id = journal.id
     database.session.add_all(lines)
-    database.session.commit()
+    if commit:
+        database.session.commit()
+    else:
+        database.session.flush()
     return journal
 
 
 def get_journal(journal_id: str) -> ComprobanteContable | None:
     """Obtiene un comprobante manual por ID."""
     return database.session.get(ComprobanteContable, journal_id)
-
-
-def list_journals() -> list[ComprobanteContable]:
-    """Lista comprobantes manuales recientes."""
-    return list(
-        database.session.execute(
-            select(ComprobanteContable)
-            .where(ComprobanteContable.is_fiscal_year_closing.is_(False))
-            .order_by(ComprobanteContable.date.desc(), ComprobanteContable.created.desc())
-        )
-        .scalars()
-        .all()
-    )
 
 
 def list_journal_lines(journal_id: str) -> list[ComprobanteContableDetalle]:

@@ -25,7 +25,8 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     database,
 )
-from cacao_accounting.document_flow import create_document_relation, create_target_document
+from cacao_accounting.document_flow import create_document_relation, create_target_document, lock_document_flow_document
+from cacao_accounting.document_flow.service import pending_qty
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
@@ -79,41 +80,6 @@ def supplier_quotations_for_request(purchase_request: PurchaseRequest) -> list[S
         .scalars()
         .all()
     )
-
-
-def supplier_quotation_comparison_rows(
-    offers: Sequence[SupplierQuotation],
-    offer_items: Mapping[str, Sequence[SupplierQuotationItem]],
-) -> list[dict[str, object]]:
-    """Build comparison rows from the union of all participating offer lines."""
-    rows: list[dict[str, object]] = []
-    seen_keys: set[tuple[tuple[str | None, ...], int]] = set()
-    occurrences_by_offer: dict[str, dict[tuple[str | None, ...], int]] = {}
-
-    for offer in offers:
-        occurrences = occurrences_by_offer.setdefault(offer.id, {})
-        for item in offer_items.get(offer.id, []):
-            key = _supplier_quotation_item_key(item)
-            occurrence = occurrences.get(key, 0)
-            occurrences[key] = occurrence + 1
-            row_key = (key, occurrence)
-            if row_key not in seen_keys:
-                seen_keys.add(row_key)
-                rows.append(
-                    {
-                        "item": item,
-                        "item_key": key,
-                        "occurrence": occurrence,
-                        "offers": {
-                            participant.id: _supplier_quotation_item_at_occurrence(
-                                offer_items.get(participant.id, ()), key, occurrence
-                            )
-                            for participant in offers
-                        },
-                    }
-                )
-
-    return rows
 
 
 def _supplier_quotation_item_key(item: SupplierQuotationItem) -> tuple[str | None, ...]:
@@ -226,41 +192,78 @@ def _request_item_offer_line(
     return matching[occurrence] if occurrence < len(matching) else None
 
 
-def _comparison_line_base_rate(
+def _conversion_payload(
+    base_rate: Decimal,
+    exchange_rate: Decimal,
+    exchange_rate_date: Any,
+    source: str,
+) -> dict[str, Any]:
+    """Empaqueta la conversión efectiva aplicada a una tarifa de oferta."""
+    return {
+        "base_rate": Decimal(base_rate).quantize(Decimal("0.0001")),
+        "exchange_rate": Decimal(exchange_rate).quantize(Decimal("0.0001")),
+        "exchange_rate_date": exchange_rate_date,
+        "exchange_rate_source": source,
+    }
+
+
+def comparison_line_conversion(
     offer: SupplierQuotation,
     line: SupplierQuotationItem,
     company: str,
     comparison_date: Any,
-) -> Decimal:
-    """Resolve a supplier line rate in the company's base currency."""
-    rate = Decimal(str(line.rate or 0))
-    stored_base_rate = Decimal(str(line.base_rate or 0))
-    if stored_base_rate > 0:
-        return stored_base_rate.quantize(Decimal("0.0001"))
+) -> dict[str, Any]:
+    """Resuelve la tarifa funcional y la conversión efectivamente aplicada.
 
+    ``exchange_rate_source`` identifica el origen de la tasa expuesta:
+    ``stored`` (``base_rate`` guardado en la línea), ``same_currency``,
+    ``document`` (tasa de la cotización) o ``lookup`` (tasa consultada para
+    la fecha de comparación, #1942).
+    """
+    rate = Decimal(str(line.rate or 0))
     base_currency = company_currency(company)
     transaction_currency = offer.transaction_currency or base_currency
+    conversion_date = offer.posting_date or comparison_date
+    stored_base_rate = Decimal(str(line.base_rate or 0))
+    if stored_base_rate > 0:
+        implied_rate = (stored_base_rate / rate) if rate else Decimal("1")
+        return _conversion_payload(stored_base_rate, implied_rate, conversion_date, "stored")
     if not transaction_currency or not base_currency or transaction_currency == base_currency:
-        return rate.quantize(Decimal("0.0001"))
+        return _conversion_payload(rate, Decimal("1"), None, "same_currency")
 
     document_exchange_rate = Decimal(str(getattr(offer, "exchange_rate", 0) or 0))
     if document_exchange_rate > 0:
-        return (rate * document_exchange_rate).quantize(Decimal("0.0001"))
+        return _conversion_payload(
+            rate * document_exchange_rate,
+            document_exchange_rate,
+            conversion_date,
+            "document",
+        )
 
-    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate_details
 
     try:
-        exchange_rate = _lookup_exchange_rate(
+        exchange_rate, exchange_rate_date = _lookup_exchange_rate_details(
             transaction_currency,
             base_currency,
-            offer.posting_date or comparison_date,
+            conversion_date,
         )
     except PostingError as exc:
         raise ValueError(
             _("No existe tipo de cambio para comparar una oferta en %(transaction_currency)s contra %(base_currency)s.")
             % {"transaction_currency": transaction_currency, "base_currency": base_currency}
         ) from exc
-    return (rate * exchange_rate).quantize(Decimal("0.0001"))
+    return _conversion_payload(rate * exchange_rate, exchange_rate, exchange_rate_date, "lookup")
+
+
+def comparison_line_base_rate(
+    offer: SupplierQuotation,
+    line: SupplierQuotationItem,
+    company: str,
+    comparison_date: Any,
+) -> Decimal:
+    """Resolve a supplier line rate in the company's base currency."""
+    return comparison_line_conversion(offer, line, company, comparison_date)["base_rate"]
 
 
 def purchase_request_comparison_recommendations(
@@ -297,22 +300,30 @@ def purchase_request_comparison_recommendations(
         occurrences[key] = occurrence + 1
         required_qty = _line_coverage_qty(item)
         candidates: list[dict[str, Any]] = []
+        base_currency = company_currency(purchase_request.company)
         for offer in offers:
             line = _request_item_offer_line(item, occurrence, offer_items, offer.id)
             offered_qty = _line_coverage_qty(line) if line else Decimal("0")
             if line is None or offered_qty < required_qty:
                 continue
+            tx_currency = offer.transaction_currency or base_currency
+            conversion = comparison_line_conversion(
+                offer,
+                line,
+                purchase_request.company,
+                purchase_request.posting_date,
+            )
             candidates.append(
                 {
                     "offer": offer,
                     "line": line,
                     "rate": Decimal(str(line.rate or 0)),
-                    "base_rate": _comparison_line_base_rate(
-                        offer,
-                        line,
-                        purchase_request.company,
-                        purchase_request.posting_date,
-                    ),
+                    "base_rate": conversion["base_rate"],
+                    "transaction_currency": tx_currency,
+                    "base_currency": base_currency,
+                    "exchange_rate": conversion["exchange_rate"],
+                    "exchange_rate_date": conversion["exchange_rate_date"],
+                    "exchange_rate_source": conversion["exchange_rate_source"],
                 }
             )
         candidates.sort(
@@ -451,8 +462,13 @@ def finalize_purchase_request_comparison(
 
 
 def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseRequest) -> set[str]:
-    """Return request line ids covered by a closed comparison with selected offer."""
-    return set(
+    """Return request line ids closed by a finalized comparison and pending zero.
+
+    Un comparativo finalizado solo acredita la cobertura cuando la línea ya no
+    tiene cantidad pendiente de ordenar; finalizar el comparativo no sustituye
+    la orden de compra real.
+    """
+    candidate_ids = set(
         database.session.execute(
             database.select(PurchaseRequestComparisonLine.purchase_request_item_id)
             .join(
@@ -468,25 +484,18 @@ def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseReque
         .scalars()
         .all()
     )
-
-
-def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> bool:
-    """Return whether closed comparisons cover every request line.
-
-    This gate only measures comparison coverage; lines ordered by direct
-    assignment are recognized by :func:`purchase_request_is_ready_to_close`,
-    the actual precondition to close a purchase request.
-    """
-    request_item_ids = set(
-        database.session.execute(
-            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+    return {
+        item_id
+        for item_id in candidate_ids
+        if pending_qty(
+            "purchase_request",
+            purchase_request.id,
+            item_id,
+            "purchase_order",
+            exclude_draft_targets=True,
         )
-        .scalars()
-        .all()
-    )
-    if not request_item_ids:
-        return False
-    return request_item_ids.issubset(purchase_request_comparison_covered_item_ids(purchase_request))
+        <= 0
+    }
 
 
 def purchase_request_direct_order_item_ids(purchase_request: PurchaseRequest) -> set[str]:
@@ -534,8 +543,22 @@ def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> 
         )
     ).all()
     for item_id, comparison in comparison_rows:
+        if (
+            pending_qty(
+                "purchase_request",
+                purchase_request.id,
+                item_id,
+                "purchase_order",
+                exclude_draft_targets=True,
+            )
+            > 0
+        ):
+            continue
         label = comparison.document_no or comparison.id
-        reasons.setdefault(item_id, f"Comparativo {label} finalizado con oferta seleccionada.")
+        reasons.setdefault(
+            item_id,
+            _("Comparativo %(document)s finalizado con oferta seleccionada.") % {"document": label},
+        )
     direct_rows = database.session.execute(
         database.select(DocumentRelation.source_item_id, PurchaseOrder)
         .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
@@ -548,17 +571,28 @@ def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> 
         )
     ).all()
     for item_id, order in direct_rows:
+        if (
+            pending_qty(
+                "purchase_request",
+                purchase_request.id,
+                item_id,
+                "purchase_order",
+                exclude_draft_targets=True,
+            )
+            > 0
+        ):
+            continue
         label = order.document_no or order.id
-        reasons.setdefault(item_id, f"Orden de Compra directa {label} sin comparativo.")
+        reasons.setdefault(item_id, _("Orden de Compra directa %(document)s sin comparativo.") % {"document": label})
     return reasons
 
 
 def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> bool:
-    """Return whether every request line is closed by comparison or direct order.
+    """Return whether every request line has zero pending quantity.
 
-    A line counts as closed when a finalized comparison selected an offer for
-    it or when it has an active relation to an approved purchase order, even
-    if no comparison round ever existed for that line.
+    A finalized comparison or a direct purchase order only closes a line when
+    the line no longer has quantity pending to order. Partial orders and
+    finalized comparisons without their generated order keep the request open.
     """
     request_item_ids = set(
         database.session.execute(
@@ -569,9 +603,18 @@ def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> boo
     )
     if not request_item_ids:
         return False
-    covered = purchase_request_comparison_covered_item_ids(purchase_request) | purchase_request_direct_order_item_ids(
-        purchase_request
-    )
+    covered = purchase_request_comparison_covered_item_ids(purchase_request) | {
+        item_id
+        for item_id in purchase_request_direct_order_item_ids(purchase_request)
+        if pending_qty(
+            "purchase_request",
+            purchase_request.id,
+            item_id,
+            "purchase_order",
+            exclude_draft_targets=True,
+        )
+        <= 0
+    }
     return request_item_ids.issubset(covered)
 
 
@@ -751,8 +794,19 @@ def _create_purchase_order_for_group(
     return order
 
 
-def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
+def create_purchase_orders_from_comparison(
+    comparison: PurchaseRequestComparison, user_id: str | None = None
+) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from a finalized comparison."""
+    lock_document_flow_document("purchase_request_comparison", str(comparison.id))
+    locked_comparison = database.session.execute(
+        database.select(PurchaseRequestComparison)
+        .where(PurchaseRequestComparison.id == comparison.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked_comparison is None:
+        raise ValueError(_("El comparativo no existe."))
+    comparison = locked_comparison
     purchase_request = _comparison_purchase_request_or_raise(comparison)
     lines = _comparison_selected_lines(comparison)
     grouped, quotations_by_group = _group_comparison_lines(lines, comparison)
@@ -762,6 +816,6 @@ def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison
     ]
     comparison.status = "used"
     comparison.used_at = datetime.now(timezone.utc)
-    comparison.modified_by = comparison.finalized_by
+    comparison.modified_by = user_id or comparison.finalized_by
     database.session.flush()
     return orders

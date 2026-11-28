@@ -5,7 +5,7 @@
 
 from cacao_accounting.i18n import _l
 from flask_wtf import FlaskForm
-from wtforms import HiddenField, RadioField, SelectField, StringField
+from wtforms import RadioField, SelectField, StringField
 from wtforms.fields import DateField
 from wtforms.validators import DataRequired, Optional
 
@@ -30,7 +30,6 @@ class SetupLanguageForm(FlaskForm):
     """Formulario para seleccionar el idioma de la aplicación."""
 
     idioma = SelectField(_l("Idioma predeterminado"), choices=LANGUAGE_CHOICES, validators=[DataRequired()])
-    step = HiddenField(default="1")
 
 
 class SetupRegionalForm(FlaskForm):
@@ -39,7 +38,6 @@ class SetupRegionalForm(FlaskForm):
     pais = SelectField(_l("País predeterminado"), choices=COUNTRY_CHOICES, validators=[DataRequired()])
     moneda = SelectField(_l("Moneda predeterminada"), choices=[], validators=[DataRequired()])
     zona_horaria = SelectField(_l("Zona horaria"), choices=[], validators=[DataRequired()])
-    step = HiddenField(default="2")
 
     def __init__(self, *args, **kwargs):
         """Inicializa el formulario regional con las monedas disponibles."""
@@ -74,11 +72,11 @@ class SetupCompanyForm(FlaskForm):
         validators=[DataRequired()],
     )
     catalogo_origen = SelectField(_l("Catálogo existente"), choices=[], validators=[])
-    step = HiddenField(default="3")
 
     def __init__(self, *args, **kwargs):
         """Inicializa el formulario de empresa con las opciones de catálogo disponibles."""
         language = kwargs.pop("language", "es")
+        self.language = language
         super().__init__(*args, **kwargs)
         texts = setup_texts(language)
         self.id.label.text = texts["company_code"]
@@ -96,8 +94,13 @@ class SetupCompanyForm(FlaskForm):
         if self.catalogo.data == "en_cero":
             self.catalogo_origen.data = ""
 
-
-class SetupConfirmationForm(FlaskForm):
-    """Formulario final de confirmación del proceso de configuración."""
-
-    step = HiddenField(default="4")
+    def validate(self, extra_validators=None):
+        """Rechaza un rango fiscal invertido antes de crear datos."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        start = self.inicio_anio_fiscal.data
+        end = self.fin_anio_fiscal.data
+        if start and end and start > end:
+            self.fin_anio_fiscal.errors.append(setup_texts(self.language)["invalid_fiscal_range"])
+            return False
+        return True

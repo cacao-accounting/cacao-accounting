@@ -39,6 +39,14 @@ def company_currency(company: str | None) -> str | None:
     return str(entity.currency) if entity and entity.currency else None
 
 
+def company_country(company: str | None) -> str | None:
+    """Return the normalized country configured for a company."""
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first() if company else None
+    value = getattr(entity, "country", None)
+    normalized = str(value).strip().upper() if value else ""
+    return normalized or None
+
+
 def validate_immutable_header(source: Any | None, company: str | None, currency: str | None) -> tuple[str | None, str | None]:
     """Validate and resolve company/currency inherited from a source document."""
     if source is None:

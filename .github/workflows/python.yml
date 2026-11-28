@@ -10,17 +10,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python-version: "3.12"
-            mode: deps
           - python-version: "3.13"
             mode: full
           - python-version: "3.13"
             mode: desktop
           - python-version: "3.14"
-            mode: deps
-          - python-version: "3.15"
-            mode: deps
-            allow-prereleases: true
+            mode: full
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -49,7 +44,7 @@ jobs:
           LOGURU_LEVEL: "WARNING"
           SECRET_KEY: "ASD123kljaAddS"
         run: |
-          python -m pytest --full -qq --tb=line --cov=cacao_accounting
+          python -m pytest -n auto --full -qq --tb=line --cov=cacao_accounting
       - name: Test with pytest in Desktop Mode
         if: matrix.mode == 'desktop'
         env:
@@ -58,7 +53,7 @@ jobs:
           SECRET_KEY: "ASD123kljaAddS"
           CACAO_ACCOUNTING_DESKTOP: "True"
         run: |
-          python -m pytest --full -qq --tb=line
+          python -m pytest -n auto --full -qq --tb=line
       - name: Coveralls
         if: matrix.mode == 'full'
         continue-on-error: true

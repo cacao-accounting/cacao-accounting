@@ -38,21 +38,3 @@ class RoundingManager:
         quantizer = Decimal("1." + "0" * target_precision) if target_precision > 0 else Decimal("1")
 
         return value.quantize(quantizer, rounding=target_mode)
-
-    def distribute_residual(self, total: Decimal, shares: list[Decimal]) -> list[Decimal]:
-        """Distribute a total amount among shares, ensuring the sum matches exactly."""
-        if not shares:
-            return []
-
-        rounded_shares = [self.round(s) for s in shares]
-        current_sum = sum(rounded_shares)
-        diff = total - current_sum
-
-        if diff == 0:
-            return rounded_shares
-
-        # Adjust the largest share to absorb the rounding difference
-        # This is a simple but effective strategy for accounting
-        idx = shares.index(max(shares))
-        rounded_shares[idx] += diff
-        return rounded_shares

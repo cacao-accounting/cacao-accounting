@@ -3,15 +3,20 @@
 
 """Servicio centralizado de importación."""
 
+import hashlib
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict, Type, List, Any
 from flask import current_app
+from sqlalchemy import case, event, update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 from cacao_accounting.database import database
 from cacao_accounting.imports.column_labels import canonical_columns
+from cacao_accounting.imports.csv_dialect import ImportCSVFormatError
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.readers.csv_reader import CSVReader
+from cacao_accounting.imports.readers.limits import ImportReadLimitError
 from cacao_accounting.imports.readers.xls_reader import XLSReader
 from cacao_accounting.imports.readers.xlsx_reader import XLSXReader
 from cacao_accounting.imports.readers.ods_reader import ODSReader
@@ -35,10 +40,59 @@ from cacao_accounting.imports.adapters.transaction_documents import (
     SupplierQuotationAdapter,
 )
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.cache import invalidate_cache
 from cacao_accounting.i18n import _
+
+
+# Las columnas de importación son ``DateTime`` sin zona. Guardar siempre UTC
+# ingenuo evita mezclar naive/aware y mantiene comparable el corte de
+# recuperación en cualquier motor (N5).
+def _utc_now_naive() -> datetime:
+    """Devuelve la hora UTC actual sin información de zona."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _source_fingerprint(path: str | None) -> str:
+    """Devuelve una huella estable del archivo fuente para identidad de importación."""
+    if not path:
+        return ""
+    try:
+        with open(path, "rb") as source:
+            return hashlib.sha256(source.read()).hexdigest()
+    except OSError:
+        return ""
+
 
 IMPORT_SYNC_MAX_ROWS = 100
 REVALIDATABLE_IMPORT_STATUSES = {1, 2, 3, 7}
+STRUCTURAL_ERROR_TYPES = {
+    "DUPLICATE_COLUMN",
+    "UNKNOWN_COLUMN",
+    "PROHIBITED_COLUMN",
+    "MISSING_COLUMN",
+    "MISSING_HEADER",
+    "EXTRA_CELLS",
+}
+_IMPORT_BATCH_SESSION_KEY = "import_batch_worker_id"
+
+
+class ImportBatchOwnershipLost(RuntimeError):
+    """Raised when recovery or cancellation has taken ownership from a worker."""
+
+
+@event.listens_for(Session, "before_commit")
+def _renew_import_batch_lease(session: Session) -> None:
+    """Renew and fence an import worker before every internal service commit."""
+    batch_id = session.info.get(_IMPORT_BATCH_SESSION_KEY)
+    if not batch_id:
+        return
+    result = session.connection().execute(
+        update(ImportBatch)
+        .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+        .values(started_at=_utc_now_naive())
+    )
+    if (getattr(result, "rowcount", 0) or 0) != 1:
+        raise ImportBatchOwnershipLost(f"Import batch {batch_id} is no longer owned by this worker.")
 
 
 class _IndexedImportRow(dict[str, Any]):
@@ -101,28 +155,23 @@ class ImportService:
 
     def _normalize_rows(self, columns: List[str], rows: List[List[Any]]) -> List[Dict[str, Any]]:
         """Convierte filas de lista a diccionarios usando los nombres de columna."""
-        return [dict(zip(columns, row)) for row in rows]
+        return [
+            {column: row[index] if index < len(row) else "" for index, column in enumerate(columns) if column} for row in rows
+        ]
 
     def _canonicalize_table_headers(self, table: Any, adapter: Any) -> None:
         """Map localized template headers to the adapter's canonical names."""
         expected_columns = getattr(adapter, "columns", None)
         if expected_columns is not None:
-            table.columns = canonical_columns(table.columns, expected_columns)
+            table.columns = canonical_columns(table.columns, expected_columns, getattr(adapter, "column_aliases", {}))
 
     def validate(self, batch_id: str) -> bool:
         """Valida estructuralmente y por reglas de negocio un lote de importación."""
-        batch = database.session.get(ImportBatch, batch_id, with_for_update=True)
-        if (
-            not batch
-            or batch.import_status not in REVALIDATABLE_IMPORT_STATUSES
-            or batch.success_rows
-            or batch.processed_rows
-            or batch.started_at
-        ):
+        if not self._claim_batch(batch_id, REVALIDATABLE_IMPORT_STATUSES):
             return False
-
-        batch.import_status = 4
-        database.session.commit()
+        batch = database.session.get(ImportBatch, batch_id)
+        if not batch:
+            return False
 
         try:
             if not self._validate_accounting_book_rule(batch):
@@ -132,23 +181,31 @@ class ImportService:
             adapter = self._get_adapter(batch.record_type)
             table = reader.read(batch.source_path)
             self._canonicalize_table_headers(table, adapter)
-            normalized_rows = self._normalize_rows(table.columns, table.rows)
-
             ImportBatchError.query.filter_by(batch_id=batch_id).delete()
 
             structural_errors = self._collect_structural_errors(batch_id, table, adapter)
             if structural_errors:
                 self._commit_structural_errors(batch, batch_id, structural_errors)
                 return True
+            if not table.rows:
+                self._commit_empty_file_error(batch, batch_id)
+                return True
 
-            docs = self._group_by_reference(table.columns, normalized_rows)
+            normalized_rows = self._normalize_rows(table.columns, table.rows)
+            docs = self._group_by_reference(table.columns, normalized_rows, adapter)
             batch.total_rows = len(normalized_rows)
 
             business_errors_count = self._collect_business_errors(adapter, batch_id, batch.company_id, docs)
             batch.import_status = 2 if business_errors_count > 0 else 3
+            batch.started_at = None
             database.session.commit()
 
-        except (ArithmeticError, SQLAlchemyError, ValueError, OSError) as e:
+        except Exception as e:
+            # Cualquier falla del lector o del adaptador es un lote inválido:
+            # estado 7 con el error registrado. Un archivo corrupto que pasa
+            # el chequeo MIME (zip truncado, hoja no soportada) no debe dejar
+            # el lote atrapado en 'procesando'.
+            database.session.rollback()
             self._handle_validation_error(batch, batch_id, e)
         return True
 
@@ -164,23 +221,45 @@ class ImportService:
                 )
             )
             batch.import_status = 7
+            batch.started_at = None
             database.session.commit()
             return False
         return True
 
+    def _claim_batch(self, batch_id: str, allowed_statuses: set[int]) -> bool:
+        """Toma un lote mediante una transición condicional segura entre motores."""
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(
+                ImportBatch.id == batch_id,
+                ImportBatch.import_status.in_(allowed_statuses),
+                ImportBatch.success_rows == 0,
+                ImportBatch.processed_rows == 0,
+                ImportBatch.started_at.is_(None),
+            )
+            .values(import_status=4, started_at=_utc_now_naive())
+        )
+        if result.rowcount != 1:  # type: ignore[attr-defined]
+            database.session.rollback()
+            return False
+        database.session.commit()
+        return True
+
     def _collect_structural_errors(self, batch_id: str, table: Any, adapter: Any) -> List[ImportBatchError]:
-        """Recolecta errores estructurales de columnas."""
+        """Recolecta errores estructurales de encabezados y filas."""
+        errors = self._collect_header_errors(batch_id, table.columns, adapter)
+        errors.extend(self._collect_row_width_errors(batch_id, table.columns, table.rows))
+        return errors
+
+    def _collect_header_errors(self, batch_id: str, columns: List[str], adapter: Any) -> List[ImportBatchError]:
+        """Valida encabezados duplicados, desconocidos, prohibidos y requeridos."""
         errors = []
-        available_columns = set(table.columns)
+        available_columns = set(columns)
         seen_columns = set()
-        journal_aliases = {
-            "document_ref": {"document_ref", "reference", "document_reference"},
-            "fecha": {"fecha", "posting_date", "date"},
-            "cuenta": {"cuenta", "account", "account_code"},
-            "debito": {"debito", "debe", "debit"},
-            "credito": {"credito", "haber", "credit"},
-        }
-        for col in table.columns:
+        expected_columns = set(getattr(adapter, "columns", []))
+        for col in columns:
+            if not col:
+                continue
             if col in seen_columns:
                 errors.append(
                     ImportBatchError(
@@ -192,6 +271,15 @@ class ImportService:
                     )
                 )
             seen_columns.add(col)
+            if expected_columns and col not in expected_columns:
+                errors.append(
+                    ImportBatchError(
+                        batch_id=batch_id,
+                        field_name=col,
+                        error_type="UNKNOWN_COLUMN",
+                        message=_("La columna %(column)s no pertenece al formato de importación.") % {"column": col},
+                    )
+                )
             if col.lower() in self.FORBIDDEN_COLUMNS:
                 errors.append(
                     ImportBatchError(
@@ -203,8 +291,7 @@ class ImportService:
                 )
 
         for req_col in adapter.required_columns:
-            accepted = journal_aliases.get(req_col, {req_col}) if isinstance(adapter, JournalEntryAdapter) else {req_col}
-            if not available_columns.intersection(accepted):
+            if req_col not in available_columns:
                 errors.append(
                     ImportBatchError(
                         batch_id=batch_id,
@@ -215,16 +302,50 @@ class ImportService:
                 )
         return errors
 
+    def _collect_row_width_errors(self, batch_id: str, columns: List[str], rows: List[List[Any]]) -> List[ImportBatchError]:
+        """Detecta contenido bajo encabezados vacíos o fuera de la tabla."""
+        errors = []
+        for row_number, row in enumerate(rows, start=1):
+            for index, value in enumerate(row[: len(columns)]):
+                if not columns[index] and self._has_cell_value(value):
+                    errors.append(
+                        ImportBatchError(
+                            batch_id=batch_id,
+                            row_number=row_number,
+                            error_type="MISSING_HEADER",
+                            message=_("La columna tiene datos pero no tiene encabezado."),
+                        )
+                    )
+                    break
+            if any(self._has_cell_value(value) for value in row[len(columns) :]):
+                errors.append(
+                    ImportBatchError(
+                        batch_id=batch_id,
+                        row_number=row_number,
+                        error_type="EXTRA_CELLS",
+                        message=_("La fila contiene datos después de la última columna con encabezado."),
+                    )
+                )
+        return errors
+
+    @staticmethod
+    def _has_cell_value(value: Any) -> bool:
+        """Determina si una celda contiene contenido significativo."""
+        return value is not None and (not isinstance(value, str) or bool(value.strip()))
+
     def _commit_structural_errors(self, batch: ImportBatch, batch_id: str, errors: List[ImportBatchError]) -> None:
         """Persistir errores estructurales y marca batch como fallido."""
         for err in errors:
             database.session.add(err)
         batch.import_status = 7
+        batch.started_at = None
         database.session.commit()
 
     def _collect_business_errors(self, adapter: Any, batch_id: str, company_id: str, docs: Dict[str, List]) -> int:
         """Recolecta errores de negocio de filas y documentos."""
         errors_count = 0
+        batch = database.session.get(ImportBatch, batch_id)
+        context = {"company_id": company_id, "accounting_book_id": batch.accounting_book_id if batch else None}
         for ref, rows in docs.items():
             for i, row in enumerate(rows, start=1):
                 for err_msg in adapter.validate_row(row):
@@ -239,17 +360,42 @@ class ImportService:
                         )
                     )
 
-            for err_msg in adapter.validate_document(rows, {"company_id": company_id}):
+            for err_msg in adapter.validate_document(rows, context):
                 errors_count += 1
                 database.session.add(
                     ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="BUSINESS_RULE", message=err_msg)
                 )
+        batch_validator = getattr(adapter, "validate_batch_documents", None)
+        if callable(batch_validator):
+            for err_msg in batch_validator(docs, context):
+                errors_count += 1
+                database.session.add(ImportBatchError(batch_id=batch_id, error_type="BUSINESS_RULE", message=err_msg))
         return errors_count
 
-    def _handle_validation_error(self, batch: ImportBatch, batch_id: str, e: Exception) -> None:
-        """Maneja errores inesperados durante validación."""
-        database.session.add(ImportBatchError(batch_id=batch_id, error_type="SYSTEM_ERROR", message=str(e)))
+    def _commit_empty_file_error(self, batch: ImportBatch, batch_id: str) -> None:
+        """Marca un archivo con encabezados pero sin filas como inválido (#1065)."""
+        database.session.add(
+            ImportBatchError(
+                batch_id=batch_id,
+                error_type="NO_DATA_ROWS",
+                message=_("El archivo no contiene filas de datos."),
+            )
+        )
         batch.import_status = 7
+        batch.started_at = None
+        database.session.commit()
+
+    def _handle_validation_error(self, batch: ImportBatch, batch_id: str, e: Exception) -> None:
+        """Registra fallos de validación y evita dejar el lote procesando."""
+        error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "SYSTEM_ERROR"
+        if error_type == "RESOURCE_LIMIT":
+            ImportBatchError.query.filter(
+                ImportBatchError.batch_id == batch_id,
+                ImportBatchError.error_type.in_(STRUCTURAL_ERROR_TYPES | {"RESOURCE_LIMIT"}),
+            ).delete(synchronize_session=False)
+        database.session.add(ImportBatchError(batch_id=batch_id, error_type=error_type, message=str(e)))
+        batch.import_status = 7
+        batch.started_at = None
         database.session.commit()
 
     def preview(self, batch_id: str) -> Dict[str, Any]:
@@ -260,12 +406,20 @@ class ImportService:
 
         reader = self._get_reader(batch.source_format)
         adapter = self._get_adapter(batch.record_type)
-        table = reader.read(batch.source_path)
+        persisted_errors = ImportBatchError.query.filter_by(batch_id=batch_id).all()
+        try:
+            table = reader.read(batch.source_path)
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # Readers raise format-specific exceptions.
+            return self._reader_preview_error(batch, persisted_errors, exc)
         self._canonicalize_table_headers(table, adapter)
-        normalized_rows = self._normalize_rows(table.columns, table.rows)
-        docs = self._group_by_reference(table.columns, normalized_rows)
-
-        errors = ImportBatchError.query.filter_by(batch_id=batch_id).all()
+        structural_errors = self._collect_structural_errors(batch_id, table, adapter)
+        errors = [error for error in persisted_errors if error.error_type not in STRUCTURAL_ERROR_TYPES]
+        errors.extend(structural_errors)
+        if structural_errors:
+            docs = {}
+        else:
+            normalized_rows = self._normalize_rows(table.columns, table.rows)
+            docs = self._group_by_reference(table.columns, normalized_rows, adapter)
 
         sample_rows_list = table.rows[:10]
 
@@ -277,20 +431,44 @@ class ImportService:
             "errors": errors,
         }
 
+    @staticmethod
+    def _reader_preview_error(
+        batch: ImportBatch, persisted_errors: list[ImportBatchError], error: Exception
+    ) -> Dict[str, Any]:
+        """Devuelve el detalle del lote cuando el lector no puede abrir la fuente."""
+        is_resource_limit = isinstance(error, ImportReadLimitError)
+        is_bad_csv = isinstance(error, ImportCSVFormatError)
+        error_type = "RESOURCE_LIMIT" if is_resource_limit else "SYSTEM_ERROR"
+        message = str(error) if is_resource_limit or is_bad_csv else _("No se pudo leer el archivo de importación.")
+        errors = [
+            item
+            for item in persisted_errors
+            if item.error_type not in STRUCTURAL_ERROR_TYPES | {"RESOURCE_LIMIT", "SYSTEM_ERROR"}
+        ]
+        errors.append(ImportBatchError(batch_id=batch.id, error_type=error_type, message=message))
+        return {"batch": batch, "columns": [], "sample_rows": [], "total_documents": 0, "errors": errors}
+
     def execute(self, batch_id: str) -> bool:
         """Ejecuta la importación del lote de forma síncrona o asíncrona."""
-        batch = database.session.get(ImportBatch, batch_id, with_for_update=True)
+        batch = database.session.get(ImportBatch, batch_id)
         if not batch:
             return False
 
         if batch.import_status != 3 or batch.success_rows or batch.processed_rows or batch.started_at:
             return False
 
-        reader = self._get_reader(batch.source_format)
-        table = reader.read(batch.source_path)
+        if not self._claim_batch(batch_id, {3}):
+            return False
 
-        batch.import_status = 4
-        database.session.commit()
+        try:
+            reader = self._get_reader(batch.source_format)
+            table = reader.read(batch.source_path)
+        except Exception as exc:
+            self._handle_execution_error(batch_id, exc)
+            return True
+        if not table.rows:
+            self._handle_execution_error(batch_id, ValueError(_("El archivo no contiene filas de datos.")))
+            return True
 
         if len(table.rows) > IMPORT_SYNC_MAX_ROWS:
             thread = threading.Thread(
@@ -301,14 +479,19 @@ class ImportService:
             thread.start()
         else:
             self._execute_task(current_app._get_current_object(), batch_id)  # type: ignore[attr-defined]
+            database.session.expire_all()
         return True
 
-    def cancel(self, batch_id: str):
-        """Solicita la cancelación de un lote de importación."""
-        batch = database.session.get(ImportBatch, batch_id)
-        if batch:
-            batch.cancel_requested = True
-            database.session.commit()
+    def cancel(self, batch_id: str) -> bool:
+        """Solicita cancelación solo mientras el worker conserva el lote."""
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(cancel_requested=True)
+            .execution_options(synchronize_session=False)
+        )
+        database.session.commit()
+        return (getattr(result, "rowcount", 0) or 0) == 1
 
     def _process_document(
         self,
@@ -318,13 +501,49 @@ class ImportService:
         context: dict,
         batch: Any,
         batch_id: str,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int] | None:
         """Procesa un documento individual dentro de la importación."""
-        doc_obj = adapter.build_document(rows, context)
-        self._validate_document_period(doc_obj, batch)
-        adapter.persist_document(doc_obj)
-        database.session.commit()
-        return len(rows), 0
+        session = database.session()
+        previous_batch_id = session.info.get(_IMPORT_BATCH_SESSION_KEY)
+        session.info[_IMPORT_BATCH_SESSION_KEY] = batch_id
+        try:
+            if not self._renew_batch_claim(batch_id):
+                database.session.rollback()
+                self._check_batch_cancellation(batch, batch_id)
+                return None
+
+            doc_obj = adapter.build_document(rows, context)
+            self._validate_document_period(doc_obj, batch)
+            adapter.persist_document(doc_obj)
+            database.session.commit()
+            # Los adaptadores de terceros crean Party/CompanyParty: el selector de
+            # datos maestros debe dejar de servir la lista anterior (#1900).
+            invalidate_cache("smart-select-master-data")
+            return len(rows), 0
+        finally:
+            if previous_batch_id is None:
+                session.info.pop(_IMPORT_BATCH_SESSION_KEY, None)
+            else:
+                session.info[_IMPORT_BATCH_SESSION_KEY] = previous_batch_id
+
+    @staticmethod
+    def _renew_batch_claim(batch_id: str) -> bool:
+        """Renueva la marca del worker dentro de la transaccion del documento.
+
+        El UPDATE condicional adquiere el lock de la fila hasta confirmar el
+        documento y evita que recovery clasifique como vencido un worker activo.
+        """
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(
+                ImportBatch.id == batch_id,
+                ImportBatch.import_status == 4,
+                ImportBatch.cancel_requested.is_(False),
+            )
+            .values(started_at=_utc_now_naive())
+            .execution_options(synchronize_session=False)
+        )
+        return (getattr(result, "rowcount", 0) or 0) == 1
 
     def _validate_document_period(self, doc_obj: Any, batch: Any) -> None:
         """Valida que el periodo contable esté abierto para el documento."""
@@ -366,7 +585,7 @@ class ImportService:
                 return
 
             batch.import_status = 4
-            batch.started_at = datetime.now()
+            batch.started_at = _utc_now_naive()
             database.session.commit()
 
             try:
@@ -374,8 +593,32 @@ class ImportService:
                 adapter = self._get_adapter(batch.record_type)
                 table = reader.read(batch.source_path)
                 self._canonicalize_table_headers(table, adapter)
+                if self._check_batch_cancellation(batch, batch_id):
+                    return
+                # El archivo puede cambiar entre la validación de `execute()` y
+                # esta segunda lectura del worker. Nunca se anuncia éxito para
+                # cero datos (#1200).
+                if not table.rows:
+                    self._handle_execution_error(batch_id, ValueError(_("El archivo no contiene filas de datos.")))
+                    return
+                structural_errors = self._collect_structural_errors(batch_id, table, adapter)
+                if structural_errors:
+                    self._commit_execution_structural_errors(batch_id, structural_errors)
+                    return
+
                 normalized_rows = self._normalize_rows(table.columns, table.rows)
-                docs = self._group_by_reference(table.columns, normalized_rows)
+                docs = self._group_by_reference(table.columns, normalized_rows, adapter)
+                ImportBatchError.query.filter_by(batch_id=batch_id).delete()
+                batch.total_rows = len(normalized_rows)
+                business_errors_count = self._collect_business_errors(adapter, batch_id, batch.company_id, docs)
+                if business_errors_count:
+                    self._transition_execution_status(batch_id, 2)
+                    database.session.commit()
+                    return
+
+                order_documents = getattr(adapter, "order_documents", None)
+                if callable(order_documents):
+                    docs = order_documents(docs)
 
                 context = {
                     "company_id": batch.company_id,
@@ -383,13 +626,14 @@ class ImportService:
                     "accounting_book_id": batch.accounting_book_id,
                     "record_type": batch.record_type,
                     "created_by": batch.created_by,
+                    "import_fingerprint": _source_fingerprint(batch.source_path),
                 }
 
                 success_count, error_count = self._process_all_documents(batch, batch_id, adapter, docs, context)
                 self._finalize_execution(batch, batch_id, success_count, error_count)
 
-            except (ArithmeticError, SQLAlchemyError, ValueError, OSError) as e:
-                self._handle_execution_error(batch, batch_id, e)
+            except Exception as e:
+                self._handle_execution_error(batch_id, e)
 
     def _process_all_documents(
         self, batch: Any, batch_id: str, adapter: Any, docs: Dict[str, List], context: dict
@@ -403,7 +647,10 @@ class ImportService:
                 return success_count, error_count
 
             try:
-                s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
+                result = self._process_document(adapter, ref, rows, context, batch, batch_id)
+                if result is None:
+                    return success_count, error_count
+                s, e = result
                 success_count += s
                 error_count += e
             except (ArithmeticError, ValueError, SQLAlchemyError) as exc:
@@ -414,16 +661,68 @@ class ImportService:
         return success_count, error_count
 
     def _check_batch_cancellation(self, batch: Any, batch_id: str) -> bool:
-        """Verifica si el batch fue cancelado."""
+        """Detiene el worker si el lote ya no le pertenece.
+
+        Devuelve ``True`` cuando debe abandonar el procesamiento: cancelación
+        solicitada (estado terminal 8) o pérdida de propiedad porque otra ruta
+        (recovery) dejó de tener el lote en proceso (estado 4). Sin este último
+        control, un worker aún activo podría seguir creando documentos y
+        asientos después de que recovery marcara el lote como fallido (#1203).
+        """
         database.session.expire(batch)
         current_batch = database.session.get(ImportBatch, batch_id)
         if not current_batch:
             return True
         if current_batch.cancel_requested:
-            current_batch.import_status = 8
+            result = database.session.execute(
+                update(ImportBatch)
+                .where(
+                    ImportBatch.id == batch_id,
+                    ImportBatch.import_status == 4,
+                    ImportBatch.cancel_requested.is_(True),
+                )
+                .values(import_status=8, started_at=None, completed_at=_utc_now_naive())
+                .execution_options(synchronize_session=False)
+            )
             database.session.commit()
+            if (getattr(result, "rowcount", 0) or 0) == 1:
+                database.session.expire_all()
+                return True
+            database.session.expire_all()
+            current_batch = database.session.get(ImportBatch, batch_id)
+            return current_batch is None or current_batch.import_status != 4 or current_batch.cancel_requested
+        if current_batch.import_status != 4:
             return True
         return False
+
+    @staticmethod
+    def _transition_execution_status(batch_id: str, target_status: int) -> tuple[bool, int | None]:
+        """Cierra un atajo del worker sin pisar cancelación o recuperación."""
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(
+                import_status=case((ImportBatch.cancel_requested.is_(True), 8), else_=target_status),
+                started_at=None,
+                completed_at=case(
+                    (ImportBatch.cancel_requested.is_(True), _utc_now_naive()),
+                    else_=ImportBatch.completed_at,
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        transitioned = (getattr(result, "rowcount", 0) or 0) == 1
+        database.session.expire_all()
+        batch = database.session.get(ImportBatch, batch_id)
+        return transitioned, batch.import_status if batch else None
+
+    def _commit_execution_structural_errors(self, batch_id: str, errors: list[ImportBatchError]) -> None:
+        """Registra errores solo si el worker conserva el lote frente a cancelación/recovery."""
+        transitioned, final_status = self._transition_execution_status(batch_id, 7)
+        if transitioned and final_status == 7:
+            ImportBatchError.query.filter_by(batch_id=batch_id).delete()
+            database.session.add_all(errors)
+        database.session.commit()
 
     def _handle_document_error(
         self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int, row_count: int
@@ -444,26 +743,91 @@ class ImportService:
             database.session.commit()
 
     def _finalize_execution(self, batch: Any, batch_id: str, success_count: int, error_count: int) -> None:
-        """Finaliza la ejecución actualizando estados y contadores."""
-        current_batch = database.session.get(ImportBatch, batch_id)
-        if current_batch:
-            current_batch.success_rows = success_count
-            current_batch.error_rows = error_count
-            current_batch.completed_at = datetime.now()
-            current_batch.import_status = 5 if error_count == 0 else 6
-            database.session.commit()
+        """Finaliza la ejecución actualizando estados y contadores.
 
-    def _handle_execution_error(self, batch: Any, batch_id: str, e: Exception) -> None:
+        La transición terminal se hace con un UPDATE condicional
+        ``WHERE import_status = 4`` para no sobrescribir un estado que recovery
+        (7) o una cancelación (8) hayan comprometido entre la lectura y la
+        escritura del worker (#1203).
+        """
+        current_batch = database.session.get(ImportBatch, batch_id)
+        if current_batch is None:
+            return
+        completed_at = _utc_now_naive()
+        target_status = 5 if error_count == 0 else 6
+        # Una sola transición atómica: WHERE import_status = 4 protege contra
+        # recovery (7) y el CASE resuelve la cancelación contra el valor
+        # comprometido al momento del UPDATE, cerrando la carrera en que
+        # `/cancel` marca cancel_requested=True entre la lectura y la escritura
+        # del worker (#1203).
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(
+                success_rows=success_count,
+                error_rows=error_count,
+                started_at=None,
+                completed_at=completed_at,
+                import_status=case(
+                    (ImportBatch.cancel_requested.is_(True), 8),
+                    else_=target_status,
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        database.session.commit()
+        # rowcount == 0 significa que recovery ganó la carrera: el estado 7
+        # permanece intacto. La cancelación no produce rowcount 0 porque la
+        # propia transición la resuelve a 8. Si el checkpoint ya fijó estado 8,
+        # conserva los contadores parciales sin modificar el estado terminal.
+        if (getattr(result, "rowcount", 0) or 0) == 0:
+            database.session.expire_all()
+            current_batch = database.session.get(ImportBatch, batch_id)
+            if current_batch and current_batch.import_status == 8 and current_batch.cancel_requested:
+                database.session.execute(
+                    update(ImportBatch)
+                    .where(
+                        ImportBatch.id == batch_id,
+                        ImportBatch.import_status == 8,
+                        ImportBatch.cancel_requested.is_(True),
+                    )
+                    .values(success_rows=success_count, error_rows=error_count)
+                    .execution_options(synchronize_session=False)
+                )
+                database.session.commit()
+
+    def _handle_execution_error(self, batch_id: str, e: Exception) -> None:
         """Maneja errores fatales durante la ejecución."""
-        current_batch = database.session.get(ImportBatch, batch_id)
-        if current_batch:
-            current_batch.import_status = 7
-            err_record = ImportBatchError(batch_id=batch_id, error_type="FATAL_ERROR", message=str(e))
-            database.session.add(err_record)
-            database.session.commit()
+        database.session.rollback()
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(
+                import_status=case((ImportBatch.cancel_requested.is_(True), 8), else_=7),
+                started_at=None,
+                completed_at=case(
+                    (ImportBatch.cancel_requested.is_(True), _utc_now_naive()),
+                    else_=ImportBatch.completed_at,
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if (getattr(result, "rowcount", 0) or 0) == 1:
+            database.session.expire_all()
+            current_batch = database.session.get(ImportBatch, batch_id)
+            if current_batch and current_batch.import_status != 8:
+                error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "FATAL_ERROR"
+                err_record = ImportBatchError(batch_id=batch_id, error_type=error_type, message=str(e))
+                database.session.add(err_record)
+        database.session.commit()
 
-    def _group_by_reference(self, columns: List[str], rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Agrupa las filas por la columna document_ref."""
+    def _group_by_reference(
+        self, columns: List[str], rows: List[Dict[str, Any]], adapter: Any | None = None
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Agrupa filas solo cuando el adaptador usa una referencia documental."""
+        if adapter is not None and not getattr(adapter, "group_by_reference", True):
+            return {f"row_{i}": [_IndexedImportRow(row, i + 1)] for i, row in enumerate(rows)}
+
         reference_column = next(
             (column for column in ("document_ref", "reference", "document_reference") if column in columns), None
         )

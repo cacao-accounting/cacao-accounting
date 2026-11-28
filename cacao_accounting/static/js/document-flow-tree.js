@@ -104,9 +104,19 @@
 
   function statusBadgeClass(node) {
     if (node.docstatus === 2) return 'ca-flow-badge--cancelled';
+    const code = String(node?.status?.code || '').toLowerCase();
+    if (code === 'approved' || code === 'paid' || code === 'completed') return 'ca-flow-badge--approved';
+    if (code.startsWith('pending_') || code.startsWith('partially_') || code === 'open') {
+      return 'ca-flow-badge--partial';
+    }
+    if (code === 'draft') return 'ca-flow-badge--draft';
     const label = String(node?.status?.label || '').toLowerCase();
-    if (label.includes('aprob') || label.includes('pagad')) return 'ca-flow-badge--approved';
-    if (label.includes('pend') || label.includes('parcial')) return 'ca-flow-badge--partial';
+    if (label.includes('aprob') || label.includes('approved') || label.includes('pagad') || label.includes('paid')) {
+      return 'ca-flow-badge--approved';
+    }
+    if (label.includes('pend') || label.includes('pending') || label.includes('parcial') || label.includes('partial')) {
+      return 'ca-flow-badge--partial';
+    }
     if (label.includes('borrador') || label.includes('draft')) return 'ca-flow-badge--draft';
     return '';
   }

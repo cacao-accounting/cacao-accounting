@@ -165,10 +165,11 @@ class ProjectCapitalizationService:
 
         for voucher_id, lines in groups.items():
             try:
-                if self._process_group(company, voucher_id, lines, user_id):
-                    success_count += 1
+                with database.session.begin_nested():
+                    if self._process_group(company, voucher_id, lines, user_id):
+                        success_count += 1
             except Exception as e:
-                database.session.rollback()
+                # begin_nested revierte solo el grupo; grupos previos siguen pendientes de commit.
                 log.exception(f"Error capitalizando comprobante {voucher_id}")
                 errors.append(f"Comprobante {voucher_id}: {str(e)}")
 
@@ -236,9 +237,13 @@ class ProjectCapitalizationService:
         capitalization_journals = [
             _create_capitalization_journal(company, currency_lines, user_id) for currency_lines in lines_by_currency.values()
         ]
-        orig_journal.capitalized_by_id = capitalization_journals[0].id
-        database.session.add(orig_journal)
 
         for cap_journal in capitalization_journals:
-            submit_journal(cap_journal.id, user_id=user_id)
+            # Atomicidad por fuente (#1784): no confirmar por diario; si una moneda falla,
+            # el rollback del grupo revierte diarios y vínculo de capitalización.
+            submit_journal(cap_journal.id, user_id=user_id, commit=False)
+
+        orig_journal.capitalized_by_id = capitalization_journals[0].id
+        database.session.add(orig_journal)
+        database.session.flush()
         return True

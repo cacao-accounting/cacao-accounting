@@ -22,7 +22,7 @@
         payment_type: config.paymentType,
         company: '',
         naming_series_id: '',
-        posting_date: new Date().toISOString().slice(0, 10),
+        posting_date: globalThis.cacaoLocalIsoDate(new Date()),
         bank_account_id: '',
         currency: '',
         paid_amount: 0,
@@ -32,16 +32,18 @@
         unit_code: '',
         project_code: '',
         remarks: '',
-        external_number: '',
+        reference_no: '',
       },
       payload: '',
 
       init: function () {
         document.addEventListener('bank-account-selected', (event) => {
             this.header.bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                this.header.currency = event.detail.extra.currency;
-            }
+            this.header.currency = event.detail.currency || '';
+        });
+        this.$watch('header.company', () => {
+            this.header.bank_account_id = '';
+            this.header.currency = '';
         });
       },
 
@@ -65,7 +67,7 @@
           unit_code: this.header.unit_code,
           project_code: this.header.project_code,
           remarks: this.header.remarks,
-          external_number: this.header.external_number
+          reference_no: this.header.reference_no
         });
       }
     };
@@ -94,11 +96,11 @@
             doctype: "company",
             name: "company"
           })'>
-          <input type="hidden" x-model="selectedValue" x-effect="header.company = selectedValue">
+          <input type="hidden" id="company" name="company" x-model="selectedValue" x-effect="header.company = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -108,16 +110,18 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
-            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
-            filterSources: ["#company_val"],
+            filters: {
+              company: { selector: "#company" },
+              entity_type: "{{ 'bank_debit_note' if payment_type == 'debit_note' else 'bank_credit_note' }}"
+            },
+            filterSources: ["#company"],
             autoSelectDefault: true
           })'>
-          <input type="hidden" id="company_val" x-model="header.company">
           <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -128,15 +132,16 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "bank_account",
             name: "bank_account_id",
-            filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-            filterSources: ["#company_val"],
-            onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
+            filters: { company: { selector: "#company" }, is_active: function() { return "True" } },
+            filterSources: ["#company"],
+            onSelect: function(opt) { $dispatch("bank-account-selected", opt) },
+            onClear: function() { header.bank_account_id = ""; header.currency = ""; }
           })'>
-          <input type="hidden" x-model="selectedValue">
+          <input type="hidden" x-model="selectedValue" x-effect="header.bank_account_id = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -163,14 +168,14 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "cost_center",
             name: "cost_center_code",
-            filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-            filterSources: ["#company_val"]
+            filters: { company: { selector: "#company" }, is_active: function() { return "True" } },
+            filterSources: ["#company"]
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.cost_center_code = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar centro de costo...') }}">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -180,14 +185,14 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "unit",
             name: "unit_code",
-            filters: { company: { selector: "#company_val" } },
-            filterSources: ["#company_val"]
+            filters: { company: { selector: "#company" } },
+            filterSources: ["#company"]
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.unit_code = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar unidad de negocio...') }}">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -197,14 +202,14 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "project",
             name: "project_code",
-            filters: { company: { selector: "#company_val" } },
-            filterSources: ["#company_val"]
+            filters: { company: { selector: "#company" } },
+            filterSources: ["#company"]
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.project_code = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar proyecto...') }}">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -220,14 +225,14 @@
             <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "account",
                 name: "paid_to_account_id",
-                filters: { company: { selector: "#company_val" } },
-                filterSources: ["#company_val"]
+                filters: { company: { selector: "#company" } },
+                filterSources: ["#company"]
               })'>
               <input type="hidden" x-model="selectedValue" x-effect="header.paid_to_account_id = selectedValue">
               <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta contable...') }}" required>
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>
@@ -236,14 +241,14 @@
             <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "account",
                 name: "paid_from_account_id",
-                filters: { company: { selector: "#company_val" } },
-                filterSources: ["#company_val"]
+                filters: { company: { selector: "#company" } },
+                filterSources: ["#company"]
               })'>
               <input type="hidden" x-model="selectedValue" x-effect="header.paid_from_account_id = selectedValue">
               <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta contable...') }}" required>
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>
@@ -251,7 +256,7 @@
         </div>
         <div class="col-md-6">
             <label class="form-label">{{ _('Referencia externa') }}</label>
-            <input class="form-control" x-model="header.external_number" placeholder="{{ _('No. documento...') }}">
+            <input class="form-control" x-model="header.reference_no" placeholder="{{ _('No. documento...') }}">
         </div>
         <div class="col-md-12">
             <label class="form-label">{{ _('Descripción / Concepto') }}</label>

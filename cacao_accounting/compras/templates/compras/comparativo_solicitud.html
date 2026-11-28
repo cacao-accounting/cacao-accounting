@@ -1,7 +1,7 @@
 {% extends "base.html" %} {% block contenido %} {% import "macros.html" as
 macros %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"
@@ -44,6 +44,14 @@ macros %}
         · {{ _("Cotizaciones participantes: %(count)s", count=offers|length) }}
       </p>
     </div>
+
+  {% if functional_currency %}
+  <div class="alert alert-info small py-2 mb-2">
+    <strong>{{ _("Moneda funcional de comparaci?n") }}:</strong> {{ functional_currency }}.
+    {{ _("La recomendaci?n se calcula por tarifa equivalente en moneda funcional; la tarifa original de la oferta se muestra con su moneda transaccional.") }}
+  </div>
+  {% endif %}
+
     <span
       class="badge text-bg-{% if comparison.status == 'used' %}dark{% elif comparison.status == 'finalized' %}success{% elif comparison.status == 'pending_authorization' %}warning{% else %}secondary{% endif %}"
     >
@@ -82,14 +90,14 @@ macros %}
         </span>
         {% else %} · {{ _("Sin ronda abierta") }} {% endif %}
       </span>
-      {% if context.round and context.round.status == 'open' %}
+      {% if context.round and context.round.status == 'open' and can_create %}
       <a
         class="btn btn-sm btn-outline-primary"
         href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=context.rfq.id) }}"
       >
         <i class="bi bi-plus-circle me-1"></i>{{ _("Agregar oferta a esta ronda") }}
       </a>
-      {% else %}
+      {% elif can_authorize and can_create %}
       <form
         method="post"
         action="{{ url_for('compras.compras_comparativo_solicitud_abrir_ronda', comparison_id=comparison.id) }}"
@@ -106,6 +114,9 @@ macros %}
   </div>
   {% endif %}
 
+  {% if recommendations_error %}
+  <div class="alert alert-warning m-3 mb-0" role="alert">{{ recommendations_error }}</div>
+  {% endif %}
   <form
     method="post"
     action="{{ url_for('compras.compras_comparativo_guardar_borrador', comparison_id=comparison.id) }}"
@@ -180,11 +191,16 @@ macros %}
                 />
                 {% endif %}
                 <span>
-                  <strong>{{ candidate.rate }}</strong
-                  ><small class="d-block text-muted"
-                    >{{ candidate.line.qty }} {{ candidate.line.uom or ''
-                    }}</small
-                  >
+                  <strong>{{ format_money_with_currency(candidate.rate, candidate.transaction_currency) }}</strong>
+                  <small class="d-block text-muted">{{ candidate.line.qty }} {{ candidate.line.uom or '' }}</small>
+                  {% if candidate.transaction_currency and candidate.base_currency and candidate.transaction_currency != candidate.base_currency %}
+                  <small class="d-block text-muted">
+                    {{ _("Equivalente") }}: {{ format_money_with_currency(candidate.base_rate, candidate.base_currency) }}
+                    {% if candidate.exchange_rate and candidate.exchange_rate > 0 %}
+                    ({{ _("TC") }} {{ candidate.exchange_rate }}{% if candidate.exchange_rate_date %}, {{ candidate.exchange_rate_date }}{% endif %}{% if candidate.exchange_rate_source == 'lookup' %} · {{ _("tasa consultada") }}{% endif %})
+                    {% endif %}
+                  </small>
+                  {% endif %}
                   {% if row.recommended and row.recommended.offer.id == offer.id
                   %}<span class="badge text-bg-success">{{ _("Recomendado") }}</span>{%
                   endif %}
@@ -218,6 +234,7 @@ macros %}
             </td>
           </tr>
           {% else %}
+          {% if not request_has_lines %}
           <tr>
             <td
               colspan="{{ offers|length + 3 }}"
@@ -226,6 +243,7 @@ macros %}
               {{ _("La Solicitud de Compra no tiene líneas.") }}
             </td>
           </tr>
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>
@@ -233,10 +251,12 @@ macros %}
 
     {% if comparison.status not in ['finalized', 'used'] %}
     <div class="d-flex gap-2 mt-3 flex-wrap">
+      {% if can_create %}
       <button type="submit" class="btn btn-outline-primary">
         <i class="bi bi-save me-1"></i>{{ _("Guardar borrador") }}
       </button>
-      {% if is_purchase_sourcing_authorizer %}
+      {% endif %}
+      {% if can_authorize %}
       <button
         type="submit"
         formaction="{{ url_for('compras.compras_comparativo_finalizar', comparison_id=comparison.id) }}"
@@ -249,7 +269,7 @@ macros %}
     {% endif %}
   </form>
 
-  {% if comparison.status == 'finalized' %}
+  {% if comparison.status == 'finalized' and can_create %}
   <div class="d-flex justify-content-end p-3 pt-0">
     <form
       method="post"

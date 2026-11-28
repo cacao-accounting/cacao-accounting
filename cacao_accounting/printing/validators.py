@@ -3,31 +3,86 @@
 """Validadores para plantillas de impresión."""
 
 import re
+from html.parser import HTMLParser
 from typing import Optional
+
 from cacao_accounting.printing.exceptions import TemplateValidationError
 
 
 from cacao_accounting.i18n import _
 
 
-def validate_template_security(template_body: str) -> None:
-    """Valida que la plantilla no contenga elementos prohibidos."""
-    # Check for <script>
-    if re.search(r"<script", template_body, re.IGNORECASE):
-        raise TemplateValidationError(_("Las plantillas no pueden contener etiquetas <script>."))
+class _PrintTemplateSecurityParser(HTMLParser):
+    """Capture active HTML features that are unsafe in printable templates."""
 
-    # Check for inline events
-    forbidden_events = [
-        "onclick",
-        "onload",
-        "onerror",
-        "onmouseover",
-        "onfocus",
-        "onsubmit",
-    ]
-    for event in forbidden_events:
-        if re.search(rf"\b{event}\s*=", template_body, re.IGNORECASE):
-            raise TemplateValidationError(_("El atributo '%(event)s' no está permitido.") % {"event": event})
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.violation: tuple[str, str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Record the first active tag, event handler, or executable URL."""
+        normalized_tag = tag.lower()
+        if normalized_tag in {"script", "iframe", "object", "embed"}:
+            self.violation = ("element", normalized_tag)
+            return
+
+        for name, value in attrs:
+            normalized_name = name.lower()
+            if normalized_name.startswith("on"):
+                self.violation = ("event", normalized_name)
+                return
+            url_attributes = {"href", "src", "action", "formaction", "xlink:href"}
+            if normalized_name in url_attributes and _has_executable_url(value):
+                self.violation = ("url", normalized_name)
+                return
+
+
+def _has_executable_url(value: str | None) -> bool:
+    """Detect JavaScript and VBScript URL schemes after browser whitespace handling."""
+    if not value:
+        return False
+    compact_value = re.sub(r"[\x00-\x20]+", "", value).lower()
+    return compact_value.startswith(("javascript:", "vbscript:"))
+
+
+def _rendered_probe(template_body: str) -> str:
+    """Renderiza la plantilla en sandbox para validar la salida, no solo el fuente.
+
+    El escape de Jinja (``<scr{{ '' }}ipt>``) evita que el parser vea un
+    ``<script>`` en el texto, pero produce uno al renderizar. La sonda usa un
+    entorno sandbox y, si la plantilla no puede renderizarse con el contexto
+    vacío, devuelve el fuente para conservar el comportamiento previo (#2131).
+    """
+    from jinja2.sandbox import SandboxedEnvironment
+
+    try:
+        return SandboxedEnvironment(autoescape=False).from_string(template_body).render()
+    except Exception:
+        return ""
+
+
+def validate_template_security(template_body: str) -> None:
+    """Valida que la plantilla no contenga elementos prohibidos en su salida."""
+    if re.search(r"<!\s*\[\s*cdata\s*\[", template_body, re.IGNORECASE):
+        raise TemplateValidationError(_("Las secciones CDATA no están permitidas en plantillas HTML."))
+    ambiguous_comment_endings = r"<!--(?:.*?)--!>|<!-->|<!--->"
+    if re.search(ambiguous_comment_endings, template_body, re.DOTALL):
+        raise TemplateValidationError(_("Los delimitadores de comentario HTML ambiguos no están permitidos."))
+
+    parser = _PrintTemplateSecurityParser()
+    parser.feed(template_body)
+    rendered = _rendered_probe(template_body)
+    if rendered != template_body:
+        parser.feed(rendered)
+    if parser.violation is None:
+        return
+
+    violation_type, value = parser.violation
+    if violation_type == "event":
+        raise TemplateValidationError(_("El atributo '%(event)s' no está permitido.") % {"event": value})
+    if violation_type == "element":
+        raise TemplateValidationError(_("El elemento HTML '%(element)s' no está permitido.") % {"element": value})
+    raise TemplateValidationError(_("No se permiten URLs con esquemas ejecutables."))
 
 
 def validate_css_safety(stylesheet_body: Optional[str]) -> None:
@@ -35,6 +90,19 @@ def validate_css_safety(stylesheet_body: Optional[str]) -> None:
     if not stylesheet_body:
         return
 
+    if re.search(r"</style(?=$|[\t\n\f\r />])", stylesheet_body, re.IGNORECASE):
+        raise TemplateValidationError(_("El CSS no puede cerrar el elemento <style>."))
+
     # Basic check for expression() or other dynamic CSS
     if "expression(" in stylesheet_body.lower():
         raise TemplateValidationError(_("Dynamic CSS expressions are not allowed."))
+
+    # #1930: el tama?o y la orientaci?n de p?gina pertenecen a la configuraci?n
+    # de impresi?n. Una regla @page con `size` (incluido `!important`) podr?a
+    # imponerse a la selecci?n del usuario, as? que se rechaza expl?citamente.
+    for bloque in re.finditer(r"@page[^{]*\{([^}]*)\}", stylesheet_body, re.IGNORECASE | re.DOTALL):
+        declarations = re.sub(r"/\*.*?\*/", " ", bloque.group(1), flags=re.DOTALL)
+        if re.search(r"(?:^|[;\s])size\s*:", declarations, re.IGNORECASE):
+            raise TemplateValidationError(
+                _("El CSS de la plantilla no puede definir el tama?o de p?gina; use la configuraci?n de impresi?n.")
+            )

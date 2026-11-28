@@ -5,14 +5,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Set
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
-from cacao_accounting.database import TaxRule, database
+from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS, unique_concepts
+from cacao_accounting.accounting_engine.landed_cost.engine import VALID_ALLOCATION_METHODS
+from cacao_accounting.database import Accounts, Currency, Entity, Item, ItemCategory, TaxRule, database
 
 
 from cacao_accounting.i18n import _
@@ -52,9 +54,9 @@ def update_tax_rule(rule: TaxRule, values: Mapping[str, str | None]) -> TaxRule:
     return rule
 
 
-def delete_tax_rule(rule: TaxRule) -> None:
-    """Elimina una regla fiscal."""
-    database.session.delete(rule)
+def deactivate_tax_rule(rule: TaxRule) -> None:
+    """Retira una regla fiscal del uso futuro conservando su evidencia histórica."""
+    rule.is_active = False
 
 
 def build_tax_rule_contexts(
@@ -89,6 +91,111 @@ def build_tax_rule_context(rule_id: str) -> TaxRuleContext | None:
     return _to_context(rule)
 
 
+def _validate_tax_rule_references(company: str | None, account_id: str | None, currency: str | None) -> None:
+    """Valida compañía, moneda y cuenta antes de persistir la regla."""
+    if company:
+        exists = database.session.execute(select(Entity.id).filter_by(code=company)).scalar_one_or_none()
+        if exists is None:
+            raise TaxRuleServiceError(_("La compañía de la regla fiscal no existe."))
+    account_code = _clean_text(account_id)
+    if account_code:
+        account = database.session.get(Accounts, account_code)
+        if account is None:
+            raise TaxRuleServiceError(_("La cuenta contable de la regla fiscal no existe."))
+        if company is None:
+            raise TaxRuleServiceError(_("Una regla fiscal global no puede asociar una cuenta contable específica."))
+        if company and account.entity != company:
+            raise TaxRuleServiceError(_("La cuenta contable no pertenece a la compañía de la regla fiscal."))
+    currency_code = _clean_text(currency)
+    if currency_code:
+        exists = database.session.execute(select(Currency.code).filter_by(code=currency_code)).scalar_one_or_none()
+        if exists is None:
+            raise TaxRuleServiceError(_("La moneda de la regla fiscal no existe."))
+
+
+RECOGNITION_EVENTS: frozenset[str] = frozenset(
+    {
+        "invoice",
+        "payment",
+        "payment_confirmed",
+        "collection",
+        "collection_confirmed",
+        "refund_confirmed",
+        "settlement",
+        "reversal",
+        "purchase_request_confirmed",
+        "purchase_order_confirmed",
+        "purchase_receipt_confirmed",
+        "purchase_invoice_confirmed",
+        "purchase_credit_note_confirmed",
+        "import_landed_cost_confirmed",
+        "sales_request_confirmed",
+        "sales_order_confirmed",
+        "delivery_note_confirmed",
+        "sales_invoice_confirmed",
+        "sales_credit_note_confirmed",
+        "stock_entry_confirmed",
+        "bank_transfer_confirmed",
+    }
+)
+
+TAX_RULE_ENUMS: dict[str, tuple[Set[str], str]] = {
+    "applies_to": ({"both", "purchase", "sales"}, "both"),
+    "level": ({"item", "party", "transaction", "company"}, "transaction"),
+    "tax_type": ({"tax", "withholding", "charge", "deduction"}, "tax"),
+    "calculation_method": (SUPPORTED_TAX_CALCULATION_METHODS, "percentage"),
+    "base_mode": ({"goods", "accumulated"}, "goods"),
+    "accounting_treatment": ({"separate_tax_account", "capitalizable_inventory_cost"}, "separate_tax_account"),
+    "recognition_event": (RECOGNITION_EVENTS, "invoice"),
+    "allocation_method": (VALID_ALLOCATION_METHODS, ""),
+}
+
+
+def _validated_enum(values: Mapping[str, str | None], field: str) -> str:
+    """Valida un campo enumerado y aplica su default cuando llega vacío."""
+    allowed, default = TAX_RULE_ENUMS[field]
+    raw = _clean_text(values.get(field))
+    if not raw:
+        return default
+    if raw not in allowed:
+        raise TaxRuleServiceError(_("El valor de %(field)s no es válido para la regla fiscal.") % {"field": field})
+    return raw
+
+
+def resolve_item_category_ids(item_codes: Iterable[str | None]) -> dict[str, str | None]:
+    """Resuelve la categoría de cada artículo con una sola consulta.
+
+    La condición fiscal por categoría (#1353) se evalúa por línea; resolver la
+    categoría en lote evita una consulta por artículo al construir contextos.
+    """
+    codes = sorted({str(code) for code in item_codes if code})
+    if not codes:
+        return {}
+    rows = database.session.execute(select(Item.code, Item.item_category_id).where(Item.code.in_(codes))).all()
+    return {str(code): category_id for code, category_id in rows}
+
+
+def _validated_item_categories(value: str | None) -> str | None:
+    """Valida y canonicaliza las categorías de artículo permitidas por la regla.
+
+    La condición fiscal por categoría usa ULID del catálogo existente
+    ``ItemCategory``; se exige que la categoría exista y esté activa al guardar.
+    El orden y la deduplicación hacen estable el snapshot fiscal posterior.
+    """
+    categories = sorted(set(_csv_to_list(value)))
+    for category_id in categories:
+        category = database.session.get(ItemCategory, category_id)
+        if category is None:
+            raise TaxRuleServiceError(
+                _("La categoría de artículo %(category)s de la regla fiscal no existe.") % {"category": category_id}
+            )
+        if not category.is_active:
+            raise TaxRuleServiceError(
+                _("La categoría de artículo %(category)s de la regla fiscal no está activa.") % {"category": category_id}
+            )
+    return ", ".join(categories) if categories else None
+
+
 def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> None:
     """Aplica datos validados a una regla fiscal ORM."""
     name = (values.get("name") or "").strip()
@@ -97,28 +204,38 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
         raise TaxRuleServiceError(_("El nombre de la regla fiscal es obligatorio."))
     if not concept:
         raise TaxRuleServiceError(_("El concepto fiscal es obligatorio."))
-    rule.company = _clean_text(values.get("company"))
+    company = _clean_text(values.get("company"))
+    _validate_tax_rule_references(company, values.get("account_id"), values.get("currency"))
+    applies_to = _validated_enum(values, "applies_to")
+    level = _validated_enum(values, "level")
+    tax_type = _validated_enum(values, "tax_type")
+    calculation_method = _validated_enum(values, "calculation_method")
+    base_mode = _validated_enum(values, "base_mode")
+    accounting_treatment = _validated_enum(values, "accounting_treatment")
+    recognition_event = _validated_enum(values, "recognition_event")
+    rule.company = company
     rule.name = name
-    rule.applies_to = _clean_text(values.get("applies_to")) or "both"
-    rule.level = _clean_text(values.get("level")) or "transaction"
+    rule.applies_to = applies_to
+    rule.level = level
     rule.concept = concept
-    rule.tax_type = _clean_text(values.get("tax_type")) or "tax"
-    rule.calculation_method = _clean_text(values.get("calculation_method")) or "percentage"
+    rule.tax_type = tax_type
+    rule.calculation_method = calculation_method
     rule.rate = _decimal_value(values.get("rate"), default="0")
     rule.amount = _decimal_value(values.get("amount"), default="0")
-    rule.base_mode = _clean_text(values.get("base_mode")) or "goods"
+    rule.base_mode = base_mode
     rule.include_concepts = _normalized_csv(values.get("include_concepts"))
     rule.exclude_concepts = _normalized_csv(values.get("exclude_concepts"))
+    rule.allowed_item_categories = _validated_item_categories(values.get("allowed_item_categories"))
     rule.sequence = _int_value(values.get("sequence"), default=10)
-    rule.accounting_treatment = _clean_text(values.get("accounting_treatment")) or "separate_tax_account"
-    rule.recognition_event = _clean_text(values.get("recognition_event")) or "invoice"
+    rule.accounting_treatment = accounting_treatment
+    rule.recognition_event = recognition_event
     rule.account_id = _clean_text(values.get("account_id"))
     rule.affects_inventory = values.get("affects_inventory") is not None
     rule.affects_cost = values.get("affects_cost") is not None
     rule.affects_document_total = values.get("affects_document_total") is not None
     rule.affects_settlement = values.get("affects_settlement") is not None
     rule.participates_in_next_base = values.get("participates_in_next_base") is not None
-    rule.allocation_method = _clean_text(values.get("allocation_method"))
+    rule.allocation_method = _validated_enum(values, "allocation_method")
     rule.currency = _clean_text(values.get("currency"))
     rule.country = _clean_text(values.get("country"))
     rule.valid_from = _date_value(values.get("valid_from"))
@@ -137,8 +254,8 @@ def _to_context(rule: TaxRule) -> TaxRuleContext:
         rate=_decimal_value(rule.rate, default="0"),
         amount=_decimal_value(rule.amount, default="0"),
         base_mode=rule.base_mode,
-        include_concepts=_csv_to_list(rule.include_concepts),
-        exclude_concepts=_csv_to_list(rule.exclude_concepts),
+        include_concepts=unique_concepts(_csv_to_list(rule.include_concepts)),
+        exclude_concepts=unique_concepts(_csv_to_list(rule.exclude_concepts)),
         participates_in_next_base=bool(rule.participates_in_next_base),
         order=int(rule.sequence or 0),
         accounting_treatment=rule.accounting_treatment,
@@ -150,6 +267,7 @@ def _to_context(rule: TaxRule) -> TaxRuleContext:
         valid_from=rule.valid_from,
         valid_to=rule.valid_to,
         allowed_currencies=[rule.currency] if rule.currency else [],
+        allowed_item_categories=_csv_to_list(rule.allowed_item_categories),
         country=rule.country,
         account_id=rule.account_id,
     )
@@ -163,7 +281,7 @@ def _clean_text(value: str | None) -> str | None:
 
 def _normalized_csv(value: str | None) -> str | None:
     """Normaliza texto CSV para persistencia estable."""
-    values = _csv_to_list(value)
+    values = unique_concepts(_csv_to_list(value))
     return ", ".join(values) if values else None
 
 
@@ -183,15 +301,19 @@ def _int_value(value: str | None, *, default: int) -> int:
 
 
 def _decimal_value(value: object, *, default: str) -> Decimal:
-    """Convierte valores decimales de formulario o BD."""
+    """Convierte valores decimales finitos de formulario o BD."""
     if value in (None, ""):
         return Decimal(default)
     if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError) as exc:
-        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es inválido.")) from exc
+        amount = value
+    else:
+        try:
+            amount = Decimal(str(value))
+        except (InvalidOperation, TypeError) as exc:
+            raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es inválido.")) from exc
+    if not amount.is_finite():
+        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal debe ser finito."))
+    return amount
 
 
 def _date_value(value: str | None) -> date | None:

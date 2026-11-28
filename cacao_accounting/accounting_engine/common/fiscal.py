@@ -5,7 +5,72 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
+from decimal import Decimal
+
+from cacao_accounting.i18n import _
+
+SUPPORTED_TAX_CALCULATION_METHODS = frozenset({"percentage", "fixed", "manual"})
+
+
+def find_duplicate_rule_id(values: Iterable[str | None]) -> str | None:
+    """Devuelve el primer identificador fiscal repetido, ignorando vacíos."""
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized:
+            continue
+        if normalized in seen:
+            return normalized
+        seen.add(normalized)
+    return None
+
 
 def affects_inventory_from_treatment(accounting_treatment: str | None) -> bool:
     """Return whether a fiscal component is capitalized into inventory."""
     return accounting_treatment == "capitalizable_inventory_cost"
+
+
+def calculate_accumulated_tax_base(
+    default_base: Decimal,
+    concept_amounts: Mapping[str, Decimal],
+    include_concepts: Sequence[str],
+    exclude_concepts: Sequence[str],
+) -> Decimal:
+    """Resolve an accumulated tax base, applying exclusions even without inclusions."""
+    unique_inclusions = unique_concepts(include_concepts)
+    unique_exclusions = unique_concepts(exclude_concepts)
+    if unique_inclusions:
+        base = sum(
+            (
+                concept_amounts.get(concept, default_base if concept == "goods" else Decimal("0"))
+                for concept in unique_inclusions
+            ),
+            Decimal("0"),
+        )
+    else:
+        base = default_base
+    excluded_amount = sum((concept_amounts.get(concept, Decimal("0")) for concept in unique_exclusions), Decimal("0"))
+    return base - excluded_amount
+
+
+def has_negative_tax_amounts(*values: Decimal) -> bool:
+    """Return whether a manual tax line contains a negative amount or rate."""
+    return any(value < 0 for value in values)
+
+
+def negative_manual_tax_amount_message() -> str:
+    """Return the shared validation message for negative manual tax values."""
+    return _("Las l\u00edneas fiscales manuales no pueden contener importes negativos.")
+
+
+def unique_concepts(values: Iterable[str]) -> list[str]:
+    """Normalize concept names and keep only their first occurrence."""
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        concept = str(value).strip()
+        if concept and concept not in seen:
+            unique.append(concept)
+            seen.add(concept)
+    return unique

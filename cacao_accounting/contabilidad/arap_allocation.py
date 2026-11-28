@@ -12,13 +12,20 @@ que la invoca.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import hashlib
 from typing import Any, Callable, Iterable
 
 from sqlalchemy import func, select
 
-from cacao_accounting.database import ARAPLedgerEntry, ARAPOpenItem as ARAPOpenItemModel, database
+from cacao_accounting.database import (
+    ARAPLedgerEntry,
+    ARAPOpenItem as ARAPOpenItemModel,
+    PaymentReference,
+    database,
+)
 
 
 from cacao_accounting.i18n import _
@@ -131,6 +138,42 @@ class AllocationLine:
     source_amount: Decimal
     rate: Decimal
     idempotency_key: str | None = None
+    open_item_id: str | None = None
+    economic_line_id: str | None = None
+
+
+def _canonical_decimal(value: Decimal) -> str:
+    """Serializa un decimal con precisión estable para calcular huellas."""
+    return format(_decimal(value).quantize(Decimal("0.000000001")), "f")
+
+
+def allocation_fingerprint(line: AllocationLine) -> str:
+    """Calcula la huella determinista del contenido económico de una asignación (#1836)."""
+    payload = "\x1f".join(
+        (
+            str(line.idempotency_key or ""),
+            str(line.document_id),
+            str(line.document_type),
+            str(line.document_currency),
+            str(line.source_currency),
+            _canonical_decimal(line.document_amount),
+            _canonical_decimal(line.source_amount),
+            _canonical_decimal(line.rate),
+            str(line.open_item_id or ""),
+            str(line.economic_line_id or ""),
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def load_existing_allocation_fingerprints(payment_id: str) -> dict[str, str | None]:
+    """Carga las huellas persistidas de un pago para verificar repeticiones (#1836)."""
+    rows = database.session.execute(
+        select(PaymentReference.idempotency_key, PaymentReference.allocation_fingerprint).where(
+            PaymentReference.payment_id == payment_id
+        )
+    ).all()
+    return {key: fingerprint for key, fingerprint in rows if key}
 
 
 @dataclass(frozen=True)
@@ -140,6 +183,7 @@ class AllocationPlan:
     source_currency: str
     source_amount: Decimal
     lines: tuple[AllocationLine, ...]
+    replayed_lines: tuple[AllocationLine, ...] = ()
 
     @property
     def allocated_source_amount(self) -> Decimal:
@@ -210,9 +254,22 @@ class OpenItemResolver:
         """Devuelve una instantánea de los documentos indexados."""
         return tuple(self._items.values())
 
-    def consume(self, document_id: str, amount: Decimal) -> None:
-        """Consume saldo después de persistir una línea."""
-        item = self.resolve(document_id)
+    def consume(
+        self,
+        document_id: str,
+        amount: Decimal,
+        *,
+        open_item_id: str | None = None,
+        economic_line_id: str | None = None,
+    ) -> None:
+        """Consume saldo de la identidad de línea elegida, no solo del documento."""
+        item = None
+        if open_item_id:
+            item = self._items.get(str(open_item_id))
+        elif economic_line_id:
+            item = self._items.get(f"{document_id}:{economic_line_id}")
+        if item is None:
+            item = self.resolve(document_id)
         key = self._key(item)
         amount = _decimal(amount)
         if amount <= 0 or amount > item.outstanding:
@@ -268,6 +325,16 @@ def list_open_items(
         ARAPLedgerEntry.economic_line_id,
         func.sum(ARAPLedgerEntry.document_amount).label("outstanding"),
         func.max(ARAPLedgerEntry.posting_date).label("posting_date"),
+        func.max(ARAPLedgerEntry.document_no).label("document_no"),
+        select(func.max(ARAPOpenItemModel.line_number))
+        .where(
+            ARAPOpenItemModel.document_type == ARAPLedgerEntry.document_type,
+            ARAPOpenItemModel.document_id == ARAPLedgerEntry.document_id,
+            ARAPOpenItemModel.economic_line_id == ARAPLedgerEntry.economic_line_id,
+        )
+        .correlate(ARAPLedgerEntry)
+        .scalar_subquery()
+        .label("line_number"),
     ).group_by(
         ARAPLedgerEntry.document_id,
         ARAPLedgerEntry.document_type,
@@ -296,13 +363,14 @@ def list_open_items(
             currency=str(row.currency),
             outstanding=abs(_decimal(row.outstanding)),
             company=row.company,
-            document_no=None,
+            document_no=row.document_no,
             economic_line_id=row.economic_line_id,
             account_id=None,
             party_type=row.party_type,
             party_id=row.party_id,
             ledger_type=row.ledger_type,
             posting_date=row.posting_date,
+            line_number=row.line_number,
             direction="debit" if _decimal(row.outstanding) > 0 else "credit",
         )
         for row in rows
@@ -336,27 +404,6 @@ def list_cached_open_items(
     return tuple(ARAPOpenItem.from_model(model) for model in db_session.execute(query).scalars())
 
 
-def resolve_open_item(
-    document_id: str,
-    *,
-    document_type: str | None = None,
-    currency: str | None = None,
-    company: str | None = None,
-    as_of_date: Any = None,
-    session: Any = None,
-) -> ARAPOpenItem:
-    """Resuelve un documento desde el ledger y exige saldo positivo único."""
-    items = list_open_items(company=company, currency=currency, as_of_date=as_of_date, session=session)
-    matches = [
-        item
-        for item in items
-        if item.document_id == document_id and (document_type is None or item.document_type == document_type)
-    ]
-    if len(matches) != 1:
-        raise AllocationError(_("No existe un open item único para %(document_id)s.") % {"document_id": document_id})
-    return matches[0]
-
-
 class AllocationPlanner:
     """Valida monedas, saldos e importes antes de ejecutar."""
 
@@ -370,25 +417,53 @@ class AllocationPlanner:
         source_currency: str,
         requests: Iterable[AllocationRequest],
         *,
-        existing_keys: Iterable[str] = (),
+        existing_keys: Mapping[str, str | None] | Iterable[str] = (),
     ) -> AllocationPlan:
-        """Crea un plan sin mutar saldos."""
+        """Crea un plan sin mutar saldos y verifica el contenido de las claves existentes."""
         available = _decimal(source_amount)
         if available <= 0 or not source_currency:
             raise AllocationError(_("El efectivo y su moneda deben ser mayores que cero."))
-        existing = set(existing_keys)
+        existing: Mapping[str, str | None] = (
+            existing_keys if isinstance(existing_keys, Mapping) else {key: None for key in existing_keys}
+        )
         lines: list[AllocationLine] = []
+        replayed: list[AllocationLine] = []
         requested: dict[str, Decimal] = {}
+        seen_keys: set[str] = set()
         consumed = Decimal("0")
         for request in requests:
             item = self.resolver.resolve(request.document_id)
-            if request.idempotency_key and request.idempotency_key in existing:
-                continue
+            key = request.idempotency_key
+            # #1144: una clave repetida dentro del mismo plan duplicaría el
+            # importe planificado mientras el ejecutor procesa una sola línea.
+            if key:
+                if key in seen_keys:
+                    raise AllocationIdempotencyError(_("La clave %(key)s está repetida en el mismo plan.") % {"key": key})
+                seen_keys.add(key)
             amount = item.outstanding if request.amount is None else _decimal(request.amount)
             if amount <= 0:
                 raise AllocationError(
                     _("El importe aplicado a %(document_id)s debe ser mayor que cero.") % {"document_id": item.document_id}
                 )
+            rate = self._rate(item.currency, source_currency, request.rate)
+            source_line = (amount * rate).quantize(Decimal("0.0001"))
+            line = AllocationLine(
+                document_id=item.document_id,
+                document_type=item.document_type,
+                document_currency=item.currency,
+                source_currency=source_currency,
+                document_amount=amount,
+                source_amount=source_line,
+                rate=rate,
+                idempotency_key=key,
+                open_item_id=item.open_item_id,
+                economic_line_id=item.economic_line_id,
+            )
+            # #1836: una clave solo es repetición si coincide todo el contenido.
+            if key and key in existing:
+                self._validate_replay(key, line, existing[key])
+                replayed.append(line)
+                continue
             item_key = self.resolver._key(item)
             total = requested.get(item_key, Decimal("0")) + amount
             if total > item.outstanding:
@@ -396,24 +471,26 @@ class AllocationPlanner:
                     _("La asignación excede el saldo de %(document_id)s.") % {"document_id": item.document_id}
                 )
             requested[item_key] = total
-            rate = self._rate(item.currency, source_currency, request.rate)
-            source_line = (amount * rate).quantize(Decimal("0.0001"))
             if consumed + source_line > available:
                 raise AllocationOverpaymentError(_("Las asignaciones exceden el efectivo disponible."))
             consumed += source_line
-            lines.append(
-                AllocationLine(
-                    document_id=item.document_id,
-                    document_type=item.document_type,
-                    document_currency=item.currency,
-                    source_currency=source_currency,
-                    document_amount=amount,
-                    source_amount=source_line,
-                    rate=rate,
-                    idempotency_key=request.idempotency_key,
-                )
+            lines.append(line)
+        return AllocationPlan(
+            source_currency=source_currency,
+            source_amount=available,
+            lines=tuple(lines),
+            replayed_lines=tuple(replayed),
+        )
+
+    @staticmethod
+    def _validate_replay(key: str, line: AllocationLine, persisted: str | None) -> None:
+        """Acepta solo repeticiones idénticas y rechaza contenido distinto (#1836)."""
+        if persisted is None:
+            raise AllocationIdempotencyError(
+                _("La clave %(key)s no tiene contenido persistido para verificar.") % {"key": key}
             )
-        return AllocationPlan(source_currency=source_currency, source_amount=available, lines=tuple(lines))
+        if persisted != allocation_fingerprint(line):
+            raise AllocationIdempotencyError(_("La clave %(key)s ya fue usada con otro contenido.") % {"key": key})
 
     @staticmethod
     def _rate(document_currency: str, source_currency: str, requested_rate: Decimal | None) -> Decimal:
@@ -456,7 +533,12 @@ class AllocationExecutor:
                         raise AllocationIdempotencyError(_("La clave %(key)s ya fue usada con otro importe.") % {"key": key})
                     output.append(line)
                     continue
-                self.resolver.consume(line.document_id, line.document_amount)
+                self.resolver.consume(
+                    line.document_id,
+                    line.document_amount,
+                    open_item_id=line.open_item_id,
+                    economic_line_id=line.economic_line_id,
+                )
                 if persist is not None:
                     persist(line)
                 if key:
@@ -478,7 +560,7 @@ def plan_allocation(
     requests: Iterable[AllocationRequest],
     *,
     resolver: OpenItemResolver,
-    existing_keys: Iterable[str] = (),
+    existing_keys: Mapping[str, str | None] | Iterable[str] = (),
 ) -> AllocationPlan:
     """Planea una asignación mediante la API estable del motor."""
     return AllocationPlanner(resolver).plan(source_amount, source_currency, requests, existing_keys=existing_keys)

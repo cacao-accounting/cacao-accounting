@@ -10,6 +10,21 @@
     return `transaction-line-${Date.now()}-${uidCounter}`;
   }
 
+  /** Devuelve la fecha calendario local en formato ISO (YYYY-MM-DD).
+   *
+   * ``toISOString()`` convierte el instante a UTC; en husos al oeste de UTC
+   * eso adelanta el día durante la noche. Los formularios contables deben
+   * prellenar el día local del usuario (#1390, #1514).
+   */
+  function localIsoDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  globalThis.cacaoLocalIsoDate = localIsoDate;
+
   function toNumber(value) {
     const parsed = Number.parseFloat(value || 0);
     if (Number.isNaN(parsed)) return 0;
@@ -18,19 +33,33 @@
 
   /** Serializa un valor financiero a cadena decimal limpia.
    *
-   * Evita que representaciones IEEE 754 (ej. 0.020000000000000004)
-   * lleguen al backend. Usa toFixed(9) — la escala máxima del sistema —
-   * y elimina ceros finales para producir una cadena que
-   * Decimal(str(value)) en el servidor procese sin perder precisión.
+   * No convierte a Number: normaliza exponentes y limita la fracción a la
+   * escala máxima del sistema para que Decimal(str(value)) reciba el texto
+   * exacto enviado por el formulario.
    */
   function toCurrencyString(value) {
     if (value === null || value === undefined || value === '') return '0';
-    const str = typeof value === 'string' ? value.trim() : String(value);
+    let str = typeof value === 'string' ? value.trim() : String(value);
     if (!str) return '0';
-    const num = Number(str);
-    if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
-    const formatted = num.toFixed(9).replace(/0{1,9}$/, '').replace(/\.$/, '') || '0';
-    return formatted === '-0' ? '0' : formatted;
+    const expMatch = str.match(/^([-+]?)(\d+)(?:\.(\d+))?[eE]([-+]?\d+)$/);
+    if (expMatch) {
+      const sign = expMatch[1] || '';
+      const digits = (expMatch[2] + (expMatch[3] || '')).replace(/^0+/, '') || '0';
+      const exp = parseInt(expMatch[4], 10) - (expMatch[3] || '').length;
+      if (exp >= 0) str = sign + digits + '0'.repeat(exp);
+      else {
+        const pos = digits.length + exp;
+        str = sign + (pos > 0 ? digits.slice(0, pos) + '.' + digits.slice(pos) : '0.' + '0'.repeat(-pos) + digits);
+      }
+    }
+    if (!/^[-+]?\d+(?:\.\d+)?$/.test(str)) return '0';
+    const sign = str.startsWith('-') ? '-' : '';
+    const unsigned = str.replace(/^[-+]/, '');
+    const [intPartRaw, fracRaw = ''] = unsigned.split('.');
+    const intPart = intPartRaw.replace(/^0+(?=\d)/, '') || '0';
+    const frac = fracRaw.slice(0, 9).replace(/0+$/, '');
+    const formatted = frac ? intPart + '.' + frac : intPart;
+    return sign && formatted !== '0' ? sign + formatted : formatted;
   }
 
   function normalizeAllowedUoms(source, fallback) {
@@ -160,12 +189,41 @@
   }
 
   function mapImportedRows(rawRows, schema) {
-    if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return [];
+    if (!schema || !Array.isArray(schema.columns) || rawRows.length < 2) return { rows: [], errors: [] };
 
     const headers = (rawRows[0] || []).map((value) => normalizeImportHeader(value));
-    const matchedIndexes = schema.columns.map((col) => findImportColumnIndex(headers, col));
+    const errors = [];
+    const matchedIndexes = [];
+    const usedHeaderIndexes = new Set();
+    schema.columns.forEach((col) => {
+      const candidates = new Set([col.key, col.label, ...(Array.isArray(col.aliases) ? col.aliases : [])]
+        .map((value) => normalizeImportHeader(value))
+        .filter(Boolean));
+      const indexes = [];
+      headers.forEach((header, headerIndex) => {
+        if (candidates.has(header)) indexes.push(headerIndex);
+      });
+      if (indexes.length > 1) {
+        errors.push({
+          row: 1,
+          field: col.key,
+          message: `${i18n.errorDuplicateHeader || 'El encabezado está duplicado.'} ${col.label || col.key}`,
+        });
+      }
+      const first = indexes.length ? indexes[0] : -1;
+      if (first >= 0 && usedHeaderIndexes.has(first)) {
+        errors.push({
+          row: 1,
+          field: col.key,
+          message: `${i18n.errorDuplicateHeader || 'El encabezado está duplicado.'} ${col.label || col.key}`,
+        });
+      }
+      if (first >= 0) usedHeaderIndexes.add(first);
+      matchedIndexes.push(first);
+    });
+    if (errors.length) return { rows: [], errors };
     const hasHeaderMatches = matchedIndexes.some((index) => index >= 0);
-    return rawRows
+    const rows = rawRows
       .slice(1)
       .map((row) => {
         const obj = {};
@@ -186,12 +244,18 @@
         return obj;
       })
       .filter((row) => Object.values(row).some((val) => val !== null && val !== undefined && String(val).trim() !== ''));
+    return { rows, errors: [] };
   }
 
   function normalizeWorksheetValue(value) {
     if (value === null || value === undefined) return '';
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (value instanceof Date) return localIsoDate(value);
     if (typeof value === 'object') {
+      if (value.formula !== undefined || value.sharedFormula !== undefined) {
+        const error = new Error(i18n.errorFormulaNotAllowed || 'El archivo contiene fórmulas. Reemplace las celdas por valores fijos.');
+        error.code = 'FORMULA_NOT_ALLOWED';
+        throw error;
+      }
       if (Array.isArray(value.richText)) {
         return value.richText.map((part) => part.text || '').join('');
       }
@@ -251,6 +315,10 @@
       qty: i18n.qtyLabel || 'Cantidad',
       rate: i18n.rateLabel || 'Precio / Costo Unitario',
       amount: i18n.amountLabel || 'Precio / Costo Total',
+      weight: i18n.weightLabel || 'Peso',
+      weightUom: i18n.weightUomLabel || 'UOM de peso',
+      volume: i18n.volumeLabel || 'Volumen',
+      volumeUom: i18n.volumeUomLabel || 'UOM de volumen',
       ...config.messages
     };
   }
@@ -263,6 +331,12 @@
       { field: 'qty', label: i18n.qtyLabel || 'Cantidad', visible: true, width: 1, required: false },
       { field: 'rate', label: i18n.rateLabel || 'Precio', visible: true, width: 1, required: false },
       { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
+      ...(config.enableDimensions ? [
+        { field: 'weight', label: i18n.weightLabel || 'Peso', visible: true, width: 1, required: false },
+        { field: 'weight_uom', label: i18n.weightUomLabel || 'UOM peso', visible: true, width: 1, required: false },
+        { field: 'volume', label: i18n.volumeLabel || 'Volumen', visible: true, width: 1, required: false },
+        { field: 'volume_uom', label: i18n.volumeUomLabel || 'UOM volumen', visible: true, width: 1, required: false },
+      ] : []),
       { field: 'amount', label: i18n.amountLabel || 'Monto', visible: true, width: 1, required: false },
     ];
   }
@@ -281,6 +355,9 @@
       if (config.showPricing === false && (column.field === 'rate' || column.field === 'amount')) {
         column.visible = false;
       }
+      if (column.field === 'warehouse' && config.showLineWarehouse === true) {
+        continue;
+      }
       if (column.field === 'warehouse' || column.field === 'batch_id' || column.field === 'serial_no') {
         column.visible = false;
       }
@@ -297,7 +374,6 @@
     });
 
     for (const confCol of configColumns) {
-      if (confCol.field === 'warehouse') continue;
       if (!defaultCols.some(d => d.field === confCol.field)) {
         columnsList.push({ ...confCol });
       }
@@ -332,6 +408,10 @@
       return {
         formKey: config.formKey || '',
         showPricing: config.showPricing !== false,
+        showPricingForManual: config.showPricingForManual === true,
+        hidePricingForSourceTypes: Array.isArray(config.hidePricingForSourceTypes)
+          ? [...config.hidePricingForSourceTypes]
+          : [],
         canEditPrices: config.canEditPrices === true || !String(config.formKey || '').startsWith('sales.'),
         enableSalesPriceLookup: String(config.formKey || '').startsWith('sales.'),
         viewKey: config.viewKey || 'draft',
@@ -347,7 +427,7 @@
           company: '',
           naming_series: '',
           currency: '',
-          posting_date: new Date().toISOString().slice(0, 10),
+          posting_date: localIsoDate(new Date()),
           party_type: '',
           party: '',
           party_label: '',
@@ -407,9 +487,10 @@
             if (this.formKey.startsWith('purchases.')) this.header.party_type = 'supplier';
           }
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
+          this._seedAppliedCatalogPrices();
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           if (typeof this.$watch === 'function') {
-            const pricingFields = new Set(['company', 'party', 'posting_date']);
+            const pricingFields = new Set(['company', 'party', 'currency', 'posting_date']);
             const fiscalFields = ['company', 'currency', 'posting_date', 'party_type', 'party', 'purpose', 'payment_type'];
             for (const field of fiscalFields) {
               this.$watch(`header.${field}`, () => {
@@ -463,8 +544,8 @@
 
         syncLineInputs() {
           const root = this.$root || document;
-          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount',
-            'batch_id', 'serial_no', 'account',
+          const fields = ['item_code', 'item_name', 'description', 'uom', 'qty', 'rate', 'amount',
+            'batch_id', 'serial_no', 'account', 'warehouse', 'source_warehouse', 'target_warehouse',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
           const monetaryFields = new Set(['qty', 'rate', 'amount']);
           for (const [index, line] of this.lines.entries()) {
@@ -516,11 +597,18 @@
             uid: createUid(),
             item_code: '',
             item_name: '',
+            description: '',
             qty: 1,
             uom: '',
             rate: 0,
             discount_percentage: 0,
+            discount_amount: 0,
             amount: 0,
+            warehouse: '',
+            weight: '',
+            weight_uom: '',
+            volume: '',
+            volume_uom: '',
             batch_id: '',
             serial_no: '',
             has_batch: false,
@@ -532,10 +620,13 @@
             unit: '',
             project: '',
             remarks: '',
+            source_warehouse: '',
+            target_warehouse: '',
             source_type: '',
             source_id: '',
             source_item_id: '',
             allowed_uoms: [],
+            uom_factors: {},
             ...config.linePrototype
           };
         },
@@ -592,18 +683,27 @@
             line.item_name = item.name || line.item_name;
           }
           this._applyItemUom(line, item);
-          line.has_batch = Boolean(line.has_batch || line.batch_id || item.has_batch || item.has_expiry_date);
-          line.has_serial_no = Boolean(line.has_serial_no || line.serial_no || item.has_serial_no);
-          line.has_expiry_date = Boolean(item.has_expiry_date || line.has_expiry_date || false);
-          if (!keepCustomName && !line.batch_id && !line.serial_no) {
+          if ((line.weight === '' || line.weight === null || line.weight === undefined) && item.weight !== undefined && item.weight !== null) {
+            line.weight = item.weight;
+            line.weight_uom = item.weight_uom || line.weight_uom;
+          }
+          if ((line.volume === '' || line.volume === null || line.volume === undefined) && item.volume !== undefined && item.volume !== null) {
+            line.volume = item.volume;
+            line.volume_uom = item.volume_uom || line.volume_uom;
+          }
+          line.has_batch = Boolean(item.has_batch || item.has_expiry_date);
+          line.has_serial_no = Boolean(item.has_serial_no);
+          line.has_expiry_date = Boolean(item.has_expiry_date);
+          if (!line.has_batch) {
             line.batch_id = '';
-            line.serial_no = '';
             line.batch_no = '';
           }
+          if (!line.has_serial_no) line.serial_no = '';
         },
 
         _applyItemUom(line, item) {
           line.allowed_uoms = normalizeAllowedUoms(item.allowed_uoms, item.default_uom);
+          line.uom_factors = item.uom_factors || {};
           const allowedUomSet = new Set(line.allowed_uoms);
           if (line.allowed_uoms.length && !allowedUomSet.has(line.uom)) {
             line.uom = line.allowed_uoms[0];
@@ -612,18 +712,58 @@
         },
 
         onItemChange(line) {
+          line.batch_id = '';
+          line.batch_no = '';
+          line.serial_no = '';
+          line.has_batch = false;
+          line.has_serial_no = false;
+          line.has_expiry_date = false;
           this.syncLineFromItem(line, false);
           this.calcAmount(line);
           void this.refreshCatalogPrice(line);
         },
 
+        onItemClear(line) {
+          this._invalidateCatalogPriceRequest(line);
+          line.item_code = '';
+          line.item_name = '';
+          line.uom = '';
+          line.allowed_uoms = [];
+          line.uom_factors = {};
+          line.batch_id = '';
+          line.batch_no = '';
+          line.serial_no = '';
+          line.has_batch = false;
+          line.has_serial_no = false;
+          line.has_expiry_date = false;
+          line.weight = '';
+          line.weight_uom = '';
+          line.volume = '';
+          line.volume_uom = '';
+          line.source_type = '';
+          line.source_id = '';
+          line.source_document_no = '';
+          line.source_item_id = '';
+          line.price_list_name = '';
+          line.rate = 0;
+          line.amount = 0;
+        },
+
         onUomChange(line, uom) {
+          const oldFactor = Number(line.uom_factors?.[line.uom]);
+          const newFactor = Number(line.uom_factors?.[uom]);
+          if (oldFactor > 0 && newFactor > 0) {
+            line.qty = toNumber(line.qty) * oldFactor / newFactor;
+            line.rate = toNumber(line.rate) * newFactor / oldFactor;
+          }
           line.uom = uom;
+          this.calcAmount(line);
           return this.refreshCatalogPrice(line);
         },
 
         onRateInput(line) {
           this._invalidateCatalogPriceRequest(line);
+          delete line._catalogPriceApplied;
           this.calcAmount(line);
         },
 
@@ -631,37 +771,68 @@
           catalogPriceRequestIds.set(line, ++catalogPriceRequestSequence);
         },
 
-        async refreshCatalogPrice(line) {
-          if (!this.enableSalesPriceLookup || line.source_item_id || !line.item_code || !this.header.company) return;
-          const requestId = ++catalogPriceRequestSequence;
-          catalogPriceRequestIds.set(line, requestId);
-          const getPricingContext = () => ({
+        _seedAppliedCatalogPrices() {
+          for (const line of this.lines) {
+            if (!line.price_list_name || !toNumber(line.rate)) continue;
+            line._catalogPriceApplied = {
+              signature: JSON.stringify(this._pricingContext(line)),
+              rate: toNumber(line.rate)
+            };
+          }
+        },
+
+        _pricingContext(line) {
+          return {
             company: this.header.company,
             customer_id: this.header.party || '',
+            currency: this.header.currency || this.header.transaction_currency || '',
             item_code: line.item_code,
             qty: toCurrencyString(line.qty || 1),
             uom: line.uom || '',
             posting_date: this.header.posting_date || '',
-          });
+          };
+        },
+
+        _clearStaleCatalogPrice(line, signature) {
+          const applied = line._catalogPriceApplied;
+          if (!applied || applied.signature === signature || toNumber(line.rate) !== applied.rate) return;
+          line.rate = 0;
+          line.price_list_name = '';
+          delete line._catalogPriceApplied;
+          this.calcAmount(line);
+        },
+
+        async refreshCatalogPrice(line) {
+          if (!this.enableSalesPriceLookup || line.source_item_id || !line.item_code || !this.header.company) return;
+          const requestId = ++catalogPriceRequestSequence;
+          catalogPriceRequestIds.set(line, requestId);
+          const getPricingContext = () => this._pricingContext(line);
           const requestedContext = getPricingContext();
+          const signature = JSON.stringify(requestedContext);
+          // Un precio de otra moneda (o fecha, cantidad, UOM, etc.) no debe
+          // permanecer en la línea si la nueva consulta falla o no responde.
+          this._clearStaleCatalogPrice(line, signature);
           const params = new URLSearchParams(requestedContext);
           try {
             const response = await fetch(`/api/sales/catalog-price?${params.toString()}`, { credentials: 'same-origin' });
             const payload = await response.json();
             if (
               requestId !== catalogPriceRequestIds.get(line) ||
-              JSON.stringify(getPricingContext()) !== JSON.stringify(requestedContext) ||
+              JSON.stringify(getPricingContext()) !== signature ||
               line.source_item_id ||
-              !response.ok
+              !response.ok ||
+              (payload.transaction_currency && payload.transaction_currency !== requestedContext.currency)
             ) return;
             if (payload.price === null) {
               line.rate = 0;
               line.price_list_name = '';
+              delete line._catalogPriceApplied;
               this.calcAmount(line);
               return;
             }
             line.rate = toNumber(payload.price);
             line.price_list_name = payload.price_list_name || '';
+            line._catalogPriceApplied = { signature, rate: line.rate };
             this.calcAmount(line);
           } catch (err) {
             console.warn('transactionForm catalog price lookup failed', err);
@@ -720,7 +891,15 @@
             return;
           }
           const gross = toNumber(line.qty) * toNumber(line.rate);
-          line.amount = gross * (1 - (toNumber(line.discount_percentage) / 100));
+          const percentage = toNumber(line.discount_percentage);
+          const discountAmount = toNumber(line.discount_amount);
+          if (percentage > 0) {
+            line.amount = gross * (1 - (percentage / 100));
+          } else if (discountAmount > 0) {
+            line.amount = Math.max(gross - discountAmount, 0);
+          } else {
+            line.amount = gross;
+          }
           this.queueTaxPreview();
         },
 
@@ -784,12 +963,22 @@
             uid: line.uid || '',
             item_code: line.item_code || '',
             item_name: line.item_name || '',
+            description: line.description || '',
             qty: toCurrencyString(line.qty),
             uom: line.uom || '',
             rate: toCurrencyString(line.rate),
             amount: toCurrencyString(line.amount),
+            discount_percentage: toCurrencyString(line.discount_percentage),
+            discount_amount: toCurrencyString(line.discount_amount),
+            weight: line.weight === '' || line.weight === null || line.weight === undefined ? '' : toCurrencyString(line.weight),
+            weight_uom: line.weight_uom || '',
+            volume: line.volume === '' || line.volume === null || line.volume === undefined ? '' : toCurrencyString(line.volume),
+            volume_uom: line.volume_uom || '',
             batch_id: line.batch_id || '',
             serial_no: line.serial_no || '',
+            source_warehouse: line.source_warehouse || '',
+            target_warehouse: line.target_warehouse || '',
+            warehouse: line.warehouse || '',
           };
         },
 
@@ -866,8 +1055,10 @@
             const data = await response.json();
             if (requestId !== taxPreviewRequestId) return;
             if (!response.ok) {
-              this.taxCharges.error = data?.message || i18n.errorTaxPreview || 'No se pudo calcular.';
-              this.taxCharges.loading = false;
+              const detail = Array.isArray(data?.errors) && data.errors.length
+                ? data.errors.join(' ')
+                : (data?.message || i18n.errorTaxPreview || 'No se pudo calcular.');
+              this._handleTaxPreviewFailure(detail);
               return;
             }
             this.applyTaxPreviewData(data);
@@ -888,7 +1079,16 @@
 
         handleTaxPreviewError(err) {
           console.warn('transactionForm tax preview failed', err);
-          this.taxCharges.error = i18n.errorTaxPreview || 'No se pudo calcular.';
+          this._handleTaxPreviewFailure(i18n.errorTaxPreview || 'No se pudo calcular.');
+        },
+
+        _handleTaxPreviewFailure(message) {
+          this.taxCharges.error = message;
+          this.taxCharges.profile = null;
+          this.taxCharges.lines = (this.taxCharges.lines || []).filter((line) => line.manual);
+          this.taxCharges.activeIndex = null;
+          this.taxCharges.modalLine = null;
+          this.recalculateTaxSummary();
           this.taxCharges.loading = false;
         },
 
@@ -904,6 +1104,12 @@
         },
 
         applyTaxPreviewData(data) {
+          const errors = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
+          if (errors.length) {
+            this._handleTaxPreviewFailure(errors.join(' '));
+            return;
+          }
+          this.taxCharges.error = '';
           this.taxCharges.profile = data.profile || null;
           this.taxCharges.summary = data.summary || this.taxCharges.summary;
           this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];
@@ -988,7 +1194,8 @@
 	        },
 
         calcTaxLine(line) {
-          line.base_amount = toNumber(line.base_amount || this.totalAmount);
+          const hasBase = line.base_amount !== null && line.base_amount !== undefined && line.base_amount !== '';
+          line.base_amount = toNumber(hasBase ? line.base_amount : this.totalAmount);
           line.rate = toNumber(line.rate);
           line.amount = this.calculateTaxAmount(line);
         },
@@ -1098,6 +1305,9 @@
             if (!response.ok) throw new Error(response.statusText || 'source request failed');
             const data = await response.json();
             if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return false;
+            if (config.sourcePricingFromApi === true && typeof data.pricing_redacted === 'boolean') {
+              this.updateSourcePricingVisibility(this.searchCriteria.source_type, data.pricing_redacted);
+            }
             this.sourceItems = this.mapSourceItems(data.items);
             return true;
           } catch (err) {
@@ -1157,7 +1367,24 @@
           this.autofillStep = 1;
         },
 
+        updateSourcePricingVisibility(sourceType = this.searchCriteria.source_type, pricingRedacted = null) {
+          const restrictedSource = this.hidePricingForSourceTypes.includes(sourceType || '');
+          let showPricing = restrictedSource
+            ? false
+            : (sourceType ? config.showPricing !== false : this.showPricingForManual || config.showPricing !== false);
+          if (config.sourcePricingFromApi === true && typeof pricingRedacted === 'boolean') {
+            showPricing = !pricingRedacted;
+          }
+          this.showPricing = showPricing;
+          for (const column of this.preferences.columns) {
+            if (column.field === 'rate' || column.field === 'amount') {
+              column.visible = this.showPricing;
+            }
+          }
+        },
+
         async fetchSourceDocuments() {
+          this.updateSourcePricingVisibility();
           const requestId = this.beginSourceRequest();
           const context = this.sourceLookupContext();
           const contextSignature = this.sourceLookupSignature();
@@ -1222,6 +1449,9 @@
               requestId !== sourceRequestSequence ||
               requestSignature !== this.sourceLookupSignature(this.selectedSourceIds())
             ) return;
+            if (config.sourcePricingFromApi === true && typeof data.pricing_redacted === 'boolean') {
+              this.updateSourcePricingVisibility(context.source_type, data.pricing_redacted);
+            }
             this.sourceItems = this.mapSourceItems(data.items);
           } catch (err) {
             if (
@@ -1248,6 +1478,7 @@
 
         applySource() {
           if (this.loadingSource || this.sourceHydrationPending || this.sourceLoadError) return;
+          this.updateSourcePricingVisibility();
           this.processSelectedSourceItems();
           this.cleanupEmptyLines();
           if (!this.lines.length) this.addRow();
@@ -1293,6 +1524,10 @@
           line.source_document_no = item.source_document_no || '';
           line.source_item_id = item.source_item_id || '';
           this.syncLineFromItem(line, false);
+          // #1895: preserve batch/serial/expiry traceability from source line after sync.
+          if (item.batch_id !== undefined && item.batch_id !== null && line.has_batch) line.batch_id = item.batch_id;
+          if (item.serial_no !== undefined && item.serial_no !== null && line.has_serial_no) line.serial_no = item.serial_no;
+          if (item.expiry_date !== undefined && item.expiry_date !== null && line.has_expiry_date) line.expiry_date = item.expiry_date;
           this.calcAmount(line);
           return line;
         },
@@ -1313,8 +1548,19 @@
           this.lines = filtered;
         },
 
+        currencyDecimals() {
+          const code = String(this.header.currency || this.header.transaction_currency || '');
+          const map = globalThis.__CACAO_CURRENCY_DECIMALS__ || {};
+          const configured = Number(map[code]);
+          return Number.isInteger(configured) ? Math.max(0, Math.min(configured, 8)) : 2;
+        },
+
         formatMoney(value) {
-          return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const decimals = this.currencyDecimals();
+          return Number(value || 0).toLocaleString(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          });
         },
 
         serializedTaxLines() {
@@ -1382,7 +1628,9 @@
 
           const lines = text.split(/\r?\n/);
           const rows = lines.map(splitTab);
-          this.importModal.parsedRows = mapImportedRows(rows, this.importModal.schema);
+          const mapped = mapImportedRows(rows, this.importModal.schema);
+          this.importModal.parsedRows = mapped.rows;
+          if (mapped.errors.length) this.importModal.errors = mapped.errors;
         },
 
         async validateImport() {
@@ -1497,6 +1745,28 @@
           if (row.quantity !== undefined) line.qty = toNumber(row.quantity);
           if (row.rate !== undefined) line.rate = toNumber(row.rate);
           if (row.account !== undefined) line.account = row.account;
+          if (row.discount !== undefined) {
+            line.discount_percentage = toNumber(row.discount);
+            line.discount_amount = 0;
+          }
+          if (row.discount_percentage !== undefined) {
+            line.discount_percentage = toNumber(row.discount_percentage);
+            line.discount_amount = 0;
+          }
+          if (row.discount_amount !== undefined) {
+            line.discount_amount = toNumber(row.discount_amount);
+            line.discount_percentage = 0;
+          }
+          if (row.warehouse !== undefined) line.warehouse = row.warehouse;
+          if (row.source_warehouse !== undefined) line.source_warehouse = row.source_warehouse;
+          if (row.target_warehouse !== undefined) line.target_warehouse = row.target_warehouse;
+          if (row.description !== undefined) {
+            const desc = String(row.description || '').trim();
+            if (desc) {
+              line.item_name = desc;
+              line.description = desc;
+            }
+          }
 
           // Journal Entry specific mapping for debit/credit into value/rate
           if (this.importModal.doctype === "journal_entry") {
@@ -1504,7 +1774,7 @@
           }
 
           if (line.item_code) {
-            this.syncLineFromItem(line, true);
+            this.syncLineFromItem(line, Boolean(line.item_name));
           }
           this.calcAmount(line);
           this.lines.push(line);
@@ -1575,12 +1845,21 @@
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(await file.arrayBuffer());
             if (requestId !== importFileRequestId) return;
-            this.importModal.parsedRows = mapImportedRows(worksheetToRows(workbook.worksheets[0]), this.importModal.schema);
+            const mapped = mapImportedRows(worksheetToRows(workbook.worksheets[0]), this.importModal.schema);
+            this.importModal.parsedRows = mapped.rows;
+            if (mapped.errors.length) this.importModal.errors = mapped.errors;
           } catch (err) {
             if (requestId !== importFileRequestId) return;
             console.error("Error processing XLSX:", err);
             this.importModal.parsedRows = [];
-            this.importModal.errors = [{ message: "Error al procesar el archivo XLSX." }];
+            this.importModal.errors = [
+              {
+                message:
+                  err && err.code === "FORMULA_NOT_ALLOWED"
+                    ? err.message
+                    : "Error al procesar el archivo XLSX.",
+              },
+            ];
           } finally {
             if (requestId === importFileRequestId) this.importModal.fileLoading = false;
           }

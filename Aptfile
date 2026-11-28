@@ -1,0 +1,16 @@
+# Dependencias de sistema para Heroku (buildpack heroku-community/apt).
+#
+# - libmagic1: python-magic, validación de MIME en importaciones.
+# - libpq-dev/build-essential: compilación de psycopg 3 contra la libpq del stack.
+# - libpango*/libharfbuzz*/fonts-dejavu-core: WeasyPrint (PDF de documentos).
+# - nodejs/npm: instalación de los assets estáticos (bootstrap, chart.js, exceljs).
+libmagic1
+libpq-dev
+build-essential
+libpango-1.0-0
+libpangoft2-1.0-0
+libharfbuzz0b
+libharfbuzz-subset0
+fonts-dejavu-core
+nodejs
+npm

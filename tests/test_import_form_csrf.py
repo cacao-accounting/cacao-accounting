@@ -1,0 +1,324 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
+"""CSRF-protected forms keep every import wizard action usable in Cloud."""
+
+from __future__ import annotations
+
+import io
+import re
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
+
+from cacao_accounting.database import (
+    CompanyParty,
+    Entity,
+    GeneratedIdentifierLog,
+    Modules,
+    NamingSeries,
+    Party,
+    Sequence,
+    SequencePeriodCounter,
+    database,
+)
+from cacao_accounting.imports.models import ImportBatch
+
+
+@pytest.fixture
+def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
+    """Enable real CSRF and seed one batch for each state-specific form."""
+    previous_csrf = app.config["WTF_CSRF_ENABLED"]
+    previous_desktop = app.config.get("MODO_ESCRITORIO")
+    app.config.update(WTF_CSRF_ENABLED=True, MODO_ESCRITORIO=False)
+    with app.app_context():
+        imports_module = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+        module_created = imports_module is None
+        previous_module_enabled = imports_module.enabled if imports_module else None
+        if module_created:
+            imports_module = Modules(module="imports", default=False, enabled=True)
+            database.session.add(imports_module)
+        imports_module.enabled = True
+        initial_batches = set(database.session.execute(database.select(ImportBatch.id)).scalars().all())
+        initial_parties = set(database.session.execute(database.select(Party.id)).scalars().all())
+        initial_series = set(database.session.execute(database.select(NamingSeries.id)).scalars().all())
+        initial_entities = set(database.session.execute(database.select(Entity.id)).scalars().all())
+        initial_identifiers = set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all())
+        initial_sequences = {
+            row.id: row.current_value for row in database.session.execute(database.select(Sequence)).scalars()
+        }
+        initial_counters = {
+            row.id: row.current_value for row in database.session.execute(database.select(SequencePeriodCounter)).scalars()
+        }
+        sufijo = uuid4().hex[:8]
+        nombre_cliente = f"Cliente QA {sufijo}"
+        source_path = tmp_path / "customer.csv"
+        source_path.write_text(
+            "nombre,nombre_comercial,identificacion_fiscal,clasificacion,grupo\n" f"{nombre_cliente},{nombre_cliente},,,\n",
+            encoding="utf-8",
+        )
+        batches = {}
+        for status in (0, 1, 3, 4):
+            batch = ImportBatch(
+                company_id="cacao",
+                record_type="customer",
+                import_status=status,
+                source_format="csv" if status else None,
+                source_filename="customer.csv" if status else None,
+                source_path=str(source_path) if status else None,
+            )
+            database.session.add(batch)
+            database.session.flush()
+            batches[status] = batch.id
+        database.session.commit()
+    client = authenticated_client("admin")
+    try:
+        yield app, client, batches
+    finally:
+        # La configuración se restaura primero: un error en la limpieza de la
+        # base no debe dejar CSRF o el modo escritorio alterados.
+        app.config["WTF_CSRF_ENABLED"] = previous_csrf
+        app.config["MODO_ESCRITORIO"] = previous_desktop
+        with app.app_context():
+            created_batches = set(database.session.execute(database.select(ImportBatch.id)).scalars().all()) - initial_batches
+            created_parties = set(database.session.execute(database.select(Party.id)).scalars().all()) - initial_parties
+            created_series = set(database.session.execute(database.select(NamingSeries.id)).scalars().all()) - initial_series
+            created_entities = set(database.session.execute(database.select(Entity.id)).scalars().all()) - initial_entities
+            created_identifiers = (
+                set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all()) - initial_identifiers
+            )
+            if created_parties:
+                database.session.execute(database.delete(CompanyParty).where(CompanyParty.party_id.in_(created_parties)))
+            if created_batches:
+                database.session.execute(database.delete(ImportBatch).where(ImportBatch.id.in_(created_batches)))
+            if created_series:
+                database.session.execute(database.delete(NamingSeries).where(NamingSeries.id.in_(created_series)))
+            if created_parties:
+                database.session.execute(database.delete(Party).where(Party.id.in_(created_parties)))
+            if created_entities:
+                database.session.execute(database.delete(Entity).where(Entity.id.in_(created_entities)))
+            if created_identifiers:
+                database.session.execute(
+                    database.delete(GeneratedIdentifierLog).where(GeneratedIdentifierLog.id.in_(created_identifiers))
+                )
+            current_sequences = {row.id: row for row in database.session.execute(database.select(Sequence)).scalars()}
+            current_counters = {
+                row.id: row for row in database.session.execute(database.select(SequencePeriodCounter)).scalars()
+            }
+            created_sequences = set(current_sequences) - set(initial_sequences)
+            created_counters = set(current_counters) - set(initial_counters)
+            for sequence_id, value in initial_sequences.items():
+                sequence = current_sequences.get(sequence_id)
+                if sequence is not None and sequence.current_value != value:
+                    sequence.current_value = value
+            for counter_id, value in initial_counters.items():
+                counter = current_counters.get(counter_id)
+                if counter is not None and counter.current_value != value:
+                    counter.current_value = value
+            if created_counters:
+                database.session.execute(
+                    database.delete(SequencePeriodCounter).where(SequencePeriodCounter.id.in_(created_counters))
+                )
+            if created_sequences:
+                database.session.execute(database.delete(Sequence).where(Sequence.id.in_(created_sequences)))
+            current_module = database.session.execute(
+                database.select(Modules).filter_by(module="imports")
+            ).scalar_one_or_none()
+            if current_module is not None:
+                if module_created:
+                    database.session.delete(current_module)
+                else:
+                    current_module.enabled = previous_module_enabled
+            database.session.commit()
+
+
+def _form_token(html: str, action: str | None = None, marker: str | None = None) -> str:
+    """Return the token embedded in the form identified by ``action`` or ``marker``.
+
+    The form must be selected explicitly: a token from the site header would
+    otherwise satisfy the POST even if the wizard form lost its own token.
+    """
+    forms = re.findall(r"<form\b([^>]*)>(.*?)</form>", html, flags=re.DOTALL)
+    for attributes, body in forms:
+        if action is not None:
+            form_action = re.search(r'action="([^"]+)"', attributes)
+            if form_action is None or form_action.group(1) != action:
+                continue
+        if marker is not None and marker not in body:
+            continue
+        token = re.search(r'name="csrf_token"\s+value="([^"]+)"', body)
+        if token is not None:
+            return token.group(1)
+    pytest.fail(f"No CSRF token found for form action={action!r} marker={marker!r}")
+
+
+def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_csrf_pages):
+    """The creation form can submit under CSRFProtect without disabling CSRF."""
+    _app, client, _batches = import_csrf_pages
+    page = client.get("/imports/new")
+    assert page.status_code == 200
+    token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
+    with _app.app_context():
+        total_antes = database.session.query(ImportBatch).count()
+
+    rejected = client.post("/imports/new", data={"company_id": "cacao", "record_type": "customer"})
+    assert rejected.status_code == 400
+
+    accepted = client.post(
+        "/imports/new",
+        data={"company_id": "cacao", "record_type": "customer", "csrf_token": token},
+    )
+    assert accepted.status_code == 302
+    with _app.app_context():
+        created_batches = (
+            database.session.execute(database.select(ImportBatch).filter_by(record_type="customer")).scalars().all()
+        )
+        assert len(created_batches) == total_antes + 1
+
+
+@pytest.mark.parametrize(
+    ("record_type", "series_type", "series_company", "expected_error"),
+    [
+        ("purchase_order", "sales_invoice", "cacao", "no coincide con el tipo"),
+        ("purchase_order", "purchase_order", "alpha", "no pertenece a la compañía"),
+    ],
+)
+def test_new_import_rejects_series_for_other_type_or_company(
+    import_csrf_pages, record_type, series_type, series_company, expected_error
+):
+    """Creation rejects a naming series whose type or company differs from the batch."""
+    app, client, _batches = import_csrf_pages
+    page = client.get("/imports/new")
+    token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
+    with app.app_context():
+        if (
+            series_company == "alpha"
+            and not database.session.execute(database.select(Entity).filter_by(code="alpha")).scalar_one_or_none()
+        ):
+            database.session.add(
+                Entity(
+                    code="alpha",
+                    name="Alpha",
+                    company_name="Alpha SA",
+                    tax_id="J-ALPHA",
+                    currency="NIO",
+                    enabled=True,
+                    status="activo",
+                )
+            )
+            database.session.flush()
+        series = NamingSeries(
+            name=f"SER-{series_type}-{series_company}",
+            entity_type=series_type,
+            company=series_company,
+            prefix_template="TEST-",
+            is_active=True,
+            is_default=False,
+        )
+        database.session.add(series)
+        database.session.commit()
+        series_id = series.id
+        count_before = database.session.query(ImportBatch).count()
+
+    response = client.post(
+        "/imports/new",
+        data={
+            "company_id": "cacao",
+            "record_type": record_type,
+            "sequence_id": series_id,
+            "csrf_token": token,
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert expected_error in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.query(ImportBatch).count() == count_before
+
+
+def test_new_import_persists_series_matching_type_and_company(import_csrf_pages):
+    """A valid company-specific series remains attached to the new batch."""
+    app, client, _batches = import_csrf_pages
+    page = client.get("/imports/new")
+    token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
+    with app.app_context():
+        series = NamingSeries(
+            name="SER-PO-CACAO",
+            entity_type="purchase_order",
+            company="cacao",
+            prefix_template="PO-",
+            is_active=True,
+            is_default=False,
+        )
+        database.session.add(series)
+        database.session.commit()
+        series_id = series.id
+
+    response = client.post(
+        "/imports/new",
+        data={
+            "company_id": "cacao",
+            "record_type": "purchase_order",
+            "sequence_id": series_id,
+            "csrf_token": token,
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        batch = database.session.execute(database.select(ImportBatch).filter_by(sequence_id=series_id)).scalar_one()
+        assert batch.company_id == "cacao"
+        assert batch.record_type == "purchase_order"
+
+
+@pytest.mark.parametrize(
+    ("status", "action"),
+    [(0, "upload"), (1, "validate"), (3, "execute"), (4, "cancel")],
+)
+def test_import_detail_forms_carry_csrf_and_reach_their_route(import_csrf_pages, status, action):
+    """Each action form sends its own token and completes its state transition."""
+    app, client, batches = import_csrf_pages
+    batch_id = batches[status]
+    page = client.get(f"/imports/{batch_id}")
+    assert page.status_code == 200
+    url = f"/imports/{batch_id}/{action}"
+    token = _form_token(page.get_data(as_text=True), url)
+
+    def payload() -> dict:
+        data: dict = {"csrf_token": token}
+        if action == "upload":
+            csv = b"nombre,nombre_comercial,identificacion_fiscal,clasificacion,grupo\n" b"Cliente CSRF,Cliente CSRF,,,\n"
+            data["file"] = (io.BytesIO(csv), "customer.csv", "text/csv")
+        return data
+
+    data_without_token = payload()
+    data_without_token.pop("csrf_token")
+    rejected = client.post(url, data=data_without_token)
+    assert rejected.status_code == 400
+
+    accepted = client.post(url, data=payload())
+    assert accepted.status_code == 302
+    assert f"/imports/{batch_id}" in accepted.headers["Location"]
+
+    with app.app_context():
+        database.session.expire_all()
+        batch = database.session.get(ImportBatch, batch_id)
+        assert batch is not None
+        if action == "upload":
+            assert batch.import_status == 1
+            assert batch.source_filename == "customer.csv"
+        elif action == "validate":
+            assert batch.import_status in (2, 3, 7)
+            assert batch.started_at is None
+        elif action == "execute":
+            assert batch.import_status == 5
+            assert batch.success_rows == 1
+            assert batch.error_rows == 0
+            assert batch.completed_at is not None
+            lineas = Path(batch.source_path).read_text(encoding="utf-8").splitlines()
+            nombre = lineas[1].split(",")[0]
+            assert database.session.execute(database.select(Party.id).filter_by(name=nombre)).scalar_one_or_none()
+        else:
+            assert batch.cancel_requested is True

@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, cast
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.accounting_engine.common.context import (
@@ -29,6 +29,7 @@ from cacao_accounting.database import (
     ExchangeRevaluation,
     ExchangeRevaluationItem,
     GLEntry,
+    DocumentRelation,
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
@@ -45,6 +46,7 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     SalesInvoice,
     SalesInvoiceItem,
+    TAX_TYPES,
     Tax,
     TaxTemplateItem,
     database,
@@ -53,7 +55,12 @@ from cacao_accounting.document_flow.service import compute_payment_unallocated_a
 from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
-from cacao_accounting.tax_rule_service import build_tax_rule_context, build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import (
+    build_tax_rule_context,
+    build_tax_rule_contexts,
+    get_tax_rule,
+    resolve_item_category_ids,
+)
 
 from cacao_accounting.i18n import _
 
@@ -264,6 +271,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     variance_account_id = getattr(defaults, "purchase_settlement_variance_account_id", None)
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
     inventory_side = "credit" if getattr(document, "is_return", False) else "debit"
     bridge_side = "debit" if getattr(document, "is_return", False) else "credit"
     for item in items:
@@ -282,7 +290,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         )
         if bridge_line is not None:
             account_lines.append(bridge_line)
-        item_contexts.append(_item_context_from_purchase_receipt_item(item))
+        item_contexts.append(_item_context_from_purchase_receipt_item(item, item_categories.get(str(item.item_code))))
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     return CalculationContext(
         company_id=company,
@@ -367,7 +375,7 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         .scalars()
         .all()
     )
-    amounts, invoice_posting_dates = _late_invoice_amounts(invoices)
+    amounts, invoice_posting_dates, invoice_item_ids = _late_invoice_amounts(invoices)
 
     prior_receipts = (
         database.session.execute(
@@ -388,24 +396,67 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
     )
 
     if prior_receipts and amounts:
-        _subtract_late_receipt_reclassifications(document, amounts, invoice_posting_dates, prior_receipts)
+        _subtract_late_receipt_reclassifications(
+            document, amounts, invoice_posting_dates, prior_receipts, invoice_item_ids=invoice_item_ids
+        )
 
     return amounts
 
 
-def _late_invoice_amounts(invoices: Iterable[PurchaseInvoice]) -> tuple[dict[str, Decimal], dict[str, date]]:
-    """Aggregate two-way invoice values and their earliest posting dates."""
+def _late_invoice_amounts(
+    invoices: Iterable[PurchaseInvoice],
+) -> tuple[dict[str, Decimal], dict[str, date], set[str]]:
+    """Aggregate two-way invoice values, dates and the source item identities."""
     amounts: dict[str, Decimal] = {}
     posting_dates: dict[str, date] = {}
+    invoice_item_ids: set[str] = set()
     for invoice in invoices:
         items = database.session.execute(
             select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
         ).scalars()
         for item in items:
+            invoice_item_ids.add(str(item.id))
             amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
             if item.item_code not in posting_dates or invoice.posting_date < posting_dates[item.item_code]:
                 posting_dates[item.item_code] = invoice.posting_date
-    return amounts, posting_dates
+    return amounts, posting_dates, invoice_item_ids
+
+
+def _allocation_amounts_by_receipt_item(
+    document: PurchaseReceipt,
+    receipt_item_ids: list[str],
+    invoice_item_ids: set[str] | None,
+) -> tuple[dict[str, list[tuple[Decimal, date | None]]], set[str]]:
+    """Return candidate allocations and receipt items with any active allocation.
+
+    The second value distinguishes "no active allocations exist" (legacy fallback
+    allowed) from "allocations exist but none are candidate-relevant" (#2277).
+    """
+    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
+
+    query = (
+        select(
+            PurchaseInvoiceReceiptAllocation,
+            PurchaseInvoice.posting_date,
+            PurchaseInvoiceItem.id.label("invoice_item_id"),
+        )
+        .join(PurchaseInvoiceItem, PurchaseInvoiceReceiptAllocation.invoice_item_id == PurchaseInvoiceItem.id)
+        .join(PurchaseInvoice, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
+        .where(
+            PurchaseInvoiceReceiptAllocation.company == document.company,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+            PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(receipt_item_ids),
+        )
+    )
+    candidate_rows: dict[str, list[tuple[Decimal, date | None]]] = {}
+    allocated_items: set[str] = set()
+    for allocation, invoice_date, alloc_invoice_item_id in database.session.execute(query):
+        receipt_item_id = str(allocation.receipt_item_id)
+        allocated_items.add(receipt_item_id)
+        if invoice_item_ids is not None and str(alloc_invoice_item_id) not in invoice_item_ids:
+            continue
+        candidate_rows.setdefault(receipt_item_id, []).append((_decimal_value(allocation.invoice_amount), invoice_date))
+    return candidate_rows, allocated_items
 
 
 def _subtract_late_receipt_reclassifications(
@@ -413,40 +464,70 @@ def _subtract_late_receipt_reclassifications(
     amounts: dict[str, Decimal],
     posting_dates: dict[str, date],
     prior_receipts: Iterable[PurchaseReceipt],
+    *,
+    invoice_item_ids: set[str] | None = None,
 ) -> None:
-    """Subtract receipt expense reclassifications from pending invoice values."""
-    from cacao_accounting.database import Book, GLEntry
+    """Resta las reclasificaciones previas conservando la identidad del artículo.
 
-    primary_book = (
-        database.session.execute(
-            select(Book)
-            .where(Book.entity == document.company, Book.status == "activo")
-            .order_by(Book.is_primary.desc(), Book.code)
+    Los créditos del GL se agregan por cuenta de gasto y no conservan la
+    dimensión de artículo. La reclasificación se reconstruye desde las líneas
+    de recepción y sus asignaciones auditables, de modo que cada crédito se
+    resta una sola vez del artículo que lo originó. Solo se consideran
+    asignaciones cuya factura ya estaba contabilizada al postear la recepción.
+    """
+    prior_receipts_list = sorted(prior_receipts, key=lambda receipt: (receipt.posting_date, receipt.id))
+    receipt_items: list[PurchaseReceiptItem] = []
+    for receipt in prior_receipts_list:
+        receipt_items.extend(
+            database.session.execute(
+                select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id, is_superseded=False)
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .first()
+    allocated_amounts, allocated_items = (
+        _allocation_amounts_by_receipt_item(
+            document,
+            [item.id for item in receipt_items],
+            invoice_item_ids,
+        )
+        if receipt_items
+        else ({}, set())
     )
-    prior_receipt_list = list(prior_receipts)
-    for item_code, amount in list(amounts.items()):
-        expense_account_id = _item_account_id(item_code, document.company, "expense")
-        if not expense_account_id:
+    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
+
+    remaining = dict(amounts)
+    for item in receipt_items:
+        item_code = item.item_code
+        available = remaining.get(item_code, Decimal("0"))
+        if available <= 0:
             continue
-        receipt_ids = [receipt.id for receipt in prior_receipt_list if receipt.posting_date >= posting_dates[item_code]]
-        if not receipt_ids:
+        prior_receipt = receipt_by_id.get(item.purchase_receipt_id)
+        invoice_date = posting_dates.get(item_code)
+        if prior_receipt is None or invoice_date is None or prior_receipt.posting_date < invoice_date:
             continue
-        query = select(GLEntry).where(
-            GLEntry.voucher_type == "purchase_receipt",
-            GLEntry.voucher_id.in_(receipt_ids),
-            GLEntry.account_id == expense_account_id,
-            GLEntry.credit > 0,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-        )
-        if primary_book:
-            query = query.where(GLEntry.ledger_id == primary_book.id)
-        entries = database.session.execute(query).scalars().all()
-        reclassified = sum((Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0"))
-        amounts[item_code] = max(Decimal("0"), amount - reclassified)
+        receipt_item_id = str(item.id)
+        rows = allocated_amounts.get(receipt_item_id, [])
+        if rows:
+            as_of = prior_receipt.posting_date
+            reclassified = sum(
+                (amount for amount, source_date in rows if as_of is None or source_date is None or source_date <= as_of),
+                Decimal("0"),
+            )
+        elif receipt_item_id in allocated_items:
+            # #2277: active allocations exist but none are candidate-relevant;
+            # do not treat this as missing evidence and do not apply legacy fallback.
+            reclassified = Decimal("0")
+        else:
+            # Sin evidencia de asignaci?n se conserva la reconstrucci?n legacy.
+            reclassified = min(_line_amount(item), available)
+        reclassified = min(reclassified, available)
+        if reclassified <= 0:
+            continue
+        remaining[item_code] = available - reclassified
+
+    for item_code, amount in amounts.items():
+        amounts[item_code] = max(Decimal("0"), remaining[item_code])
 
 
 def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationContext:
@@ -461,7 +542,10 @@ def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationCon
         raise CalculationContextBuilderError(_("La factura de compra no contiene líneas para cálculo."))
     event_type = "purchase_credit_note_confirmed" if _is_purchase_credit_note(document) else "purchase_invoice_confirmed"
     account_lines = _purchase_invoice_account_lines(document, items, company)
-    item_contexts = [_item_context_from_purchase_invoice_item(item) for item in items]
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
+    item_contexts = [
+        _item_context_from_purchase_invoice_item(item, item_categories.get(str(item.item_code))) for item in items
+    ]
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     already_capitalized = _already_capitalized_component_ids(document, company)
     return CalculationContext(
@@ -551,7 +635,8 @@ def _build_sales_invoice_context(document: SalesInvoice) -> CalculationContext:
         )
         for item in items
     ]
-    item_contexts = [_item_context_from_sales_invoice_item(item) for item in items]
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
+    item_contexts = [_item_context_from_sales_invoice_item(item, item_categories.get(str(item.item_code))) for item in items]
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="sales", event_type=event_type)
     return CalculationContext(
         company_id=company,
@@ -583,7 +668,13 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         return None
     company = _require_company(document.company)
     references = _payment_references(document)
-    settlement_references = [reference for reference in references if not _is_order_payment_reference(reference)]
+    # #1140: una referencia recortada al saldo vigente puede quedar en cero. No
+    # participa de la liquidación; el pago completo se trata como anticipo.
+    settlement_references = [
+        reference
+        for reference in references
+        if not _is_order_payment_reference(reference) and _decimal_value(reference.allocated_amount) > 0
+    ]
     amounts = _payment_settlement_amounts(
         document=document,
         spec=spec,
@@ -612,7 +703,7 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
         exchange_rate=amounts.document_exchange_rate,
         items=[_payment_item_context(document, amounts.document_total)],
         tax_rules=tax_rules,
-        references=_payment_accounting_references(document, company, spec, settlement_references, amounts),
+        references=_payment_accounting_references(document, company, spec, settlement_references, amounts, bool(references)),
         settlement_amount=amounts.settlement_amount,
     )
 
@@ -620,8 +711,12 @@ def _build_payment_context(document: PaymentEntry) -> CalculationContext | None:
 def _build_landed_cost_item_contexts(
     document: ImportLandedCost,
     company: str,
-) -> tuple[list[ItemContext], list[AccountLineSpec]]:
-    """Build item contexts and inventory debit account lines for landed cost items."""
+) -> tuple[list[ItemContext], dict[str, str]]:
+    """Build item contexts and resolve the inventory account of each landed-cost line.
+
+    El documento capitaliza cargos: los importes base de los artículos ya
+    fueron contabilizados por su factura y no se vuelven a debitar (#1757).
+    """
     items = list(
         database.session.execute(select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)).scalars().all()
     )
@@ -629,7 +724,8 @@ def _build_landed_cost_item_contexts(
         raise CalculationContextBuilderError(_("El costo de importacion no contiene lineas para calculo."))
 
     item_contexts: list[ItemContext] = []
-    account_lines: list[AccountLineSpec] = []
+    inventory_accounts: dict[str, str] = {}
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
 
     for item in items:
         amount = _decimal_value(item.amount)
@@ -643,24 +739,23 @@ def _build_landed_cost_item_contexts(
                 gross_amount=amount,
                 net_amount=amount,
                 item_type="inventory",
+                item_category=item_categories.get(str(item.item_code)),
                 uom=item.uom or "unit",
+                weight=_decimal_value(item.weight),
+                volume=_decimal_value(item.volume),
             )
         )
         try:
             inventory_account_id = inventory_account_id_for_document_line(document, item, company)
-        except SQLAlchemyError:
-            inventory_account_id = None
-        if inventory_account_id and amount and amount > 0:
-            account_lines.append(
-                AccountLineSpec(
-                    account_id=inventory_account_id,
-                    amount=amount,
-                    side="debit",
-                    description=f"{item.item_name or item.item_code} - Costo Importacion",
-                )
-            )
+        except SQLAlchemyError as exc:
+            raise CalculationContextBuilderError(
+                _("Falta la cuenta de inventario para una línea de recepción de compra.")
+            ) from exc
+        if not inventory_account_id:
+            raise CalculationContextBuilderError(_("Falta la cuenta de inventario para una línea de recepción de compra."))
+        inventory_accounts[str(item.id)] = str(inventory_account_id)
 
-    return item_contexts, account_lines
+    return item_contexts, inventory_accounts
 
 
 def _build_landed_cost_tax_rules(
@@ -704,7 +799,7 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
         raise CalculationContextBuilderError(str(exc)) from exc
     defaults = _company_defaults(company)
 
-    item_contexts, account_lines = _build_landed_cost_item_contexts(document, company)
+    item_contexts, inventory_accounts = _build_landed_cost_item_contexts(document, company)
 
     charges = list(
         database.session.execute(select(ImportLandedCostCharge).filter_by(import_landed_cost_id=document.id)).scalars().all()
@@ -712,8 +807,9 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
     total_charges_amount = sum((_decimal_value(c.amount) for c in charges), Decimal("0"))
     tax_rules = _build_landed_cost_tax_rules(charges, allocation_method)
 
+    account_lines: list[AccountLineSpec] = []
     bridge_account_id = getattr(defaults, "bridge_account_id", None)
-    if bridge_account_id and account_lines:
+    if bridge_account_id and total_charges_amount > 0:
         account_lines.append(
             AccountLineSpec(
                 account_id=bridge_account_id,
@@ -744,6 +840,7 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
             party_id=document.supplier_id,
             direction="purchase",
             account_lines=account_lines,
+            custom_references={"landed_inventory_accounts": inventory_accounts},
         ),
     )
 
@@ -782,8 +879,10 @@ def _payment_event_type(payment_type: str, party_type: str) -> str:
 
 
 def _payment_references(document: PaymentEntry) -> list[PaymentReference]:
-    """Load references associated with a payment entry."""
-    return list(database.session.execute(select(PaymentReference).filter_by(payment_id=document.id)).scalars().all())
+    """Carga solo referencias con relación documental canónica activa."""
+    from cacao_accounting.document_flow.payment import list_active_payment_references
+
+    return list_active_payment_references(document)
 
 
 def _payment_settlement_amounts(
@@ -931,19 +1030,40 @@ def _payment_tax_rules(
         at_date=document.posting_date,
         recognition_event=spec.event_type,
     )
-    # A supplier's configured rule is authoritative for withholding at payment
-    # time. Generic company withholding rules do not override that choice.
-    if spec.party_type == "supplier" and spec.event_type == "payment_confirmed" and document.party_id:
-        company_party = database.session.execute(
-            select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
-        ).scalar_one_or_none()
-        configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
-        configured_rule = build_tax_rule_context(configured_rule_id) if configured_rule_id else None
-        if configured_rule and configured_rule.tax_type == "withholding":
-            if configured_rule.recognition_event in {"payment_confirmed", "payment"}:
-                rules = [rule for rule in rules if rule.tax_type != "withholding"]
-                rules.append(configured_rule)
+    configured_rule = _configured_payment_withholding_rule(document, spec, company)
+    if configured_rule is not None:
+        rules = [rule for rule in rules if rule.tax_type != "withholding"]
+        rules.append(configured_rule)
     return sorted(rules, key=lambda rule: rule.order)
+
+
+def _configured_payment_withholding_rule(
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    company: str,
+) -> TaxRuleContext | None:
+    """Return the supplier's configured rule when it applies to this payment.
+
+    A supplier's configured rule is authoritative for withholding at payment
+    time. Generic company withholding rules do not override that choice.
+    """
+    if spec.party_type != "supplier" or spec.event_type != "payment_confirmed" or not document.party_id:
+        return None
+    company_party = database.session.execute(
+        select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
+    ).scalar_one_or_none()
+    configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
+    if not configured_rule_id:
+        return None
+    configured_rule_row = get_tax_rule(configured_rule_id)
+    if configured_rule_row is None or configured_rule_row.company not in (None, company):
+        return None
+    configured_rule = build_tax_rule_context(str(configured_rule_id))
+    if configured_rule is None or configured_rule.tax_type != "withholding":
+        return None
+    if configured_rule.recognition_event not in {"payment_confirmed", "payment"}:
+        return None
+    return configured_rule
 
 
 def _payment_item_context(document: PaymentEntry, document_total: Decimal) -> ItemContext:
@@ -966,6 +1086,7 @@ def _payment_accounting_references(
     spec: PaymentBuildSpec,
     settlement_references: list[PaymentReference],
     amounts: PaymentSettlementAmounts,
+    has_any_reference: bool,
 ) -> AccountingReferences:
     """Build accounting references for the payment mapper."""
     return _build_references(
@@ -975,13 +1096,14 @@ def _payment_accounting_references(
         account_lines=[],
         cash_account=_payment_cash_account(document),
         open_balance=amounts.company_open_balance,
-        custom_references=_payment_custom_references(settlement_references, amounts),
+        custom_references=_payment_custom_references(settlement_references, amounts, has_any_reference),
     )
 
 
 def _payment_custom_references(
     settlement_references: list[PaymentReference],
     amounts: PaymentSettlementAmounts,
+    has_any_reference: bool = False,
 ) -> dict[str, Any]:
     """Build custom reference values used by settlement posting."""
     return {
@@ -992,6 +1114,7 @@ def _payment_custom_references(
             (reference.gain_loss_amount or Decimal("0") for reference in settlement_references), Decimal("0")
         ),
         "use_advance_as_party_balance": not settlement_references,
+        "has_any_reference": has_any_reference,
         "open_payment_amount": amounts.open_payment_amount,
     }
 
@@ -1052,11 +1175,27 @@ def _tax_rules_from_template(
         .scalars()
         .all()
     )
+    items_by_tax: dict[str, list[TaxTemplateItem]] = {}
+    for template_item in template_items:
+        items_by_tax.setdefault(str(template_item.tax_id), []).append(template_item)
+    used_by_tax: dict[str, int] = {}
     rules: list[TaxRuleContext] = []
+    # El motor acumula por concepto, no por ``running_total``. Para que una
+    # fila ``previous_total`` conserve la base de la plantilla heredada hay
+    # que declarar qué impuestos previos participan y con qué signo.
+    prior_concepts: dict[str, int] = {}
     for index, tax_line in enumerate(tax_result.lines, start=1):
-        template_item = template_items[index - 1] if index - 1 < len(template_items) else None
-        if rule := _tax_rule_from_template_line(tax_line, template_item, index, event_type):
-            rules.append(rule)
+        tax_key = str(tax_line.tax_id)
+        candidates = items_by_tax.get(tax_key, [])
+        offset = used_by_tax.get(tax_key, 0)
+        matched_item = candidates[offset] if offset < len(candidates) else None
+        used_by_tax[tax_key] = offset + 1
+        rule = _tax_rule_from_template_line(tax_line, matched_item, index, event_type, prior_concepts)
+        if rule is None:
+            continue
+        rules.append(rule)
+        if not rule.included_in_price:
+            prior_concepts[rule.concept] = -1 if rule.tax_type == "withholding" else 1
     return rules
 
 
@@ -1065,6 +1204,7 @@ def _tax_rule_from_template_line(
     template_item: TaxTemplateItem | None,
     order: int,
     event_type: str,
+    prior_concepts: dict[str, int] | None = None,
 ) -> TaxRuleContext | None:
     """Convert one legacy tax line into a tax rule context."""
     tax = database.session.get(Tax, tax_line.tax_id)
@@ -1072,6 +1212,7 @@ def _tax_rule_from_template_line(
         return None
     calculation_method = _template_tax_calculation_method(tax)
     base_mode = _template_tax_base_mode(template_item)
+    include_concepts, exclude_concepts = _template_tax_dependencies(base_mode, prior_concepts or {})
     return TaxRuleContext(
         rule_id=str(tax_line.tax_id),
         name=tax_line.name,
@@ -1081,7 +1222,9 @@ def _tax_rule_from_template_line(
         rate=_decimal_value(tax.rate),
         amount=tax_line.amount if calculation_method == "fixed" else Decimal("0"),
         base_mode=base_mode,
-        include_concepts=_template_tax_include_concepts(base_mode),
+        include_concepts=include_concepts,
+        exclude_concepts=exclude_concepts,
+        participates_in_next_base=not tax_line.is_inclusive,
         order=order,
         accounting_treatment=_template_tax_accounting_treatment(tax_line),
         recognition_event=event_type,
@@ -1121,22 +1264,26 @@ def _template_tax_base_mode(template_item: TaxTemplateItem | None) -> str:
             return "goods"
 
 
-def _template_tax_include_concepts(base_mode: str) -> list[str]:
-    """Resolve dependent concepts for accumulated legacy taxes."""
-    match base_mode:
-        case "accumulated":
-            return ["goods"]
-        case _:
-            return []
+def _template_tax_dependencies(base_mode: str, prior_concepts: dict[str, int]) -> tuple[list[str], list[str]]:
+    """Resolve the accumulated and deducted concepts of a legacy previous-total tax.
+
+    La plantilla heredada actualiza su ``running_total`` con cada impuesto no
+    incluido: los aditivos suman y las retenciones restan. El motor fiscal
+    reproduce ese total declarando los conceptos previos como incluidos o
+    excluidos de la base acumulada.
+    """
+    if base_mode != "accumulated":
+        return [], []
+    include_concepts = ["goods"] + [concept for concept, sign in prior_concepts.items() if sign > 0]
+    exclude_concepts = [concept for concept, sign in prior_concepts.items() if sign < 0]
+    return include_concepts, exclude_concepts
 
 
 def _template_tax_calculation_method(tax: Tax) -> str:
-    """Normalize legacy tax calculation methods to engine-supported values."""
-    match tax.tax_type:
-        case "percentage" | "fixed":
-            return str(tax.tax_type)
-        case _:
-            return "percentage"
+    """Return the engine calculation method or reject an unknown tax type."""
+    if tax.tax_type not in TAX_TYPES:
+        raise CalculationContextBuilderError(_("El tipo de impuesto seleccionado no es válido."))
+    return str(tax.tax_type)
 
 
 def _build_references(
@@ -1177,6 +1324,7 @@ def _build_references(
         cash_account=cash_account or getattr(defaults, "default_bank", None) or getattr(defaults, "default_cash", None),
         open_balance=open_balance,
         default_tax_accounts=default_tax_accounts,
+        country=_company_country(company),
         custom_references=custom,
     )
 
@@ -1548,18 +1696,50 @@ def _prior_payment_document_net(
     company: str,
     exclude_payment_id: str,
     voucher_net: Any,
+    as_of_date: date | None = None,
 ) -> Decimal:
-    """Prorratea el neto de pagos previos entre sus documentos aplicados."""
+    """Prorratea el neto de pagos previos entre sus documentos aplicados.
+
+    Con ``as_of_date`` solo considera pagos contabilizados hasta el corte, para
+    que una revalorizacion historica no mezcle liquidaciones posteriores.
+    """
     from sqlalchemy import func
 
-    prior_references = database.session.execute(
-        select(PaymentReference.payment_id, PaymentReference.allocated_amount).where(
+    consulta = (
+        select(PaymentReference.payment_id, PaymentReference.allocated_amount)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == PaymentEntry.id)
+            & (DocumentRelation.source_type == document_type)
+            & (DocumentRelation.source_id == document_id),
+        )
+        .where(
             PaymentReference.reference_type == document_type,
             PaymentReference.reference_id == document_id,
             PaymentReference.company == company,
             PaymentReference.payment_id != exclude_payment_id,
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == company),
+            _payment_relation_active_at_cutoff(as_of_date),
         )
-    ).all()
+    )
+    if as_of_date is not None:
+        consulta = consulta.where(PaymentEntry.posting_date <= as_of_date)
+    if as_of_date is None:
+        consulta = consulta.where(PaymentEntry.docstatus == 1)
+    else:
+        # #2333: una anulación posterior al corte no debe borrar el pago del
+        # histórico; se usa la marca temporal disponible como reconstrucción.
+        corte = _cutoff_timestamp(as_of_date)
+        consulta = consulta.where(
+            or_(
+                PaymentEntry.docstatus == 1,
+                and_(PaymentEntry.docstatus == 2, PaymentEntry.modified >= corte),
+            )
+        )
+    prior_references = database.session.execute(consulta).all()
     if not prior_references:
         return Decimal("0")
     allocated_by_payment = {str(payment_id): Decimal("0") for payment_id, _ in prior_references}
@@ -1582,6 +1762,23 @@ def _prior_payment_document_net(
     return payments_net
 
 
+def _cutoff_timestamp(as_of_date: date) -> datetime:
+    """Primer instante posterior al corte para distinguir bajas posteriores."""
+    return datetime.combine(as_of_date + timedelta(days=1), time.min)
+
+
+def _payment_relation_active_at_cutoff(as_of_date: date | None) -> Any:
+    """Exige una aplicación vigente y conserva reversas posteriores al corte."""
+    if as_of_date is None:
+        return DocumentRelation.status == "active"
+    cutoff_start = _cutoff_timestamp(as_of_date)
+    return or_(
+        DocumentRelation.status == "active",
+        and_(DocumentRelation.status == "reverted", DocumentRelation.reversed_at >= cutoff_start),
+        and_(DocumentRelation.status == "cancelled", DocumentRelation.cancelled_at >= cutoff_start),
+    )
+
+
 def _document_carrying_value_in_ledger(
     *,
     company: str,
@@ -1592,6 +1789,7 @@ def _document_carrying_value_in_ledger(
     ledger_id: str | None,
     receivable: bool,
     include_revaluation_adjustments: bool = False,
+    as_of_date: date | None = None,
 ) -> Decimal | None:
     """Valor en libros previo a la aplicacion de un documento en un libro.
 
@@ -1619,19 +1817,37 @@ def _document_carrying_value_in_ledger(
     def _voucher_net(voucher_type: str, voucher_ids: list[str]) -> Decimal:
         if not voucher_ids:
             return Decimal("0")
+        condiciones = [
+            GLEntry.company == company,
+            GLEntry.ledger_id == ledger_id,
+            GLEntry.account_id == party_account_id,
+            GLEntry.voucher_type == voucher_type,
+            GLEntry.voucher_id.in_(voucher_ids),
+            GLEntry.is_reversal.is_(False),
+        ]
+        if as_of_date is None:
+            condiciones.append(GLEntry.is_cancelled.is_(False))
+        else:
+            # #2333: una baja posterior al corte no elimina la evidencia del
+            # histórico; se reconstruye con la marca temporal disponible.
+            condiciones.append(GLEntry.posting_date <= as_of_date)
+            condiciones.append(or_(GLEntry.is_cancelled.is_(False), GLEntry.modified >= _cutoff_timestamp(as_of_date)))
         row = database.session.execute(
-            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
-                GLEntry.company == company,
-                GLEntry.ledger_id == ledger_id,
-                GLEntry.account_id == party_account_id,
-                GLEntry.voucher_type == voucher_type,
-                GLEntry.voucher_id.in_(voucher_ids),
-                GLEntry.is_cancelled.is_(False),
-            )
+            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(*condiciones)
         ).scalar_one()
         return _decimal_value(row)
 
     document_net = _voucher_net(document_type, [document_id])
+    # #1161: las notas de crédito/débito relacionadas reducen el saldo abierto
+    # del documento, así que su GL debe formar parte del mismo valor contable.
+    document_net += _related_note_document_net(
+        company=company,
+        document_type=document_type,
+        document_id=document_id,
+        ledger_id=ledger_id,
+        party_account_id=party_account_id,
+        as_of_date=as_of_date,
+    )
     if include_revaluation_adjustments:
         document_net += _revaluation_document_net(
             company=company,
@@ -1646,11 +1862,64 @@ def _document_carrying_value_in_ledger(
         company=company,
         exclude_payment_id=exclude_payment_id,
         voucher_net=_voucher_net,
+        as_of_date=as_of_date,
     )
     has_gl = document_net != 0 or payments_net != 0
     if not has_gl:
         return None
     return (_net(document_net + payments_net)).quantize(Decimal("0.0001"))
+
+
+def _related_note_document_net(
+    *,
+    company: str,
+    document_type: str,
+    document_id: str,
+    ledger_id: str,
+    party_account_id: str,
+    as_of_date: date | None = None,
+) -> Decimal:
+    """GL neto de las notas de crédito/débito relacionadas con el documento.
+
+    El saldo abierto de una factura ya descuenta las notas aplicadas; el valor
+    contable anterior debe incluir sus asientos para no generar una diferencia
+    cambiaria ficticia (#1161).
+    """
+    from sqlalchemy import func
+
+    note_types_by_source = {
+        "sales_invoice": ("sales_credit_note", "sales_debit_note", "sales_return"),
+        "purchase_invoice": ("purchase_credit_note", "purchase_debit_note"),
+    }
+    note_types = note_types_by_source.get(document_type, ())
+    if not note_types:
+        return Decimal("0")
+    relations = database.session.execute(
+        select(DocumentRelation.target_type, DocumentRelation.target_id).where(
+            DocumentRelation.source_type == document_type,
+            DocumentRelation.source_id == document_id,
+            DocumentRelation.relation_type == "invoice_reversal",
+            DocumentRelation.status == "active",
+            DocumentRelation.target_type.in_(note_types),
+        )
+    ).all()
+    total = Decimal("0")
+    for note_type in note_types:
+        note_ids = [str(target_id) for target_type, target_id in relations if target_type == note_type and target_id]
+        if not note_ids:
+            continue
+        query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+            GLEntry.company == company,
+            GLEntry.ledger_id == ledger_id,
+            GLEntry.account_id == party_account_id,
+            GLEntry.voucher_type == note_type,
+            GLEntry.voucher_id.in_(note_ids),
+            GLEntry.is_cancelled.is_(False),
+        )
+        if as_of_date is not None:
+            query = query.where(GLEntry.posting_date <= as_of_date)
+        total += _decimal_value(database.session.execute(query).scalar_one())
+    return total
 
 
 def _settlement_exchange_rate(
@@ -1677,7 +1946,7 @@ def _payment_cash_account(document: PaymentEntry) -> str | None:
     return None
 
 
-def _item_context_from_purchase_receipt_item(item: PurchaseReceiptItem) -> ItemContext:
+def _item_context_from_purchase_receipt_item(item: PurchaseReceiptItem, item_category: str | None = None) -> ItemContext:
     """Convert a purchase receipt line into an item context."""
     return ItemContext(
         line_id=item.id,
@@ -1687,12 +1956,13 @@ def _item_context_from_purchase_receipt_item(item: PurchaseReceiptItem) -> ItemC
         unit_price=_decimal_value(item.rate),
         gross_amount=_line_amount(item),
         net_amount=_line_amount(item),
+        item_category=item_category,
         uom=item.uom or "unit",
         warehouse_id=item.warehouse,
     )
 
 
-def _item_context_from_purchase_invoice_item(item: PurchaseInvoiceItem) -> ItemContext:
+def _item_context_from_purchase_invoice_item(item: PurchaseInvoiceItem, item_category: str | None = None) -> ItemContext:
     """Convert a purchase invoice line into an item context."""
     return ItemContext(
         line_id=item.id,
@@ -1702,12 +1972,13 @@ def _item_context_from_purchase_invoice_item(item: PurchaseInvoiceItem) -> ItemC
         unit_price=_decimal_value(item.rate),
         gross_amount=_line_amount(item),
         net_amount=_line_amount(item),
+        item_category=item_category,
         uom=item.uom or "unit",
         warehouse_id=item.warehouse,
     )
 
 
-def _item_context_from_sales_invoice_item(item: SalesInvoiceItem) -> ItemContext:
+def _item_context_from_sales_invoice_item(item: SalesInvoiceItem, item_category: str | None = None) -> ItemContext:
     """Convert a sales invoice line into an item context."""
     return ItemContext(
         line_id=item.id,
@@ -1718,6 +1989,7 @@ def _item_context_from_sales_invoice_item(item: SalesInvoiceItem) -> ItemContext
         gross_amount=_line_amount(item),
         discount_amount=_decimal_value(getattr(item, "discount_amount", None)),
         net_amount=_line_amount(item),
+        item_category=item_category,
         uom=item.uom or "unit",
         warehouse_id=item.warehouse,
     )
@@ -1779,6 +2051,14 @@ def _company_defaults(company: str) -> CompanyDefaultAccount | None:
 def _company_entity(company: str) -> Entity | None:
     """Resolve an entity by the company code used on transactions."""
     return database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
+
+
+def _company_country(company: str) -> str | None:
+    """Resolve the normalized country configured for the company."""
+    entity = _company_entity(company)
+    value = getattr(entity, "country", None)
+    normalized = str(value).strip().upper() if value else ""
+    return normalized or None
 
 
 def _document_currency(document: Any, company: str) -> str:

@@ -67,7 +67,7 @@
               </div>
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button></template>
                 <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                 <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                 <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>

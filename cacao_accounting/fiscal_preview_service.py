@@ -16,9 +16,15 @@ from cacao_accounting.accounting_engine.common.context import (
     ItemContext,
     TaxRuleContext,
 )
-from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
+from cacao_accounting.accounting_engine.common.fiscal import (
+    affects_inventory_from_treatment,
+    find_duplicate_rule_id,
+    has_negative_tax_amounts,
+    negative_manual_tax_amount_message,
+    unique_concepts,
+)
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
-from cacao_accounting.tax_rule_service import build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import build_tax_rule_contexts, resolve_item_category_ids
 
 
 from cacao_accounting.i18n import LazyText, _, _l
@@ -228,6 +234,18 @@ def get_fiscal_document_profile(document_type: str, payment_type: str | None = N
     return profile
 
 
+def _company_country(company: str | None) -> str | None:
+    """Devuelve el país normalizado de la compañía para el preview fiscal."""
+    from cacao_accounting.database import Entity, database
+
+    if not company:
+        return None
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first()
+    value = getattr(entity, "country", None)
+    normalized = str(value).strip().upper() if value else ""
+    return normalized or None
+
+
 def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     """Calcula el preview fiscal unificado para los formularios MVP."""
     document_type = str(payload.get("document_type") or "").strip()
@@ -246,6 +264,14 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     item_contexts = _build_item_contexts(lines_payload)
     subtotal = sum((item.net_amount for item in item_contexts), Decimal("0"))
 
+    manual_tax_error = _manual_tax_line_validation_error(payload.get("tax_lines"))
+    if manual_tax_error:
+        return {
+            "tax_lines": [],
+            "summary": {"subtotal": str(subtotal), "grand_total": str(subtotal)},
+            "errors": [manual_tax_error],
+        }
+
     tax_rules = _build_tax_rules(
         payload=payload,
         profile=profile,
@@ -255,6 +281,9 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if not profile.supports_taxes and not profile.supports_charges:
         tax_rules = []
+    duplicate_rule_id = find_duplicate_rule_id(rule.rule_id for rule in tax_rules)
+    if duplicate_rule_id is not None:
+        raise ValueError(_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id})
 
     context = CalculationContext(
         company_id=company,
@@ -269,7 +298,7 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
         company_currency=company_currency,
         items=item_contexts,
         tax_rules=tax_rules,
-        references=AccountingReferences(),
+        references=AccountingReferences(country=_company_country(company)),
     )
     result = FiscalEngine().calculate(context)
     tax_lines = [
@@ -339,20 +368,23 @@ def _build_item_contexts(lines_payload: list[dict[str, Any]]) -> list[ItemContex
             )
         ]
     items: list[ItemContext] = []
+    item_categories = resolve_item_category_ids(str(line.get("item_code") or "") for line in lines_payload)
     for index, line in enumerate(lines_payload, start=1):
         qty = _decimal_value(line.get("qty"), default="1")
         rate = _decimal_value(line.get("rate"), default="0")
         amount = _decimal_value(line.get("amount"), default=str(qty * rate))
+        item_code = str(line.get("item_code") or f"ITEM-{index:03}")
         items.append(
             ItemContext(
                 line_id=str(line.get("uid") or f"LINE-{index:03}"),
-                item_id=str(line.get("item_code") or f"ITEM-{index:03}"),
+                item_id=item_code,
                 description=str(line.get("item_name") or line.get("item_code") or f"Line {index}"),
                 quantity=qty,
                 unit_price=rate,
                 gross_amount=amount,
                 net_amount=amount,
                 item_type="inventory",
+                item_category=item_categories.get(item_code),
                 uom=str(line.get("uom") or "unit"),
             )
         )
@@ -391,6 +423,24 @@ def _build_tax_rules(
     return []
 
 
+def _manual_tax_line_validation_error(payload_lines: Any) -> str | None:
+    """Return a controlled preview error for a negative manual tax amount."""
+    if not isinstance(payload_lines, list):
+        return None
+    for raw_line in payload_lines:
+        if not _is_manual_tax_line(raw_line):
+            continue
+        line = raw_line if isinstance(raw_line, dict) else {}
+        values = (
+            _decimal_value(line.get("base_amount"), default="0"),
+            _decimal_value(line.get("rate"), default="0"),
+            _decimal_value(line.get("amount"), default="0"),
+        )
+        if has_negative_tax_amounts(*values):
+            return negative_manual_tax_amount_message()
+    return None
+
+
 def _manual_tax_rules_from_payload(payload_lines: Any, recognition_event: str, *, start_order: int) -> list[TaxRuleContext]:
     """Extrae líneas manuales sin duplicar reglas canónicas reenviadas por el cliente."""
     if not isinstance(payload_lines, list):
@@ -405,17 +455,22 @@ def _manual_tax_rules_from_payload(payload_lines: Any, recognition_event: str, *
 def _tax_rule_context_from_payload(raw_line: Any, recognition_event: str, order: int) -> TaxRuleContext:
     """Convierte una línea JSON a `TaxRuleContext`."""
     item = raw_line if isinstance(raw_line, dict) else {}
+    rate = _decimal_value(item.get("rate"), default="0")
+    amount = _decimal_value(item.get("amount"), default="0")
+    base_amount = _decimal_value(item.get("base_amount"), default="0")
+    if _is_manual_tax_line(item) and has_negative_tax_amounts(base_amount, rate, amount):
+        raise ValueError(negative_manual_tax_amount_message())
     return TaxRuleContext(
         rule_id=str(item.get("source_rule_id") or item.get("rule_id") or f"MANUAL-{order:03}"),
         name=str(item.get("concept") or item.get("name") or f"rule_{order}"),
         concept=str(item.get("concept") or item.get("name") or f"rule_{order}"),
         tax_type=str(item.get("type") or item.get("tax_type") or "tax"),
         calculation_method=str(item.get("calculation_method") or "percentage"),
-        rate=_decimal_value(item.get("rate"), default="0"),
-        amount=_decimal_value(item.get("amount"), default="0"),
+        rate=rate,
+        amount=amount,
         base_mode=str(item.get("base_mode") or "goods"),
-        include_concepts=_as_list(item.get("include_concepts")),
-        exclude_concepts=_as_list(item.get("exclude_concepts")),
+        include_concepts=unique_concepts(_as_list(item.get("include_concepts"))),
+        exclude_concepts=unique_concepts(_as_list(item.get("exclude_concepts"))),
         order=order,
         accounting_treatment=str(item.get("accounting_treatment") or "separate_tax_account"),
         recognition_event=recognition_event,
@@ -495,12 +550,15 @@ def _parse_date(value: Any) -> date:
 
 
 def _decimal_value(value: Any, *, default: str) -> Decimal:
-    """Convierte valores numéricos de payload en Decimal."""
+    """Convierte valores numéricos de payload en Decimal finito."""
     raw = value if value not in (None, "") else default
     try:
-        return Decimal(str(raw))
-    except ArithmeticError:
-        return Decimal(default)
+        amount = Decimal(str(raw))
+    except ArithmeticError as exc:
+        raise ValueError(_("Los valores fiscales deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise ValueError(_("Los valores fiscales deben ser finitos."))
+    return amount
 
 
 def _as_list(value: Any) -> list[str]:

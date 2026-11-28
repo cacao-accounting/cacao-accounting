@@ -5,7 +5,7 @@ macros %} {%- if TESTING -%}
 ></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"
@@ -38,7 +38,7 @@ macros %} {%- if TESTING -%}
   >
     <i class="bi bi-plus-circle me-1"></i>{{ _("Nueva comparativa") }}
   </a>
-  {{ macros.list_filters(show_status=True) }}
+  {{ macros.list_filters(show_status=False) }}
   <table class="ca-table">
     <caption style="display: none">
       {{ _("Solicitudes de Compra y estado de sus comparativos de ofertas.") }}
@@ -54,13 +54,14 @@ macros %} {%- if TESTING -%}
       </tr>
     </thead>
     <tbody>
-      {% for item in consulta.items -%} {% set comparison =
-      comparisons_by_request.get(item.id) %}
+      {% for item in consulta.items -%} {% set comparisons =
+      comparisons_by_request.get(item.id, []) %} {% set comparison =
+      comparisons[0] if comparisons else None %}
       <tr>
         <td>{{ item.document_no or item.id }}</td>
         <td>{{ item.requested_by or "-" }}</td>
         <td>{{ item.posting_date or "" }}</td>
-        <td>{{ item.grand_total or item.total or "0" }}</td>
+        <td>{{ format_money_with_currency(item.grand_total or item.total or 0, item.transaction_currency or item.base_currency) }}</td>
         <td>
           {% if comparison %}
           {% if comparison.status == 'used' %}
@@ -77,12 +78,14 @@ macros %} {%- if TESTING -%}
           {% endif %}
         </td>
         <td>
-          {% if comparison %}
+          {% if comparisons %}
+          {% for comparison in comparisons %}
           <a
             href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id) }}"
             class="btn btn-sm btn-outline-primary"
-            >{{ _("Ver comparativo") }}</a
+            >{{ _("Ver comparativo") }}{% if comparisons|length > 1 %} {{ loop.index }}{% endif %}</a
           >
+          {% endfor %}
           <a
             href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_request_id=item.id) }}"
             class="btn btn-sm btn-outline-secondary"

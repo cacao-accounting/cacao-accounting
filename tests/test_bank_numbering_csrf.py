@@ -1,0 +1,616 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
+"""Guardado AJAX de numeración bancaria con CSRF.
+
+Escenario de negocio: el botón Guardar envía JSON al endpoint de numeración.
+Con CSRFProtect activo, el fetch debe incluir ``X-CSRFToken``; sin él la
+configuración no se persiste.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from datetime import date
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from cacao_accounting import create_app
+from cacao_accounting.auth import proteger_passwd
+from cacao_accounting.bancos import routes as bank_routes
+from cacao_accounting.bancos.services import _resolve_bank_account_numbering_config
+from cacao_accounting.config import configuracion
+from cacao_accounting.database import (
+    AccountingPeriod,
+    Bank,
+    BankAccount,
+    BankAccountNumberingConfig,
+    Currency,
+    Entity,
+    FiscalYear,
+    Modules,
+    ExternalCounter,
+    GeneratedIdentifierLog,
+    NamingSeries,
+    PaymentEntry,
+    Sequence,
+    SeriesSequenceMap,
+    Roles,
+    RolesAccess,
+    RolesUser,
+    User,
+    UserCompanyAccess,
+    database,
+)
+from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+
+CONTRASENA = "numeracion-csrf-2026"
+
+
+@pytest.fixture
+def numeracion_csrf():
+    """Cuenta bancaria con CSRF activo."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": True,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add_all(
+            [
+                Modules(module="cash", default=False, enabled=True),
+                Entity(
+                    code="cacao",
+                    name="Cacao",
+                    company_name="Cacao SA",
+                    tax_id="J0001",
+                    currency="NIO",
+                    enabled=True,
+                    status="default",
+                ),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrador",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="admin",
+                ),
+                UserCompanyAccess(user_id="admin", company_code="cacao"),
+            ]
+        )
+        database.session.commit()
+        banco = Bank(name="Banco de Prueba", swift_code="TESTNI2N", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        cuenta = BankAccount(
+            company="cacao",
+            bank_id=banco.id,
+            account_name="Cuenta Cacao",
+            account_no="CA-1",
+            currency="NIO",
+            is_active=True,
+        )
+        database.session.add(cuenta)
+        database.session.commit()
+        cuenta_id = cuenta.id
+    yield application, cuenta_id
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+def _token(html: str) -> str:
+    match = re.search(r"X-CSRFToken':\s*'([^']+)'", html)
+    assert match is not None
+    return match.group(1)
+
+
+def _login(client) -> None:
+    pagina = client.get("/login")
+    csrf = re.search(r'csrf_token[^>]*value="([^"]+)"', pagina.get_data(as_text=True))
+    assert csrf is not None
+    response = client.post(
+        "/login",
+        data={"usuario": "admin", "acceso": CONTRASENA, "csrf_token": csrf.group(1)},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+
+def test_guardado_de_numeracion_envia_csrf(numeracion_csrf):
+    """El fetch incluye el token y el POST persiste la configuración."""
+    application, cuenta_id = numeracion_csrf
+    client = application.test_client()
+    _login(client)
+
+    pagina = client.get(f"/cash_management/bank-account/{cuenta_id}")
+    assert pagina.status_code == 200
+    html = pagina.get_data(as_text=True)
+    assert "Editar" in html
+    token = _token(html)
+
+    response = client.post(
+        f"/cash_management/bank-account/{cuenta_id}/numbering-config",
+        data=json.dumps({"configs": [{"payment_type": "pay", "use_external_counter": False}]}),
+        content_type="application/json",
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "ok"
+    with application.app_context():
+        config = database.session.execute(
+            database.select(BankAccountNumberingConfig).filter_by(bank_account_id=cuenta_id, payment_type="pay")
+        ).scalar_one()
+        assert config.use_external_counter is False
+
+
+def test_guardado_sin_csrf_es_rechazado(numeracion_csrf):
+    """CSRFProtect sigue activo para el endpoint AJAX."""
+    application, cuenta_id = numeracion_csrf
+    client = application.test_client()
+    _login(client)
+
+    response = client.post(
+        f"/cash_management/bank-account/{cuenta_id}/numbering-config",
+        data=json.dumps({"configs": []}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize("reference", ["series", "counter"])
+def test_configuracion_rechaza_referencia_inactiva_sin_guardado_parcial(numeracion_csrf, reference):
+    """La configuración no persiste ninguna entrada si una referencia está inactiva."""
+    application, account_id = numeracion_csrf
+    with application.app_context():
+        if reference == "series":
+            item = NamingSeries(
+                name="Serie inactiva",
+                entity_type="payment_entry",
+                company="cacao",
+                prefix_template="PAY-*YYYY*-",
+                is_active=False,
+            )
+        else:
+            item = ExternalCounter(
+                company="cacao",
+                name="Chequera inactiva",
+                counter_type="checkbook",
+                is_active=False,
+            )
+        database.session.add(item)
+        database.session.commit()
+        item_id = item.id
+
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    payload = {"payment_type": "pay", "use_external_counter": reference == "counter"}
+    payload["naming_series_id" if reference == "series" else "external_counter_id"] = item_id
+    response = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={"configs": [payload, {"payment_type": "receive", "use_external_counter": False}]},
+        headers={"X-CSRFToken": _token(detail.get_data(as_text=True))},
+    )
+
+    assert response.status_code == 400
+    with application.app_context():
+        assert (
+            database.session.execute(database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id))
+            .scalars()
+            .all()
+            == []
+        )
+
+
+@pytest.mark.parametrize("reference", ["series", "counter"])
+def test_configuracion_rechaza_tipo_incompatible_sin_guardado_parcial(numeracion_csrf, reference):
+    """Una serie de otro doctype o un contador no-chequera se rechaza completo."""
+    application, account_id = numeracion_csrf
+    with application.app_context():
+        if reference == "series":
+            item = NamingSeries(
+                name="Serie de ventas",
+                entity_type="sales_invoice",
+                company="cacao",
+                prefix_template="INV-*YYYY*-",
+                is_active=True,
+            )
+        else:
+            item = ExternalCounter(
+                company="cacao",
+                name="Contador no chequera",
+                counter_type="other",
+                is_active=True,
+            )
+        database.session.add(item)
+        database.session.commit()
+        item_id = item.id
+
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    payload = {"payment_type": "pay", "use_external_counter": reference == "counter"}
+    payload["naming_series_id" if reference == "series" else "external_counter_id"] = item_id
+    response = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={"configs": [payload, {"payment_type": "receive", "use_external_counter": False}]},
+        headers={"X-CSRFToken": _token(detail.get_data(as_text=True))},
+    )
+
+    assert response.status_code == 400
+    with application.app_context():
+        assert (
+            database.session.execute(database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id))
+            .scalars()
+            .all()
+            == []
+        )
+
+
+def _configurar_referencias(numeracion_csrf):
+    """Crea serie, chequera y un pago existente, y guarda la configuración."""
+    application, account_id = numeracion_csrf
+    with application.app_context():
+        sufijo = uuid4().hex[:6]
+        serie = NamingSeries(
+            name=f"Serie pagos {sufijo}",
+            entity_type="bank_payment",
+            company="cacao",
+            prefix_template="PAG-*YYYY*-",
+            is_active=True,
+        )
+        chequera = ExternalCounter(
+            company="cacao",
+            name=f"Chequera {sufijo}",
+            counter_type="checkbook",
+            last_used=0,
+            is_active=True,
+        )
+        secuencia = Sequence(
+            name=f"Secuencia {sufijo}",
+            current_value=0,
+            increment=1,
+            padding=5,
+            reset_policy="never",
+        )
+        database.session.add_all(
+            [
+                serie,
+                chequera,
+                secuencia,
+                FiscalYear(
+                    id=f"FY{sufijo}",
+                    entity="cacao",
+                    name=f"2026 {sufijo}",
+                    year_start_date=date(2026, 1, 1),
+                    year_end_date=date(2026, 12, 31),
+                    is_closed=False,
+                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add(SeriesSequenceMap(naming_series_id=serie.id, sequence_id=secuencia.id, priority=0))
+        database.session.add(
+            AccountingPeriod(
+                id=f"P{sufijo}",
+                entity="cacao",
+                fiscal_year_id=f"FY{sufijo}",
+                name=f"Mayo {sufijo}",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
+        # Pago borrador elegible: sin número ni referencias asignadas, para que
+        # assign_document_identifier() realmente intente resolver la numeración.
+        pago = PaymentEntry(
+            company="cacao",
+            posting_date=None,
+            docstatus=0,
+            document_no=None,
+            naming_series_id=None,
+            external_counter_id=None,
+            external_number=None,
+            payment_type="pay",
+            currency="NIO",
+            exchange_rate=Decimal("1"),
+            paid_amount=Decimal("1"),
+            base_paid_amount=Decimal("1"),
+        )
+        database.session.add(pago)
+        database.session.commit()
+        ids = {
+            "serie": serie.id,
+            "chequera": chequera.id,
+            "secuencia": secuencia.id,
+            "pago": pago.id,
+        }
+
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    valido = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={
+            "configs": [
+                {
+                    "payment_type": "pay",
+                    "naming_series_id": ids["serie"],
+                    "use_external_counter": True,
+                    "external_counter_id": ids["chequera"],
+                }
+            ]
+        },
+        headers={"X-CSRFToken": _token(detail.get_data(as_text=True))},
+    )
+    assert valido.status_code == 200, valido.get_json()
+    return application, account_id, ids
+
+
+@pytest.mark.parametrize(
+    ("referencia", "mensaje"),
+    [
+        ("serie", "La serie seleccionada no existe o está inactiva."),
+        ("chequera", "El contador externo indicado está inactivo."),
+    ],
+)
+def test_referencia_desactivada_no_asigna_numero(numeracion_csrf, referencia: str, mensaje: str) -> None:
+    """Una referencia dada de baja tras guardar impide numerar el pago."""
+    application, account_id, ids = _configurar_referencias(numeracion_csrf)
+    with application.app_context():
+        if referencia == "serie":
+            database.session.get(NamingSeries, ids["serie"]).is_active = False
+        else:
+            database.session.get(ExternalCounter, ids["chequera"]).is_active = False
+        database.session.commit()
+
+        logs_antes = set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all())
+        secuencia_antes = database.session.execute(
+            database.select(Sequence.current_value).where(Sequence.id == ids["secuencia"])
+        ).scalar_one()
+
+        config = _resolve_bank_account_numbering_config(account_id, "pay")
+        assert config is not None
+        pago = database.session.get(PaymentEntry, ids["pago"])
+        with pytest.raises(IdentifierConfigurationError, match=re.escape(mensaje)):
+            assign_document_identifier(
+                document=pago,
+                entity_type="bank_payment",
+                posting_date_raw=date(2026, 5, 15),
+                naming_series_id=config.naming_series_id,
+                external_counter_id=config.external_counter_id,
+            )
+
+        # El documento ORM pasado no debe quedar con numeración parcial.
+        assert pago.docstatus == 0
+        assert pago.posting_date is None
+        assert pago.document_no is None
+        assert pago.naming_series_id is None
+        assert pago.external_counter_id is None
+        assert pago.external_number is None
+
+        database.session.rollback()
+        database.session.expire_all()
+        pago = database.session.get(PaymentEntry, ids["pago"])
+        assert pago.docstatus == 0
+        assert pago.posting_date is None
+        assert pago.document_no is None
+        assert pago.naming_series_id is None
+        assert pago.external_counter_id is None
+        assert pago.external_number is None
+        assert database.session.get(ExternalCounter, ids["chequera"]).last_used == 0
+        assert (
+            database.session.execute(
+                database.select(Sequence.current_value).where(Sequence.id == ids["secuencia"])
+            ).scalar_one()
+            == secuencia_antes
+        )
+        assert set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all()) == logs_antes
+
+
+def test_conflicto_de_configuracion_devuelve_409(monkeypatch, numeracion_csrf):
+    """Un IntegrityError concurrente se traduce a conflicto controlado."""
+    application, account_id = numeracion_csrf
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    token = _token(detail.get_data(as_text=True))
+
+    def _conflicto(_bank_account):
+        raise IntegrityError("insert", {}, Exception("unique"))
+
+    monkeypatch.setattr(bank_routes, "_save_numbering_configs", _conflicto)
+    response = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={"configs": [{"payment_type": "pay", "use_external_counter": False}]},
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["status"] == "error"
+    with application.app_context():
+        assert (
+            database.session.execute(database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id))
+            .scalars()
+            .all()
+            == []
+        )
+
+
+@pytest.mark.database
+def test_la_restriccion_unica_de_configuracion_se_aplica_en_el_motor():
+    """La colisión real de numeración la rechaza la base, no solo un mock."""
+    configured_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        if not configured_uri.startswith("sqlite"):
+            pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": configured_uri,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    suffix = uuid4().hex[:8].upper()
+    company_code = f"NB{suffix}"
+    currency_code = f"NB{suffix}"
+    bank_id = None
+    account_id = None
+    try:
+        with application.app_context():
+            database.create_all()
+            database.session.add(Currency(code=currency_code, name=f"Moneda {suffix}", decimals=2, active=True, default=False))
+            database.session.add(
+                Entity(
+                    code=company_code,
+                    name=f"Empresa {suffix}",
+                    company_name=f"Empresa {suffix} SA",
+                    tax_id=f"NB{suffix}",
+                    currency=currency_code,
+                    enabled=True,
+                    status="activo",
+                )
+            )
+            database.session.flush()
+            banco = Bank(name=f"Banco {suffix}", swift_code=f"NB{suffix}", is_active=True)
+            database.session.add(banco)
+            database.session.flush()
+            bank_id = banco.id
+            cuenta = BankAccount(
+                company=company_code,
+                bank_id=bank_id,
+                account_name=f"Cuenta {suffix}",
+                account_no=f"NB-{suffix}",
+                currency=currency_code,
+                is_active=True,
+            )
+            database.session.add(cuenta)
+            database.session.commit()
+            account_id = cuenta.id
+
+            database.session.add(
+                BankAccountNumberingConfig(bank_account_id=account_id, payment_type="pay", use_external_counter=False)
+            )
+            database.session.commit()
+            database.session.add(
+                BankAccountNumberingConfig(bank_account_id=account_id, payment_type="pay", use_external_counter=False)
+            )
+            with pytest.raises(IntegrityError) as error:
+                database.session.flush()
+            mensaje = str(error.value).lower()
+            assert "uq_bank_numbering_config" in mensaje or (
+                "bank_account_numbering_config.bank_account_id" in mensaje
+                and "bank_account_numbering_config.payment_type" in mensaje
+            )
+            database.session.rollback()
+            assert (
+                database.session.execute(
+                    database.select(database.func.count())
+                    .select_from(BankAccountNumberingConfig)
+                    .where(BankAccountNumberingConfig.bank_account_id == account_id)
+                ).scalar_one()
+                == 1
+            )
+    finally:
+        with application.app_context():
+            database.session.rollback()
+            if account_id:
+                configuraciones = database.session.scalars(
+                    database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id)
+                ).all()
+                for config in configuraciones:
+                    database.session.delete(config)
+                cuenta = database.session.get(BankAccount, account_id)
+                if cuenta:
+                    database.session.delete(cuenta)
+            if bank_id:
+                banco = database.session.get(Bank, bank_id)
+                if banco:
+                    database.session.delete(banco)
+            entidad = database.session.get(Entity, company_code)
+            if entidad:
+                database.session.delete(entidad)
+            moneda = database.session.get(Currency, currency_code)
+            if moneda:
+                database.session.delete(moneda)
+            database.session.commit()
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_usuario_solo_consulta_no_ve_edicion_y_no_guarda(numeracion_csrf):
+    """La UI y el endpoint de numeración requieren permiso de edición."""
+    application, account_id = numeracion_csrf
+    with application.app_context():
+        module_id = database.session.execute(database.select(Modules.id).filter_by(module="cash")).scalar_one()
+        role = Roles(name="cash-reader", note="Solo consulta caja")
+        user = User(
+            id="cash_reader",
+            user="cash_reader",
+            name="Consulta Caja",
+            password=proteger_passwd(CONTRASENA),
+            active=True,
+            classification="user",
+            company="cacao",
+        )
+        database.session.add_all([role, user])
+        database.session.flush()
+        database.session.add_all(
+            [
+                RolesAccess(rol_id=role.id, module_id=module_id, access=True, view=True, edit=False),
+                RolesUser(user_id=user.id, role_id=role.id, active=True),
+                UserCompanyAccess(user_id=user.id, company_code="cacao"),
+            ]
+        )
+        database.session.commit()
+        user_id = user.id
+        auth_version = user.auth_version
+
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+
+    assert detail.status_code == 200
+    html = detail.get_data(as_text=True)
+    assert "Configuracion de Numeracion" in html
+    assert "numberingConfig()" in html
+    assert "Editar" not in html
+    denied = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={"configs": [{"payment_type": "pay", "use_external_counter": True}]},
+        headers={"X-CSRFToken": _token(html)},
+    )
+
+    assert denied.status_code == 403
+    with application.app_context():
+        assert (
+            database.session.execute(
+                database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id, payment_type="pay")
+            ).scalar_one_or_none()
+            is None
+        )

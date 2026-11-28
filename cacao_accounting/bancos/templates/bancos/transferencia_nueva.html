@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
+{% set draft = draft_payload or {} %}
 
 <nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
@@ -18,11 +20,11 @@
 <script>
   globalThis.bankTransferForm = function (config) {
     return {
-      header: {
+      header: Object.assign({
         payment_type: config.paymentType,
         company: '',
         naming_series_id: '',
-        posting_date: new Date().toISOString().slice(0, 10),
+        posting_date: globalThis.cacaoLocalIsoDate(new Date()),
         bank_account_id: '',
         currency: '',
         target_bank_account_id: '',
@@ -30,22 +32,24 @@
         paid_amount: 0,
         exchange_rate: 1,
         remarks: '',
-        external_number: '',
-      },
+        reference_no: '',
+      }, config.draft || {}),
       payload: '',
 
       init: function () {
         document.addEventListener('bank-account-selected', (event) => {
             this.header.bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                this.header.currency = event.detail.extra.currency;
-            }
+            this.header.currency = event.detail.currency || '';
         });
         document.addEventListener('target-bank-account-selected', (event) => {
             this.header.target_bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                this.header.target_currency = event.detail.extra.currency;
-            }
+            this.header.target_currency = event.detail.currency || '';
+        });
+        this.$watch('header.company', () => {
+            this.header.bank_account_id = '';
+            this.header.currency = '';
+            this.header.target_bank_account_id = '';
+            this.header.target_currency = '';
         });
       },
 
@@ -72,14 +76,14 @@
           paid_amount: this.header.paid_amount,
           exchange_rate: this.header.exchange_rate,
           remarks: this.header.remarks,
-          external_number: this.header.external_number
+          reference_no: this.header.reference_no
         });
       }
     };
   };
 </script>
 
-<form method="post" x-data='bankTransferForm({ paymentType: "{{ payment_type }}" })' @submit="prepareSubmit">
+<form method="post" x-data='bankTransferForm({ paymentType: "{{ payment_type }}", draft: {{ (draft_payload or {})|tojson }} })' @submit="prepareSubmit">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="payment_payload" :value="payload">
 
@@ -97,37 +101,33 @@
     <div class="row g-3">
       <div class="col-md-6">
         <label class="form-label">{{ _('Compañía') }} <span class="text-danger">*</span></label>
-        <div class="ca-smart-select" x-data='smartSelect({
-            doctype: "company",
-            name: "company"
-          })'>
-          <input type="hidden" x-model="selectedValue" x-effect="header.company = selectedValue">
-          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
-          <div class="ca-smart-select-menu" x-show="open" x-cloak>
-            <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
-            </template>
-          </div>
-        </div>
+        {{ tf_macros.smart_select(
+            doctype="company",
+            name="company",
+            label=_("Compañía"),
+            preload=True,
+            required=True,
+            initial_value=draft.get("company", ""),
+            initial_label=draft.get("company_label", draft.get("company", "")),
+            x_model="header.company"
+        ) }}
       </div>
       <div class="col-md-6">
         <label class="form-label">{{ _('Secuencia') }} <span class="text-danger">*</span></label>
-        <div class="ca-smart-select" x-data='smartSelect({
-            doctype: "naming_series",
-            name: "naming_series_id",
-            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
-            filterSources: ["#company_val"],
-            autoSelectDefault: true
-          })'>
-          <input type="hidden" id="company_val" x-model="header.company">
-          <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
-          <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}" required>
-          <div class="ca-smart-select-menu" x-show="open" x-cloak>
-            <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
-            </template>
-          </div>
-        </div>
+        {{ tf_macros.smart_select(
+            doctype="naming_series",
+            name="naming_series_id",
+            label=_("Secuencia"),
+            filters={"company": {"selector": "#company"}, "entity_type": "bank_transfer"},
+            filter_sources=["#company"],
+            required_filters=["company", "entity_type"],
+            required=True,
+            auto_select_default=True,
+            load_on_filter_change=True,
+            initial_value=draft.get("naming_series_id", ""),
+            initial_label=draft.get("naming_series_label", draft.get("naming_series_id", "")),
+            x_model="header.naming_series_id"
+        ) }}
       </div>
 
       <div class="col-md-3">
@@ -136,7 +136,7 @@
       </div>
       <div class="col-md-3">
         <label class="form-label">{{ _('Referencia / Comprobante') }}</label>
-        <input class="form-control" x-model="header.external_number" placeholder="{{ _('Opcional...') }}">
+        <input class="form-control" x-model="header.reference_no" placeholder="{{ _('Opcional...') }}">
       </div>
     </div>
   </div>
@@ -147,21 +147,20 @@
             <h6 class="text-primary border-bottom pb-2 mb-3"><i class="bi bi-arrow-up-circle"></i> {{ _('Cuenta de Origen') }}</h6>
             <div class="mb-3">
                 <label class="form-label">{{ _('Banco Origen') }} <span class="text-danger">*</span></label>
-                <div class="ca-smart-select" x-data='smartSelect({
-                    doctype: "bank_account",
-                    name: "bank_account_id",
-                    filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-                    filterSources: ["#company_val"],
-                    onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
-                  })'>
-                  <input type="hidden" x-model="selectedValue" x-effect="header.bank_account_id = selectedValue">
-                  <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Seleccionar origen...') }}" required>
-                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                    <template x-for="opt in options" :key="opt.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
-                    </template>
-                  </div>
-                </div>
+                {{ tf_macros.smart_select(
+                    doctype="bank_account",
+                    name="bank_account_id",
+                    label=_("Banco Origen"),
+                    filters={"company": {"selector": "#company"}, "is_active": "True"},
+                    filter_sources=["#company"],
+                    required_filters=["company"],
+                    required=True,
+                    initial_value=draft.get("bank_account_id", ""),
+                    initial_label=draft.get("bank_account_label", draft.get("bank_account_id", "")),
+                    x_model="header.bank_account_id",
+                    on_select="function(opt) { $dispatch('bank-account-selected', opt) }",
+                    on_clear="function(){ header.currency = ''; header.exchange_rate = 1; }"
+                ) }}
             </div>
             <div class="row g-3">
                 <div class="col-md-4">
@@ -181,21 +180,20 @@
             <h6 class="text-success border-bottom pb-2 mb-3"><i class="bi bi-arrow-down-circle"></i> {{ _('Cuenta de Destino') }}</h6>
             <div class="mb-3">
                 <label class="form-label">{{ _('Banco Destino') }} <span class="text-danger">*</span></label>
-                <div class="ca-smart-select" x-data='smartSelect({
-                    doctype: "bank_account",
-                    name: "target_bank_account_id",
-                    filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-                    filterSources: ["#company_val"],
-                    onSelect: function(opt) { $dispatch("target-bank-account-selected", opt) }
-                  })'>
-                  <input type="hidden" x-model="selectedValue" x-effect="header.target_bank_account_id = selectedValue">
-                  <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Seleccionar destino...') }}" required>
-                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                    <template x-for="opt in options" :key="opt.value">
-                      <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
-                    </template>
-                  </div>
-                </div>
+                {{ tf_macros.smart_select(
+                    doctype="bank_account",
+                    name="target_bank_account_id",
+                    label=_("Banco Destino"),
+                    filters={"company": {"selector": "#company"}, "is_active": "True"},
+                    filter_sources=["#company"],
+                    required_filters=["company"],
+                    required=True,
+                    initial_value=draft.get("target_bank_account_id", ""),
+                    initial_label=draft.get("target_bank_account_label", draft.get("target_bank_account_id", "")),
+                    x_model="header.target_bank_account_id",
+                    on_select="function(opt) { $dispatch('target-bank-account-selected', opt) }",
+                    on_clear="function(){ header.target_currency = ''; header.exchange_rate = 1; }"
+                ) }}
             </div>
             <div class="row g-3">
                 <div class="col-md-4">

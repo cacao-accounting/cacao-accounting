@@ -100,12 +100,16 @@
         invalid: false,
         lastFilterSignature: '',
         onSelect: config.onSelect || null,
+        onClear: config.onClear || null,
         _positionHandler: null,
+        _filterSourceListeners: [],
         _defaultTimer: null,
         _closeSoonTimer: null,
         _requestId: 0,
+        highlightedIndex: -1,
 
         init() {
+          this.bindKeyboardNavigation();
           this.lastFilterSignature = this.filterSignature();
           this.bindFilterSources();
           this.invalid = false;
@@ -129,12 +133,26 @@
           }
         },
 
+        destroy() {
+          for (const registration of this._filterSourceListeners) {
+            registration.element.removeEventListener('change', registration.handler);
+            registration.element.removeEventListener('input', registration.handler);
+          }
+          this._filterSourceListeners = [];
+          this._invalidatePendingRequest();
+          if (this._defaultTimer !== null) {
+            clearTimeout(this._defaultTimer);
+            this._defaultTimer = null;
+          }
+          this._cancelCloseSoon();
+          this.closeMenu();
+        },
+
         handleSelectedValueChange(value) {
           const normalized = normalizeValue(value);
           if (normalized) {
             this.updateLabelFromOptions(normalized);
           } else {
-            this.search = '';
             this.selectedLabel = '';
           }
           this.syncFilledState();
@@ -157,6 +175,7 @@
             const handler = this.handleFilterChange.bind(this);
             element.addEventListener('change', handler);
             element.addEventListener('input', handler);
+            this._filterSourceListeners.push({ element, handler });
           }
         },
 
@@ -188,9 +207,12 @@
           if (event?.target) {
             this.search = event.target.value || '';
           }
-          if (this.selectedLabel && this.search !== this.selectedLabel) {
+          const selectionText = this.selectedLabel || this.selectedValue || '';
+          if ((this.selectedValue || this.selectedLabel) && this.search !== selectionText) {
             this.selectedValue = '';
             this.selectedLabel = '';
+            this._safeCallOnClear();
+            this.notifyValueChange();
           }
           this.invalid = false;
           void this.fetchOptions();
@@ -383,6 +405,7 @@
         },
 
         selectOptionFromValues(value, label, option) {
+          if (this.locked) return;
           this.selectOptionValue(value, label);
           if (typeof this.onSelect === 'function') {
             try {
@@ -417,6 +440,15 @@
           }
         },
 
+        _safeCallOnClear() {
+          if (typeof this.onClear !== 'function') return;
+          try {
+            this.onClear();
+          } catch (error) {
+            console.warn('Error in onClear callback:', error);
+          }
+        },
+
         requiredFiltersPresent() {
           const currentFilters = this.resolvedFilters();
           return !this._hasEmptyRequiredFilter(currentFilters);
@@ -433,6 +465,7 @@
         clearSelection() {
           if (this.locked) return;
           this._invalidatePendingRequest();
+          const hadSelection = Boolean(this.selectedValue || this.selectedLabel);
           this.selectedValue = '';
           this.selectedLabel = '';
           this.search = '';
@@ -440,6 +473,7 @@
           this.closeMenu();
           this.invalid = false;
           this.error = '';
+          if (hadSelection) this._safeCallOnClear();
           this.notifyValueChange();
         },
 
@@ -458,9 +492,96 @@
         },
 
         _closeSoonHandler() {
+          if (this._focusIsInsideOption()) return;
           this.closeMenu();
           const restoredInitialLabel = this.selectedLabel && this.search === this.selectedLabel;
           this.invalid = Boolean(this.search.trim() && !this.selectedValue && !restoredInitialLabel);
+        },
+
+        _focusIsInsideOption() {
+          const root = this.$el;
+          const active = typeof document !== 'undefined' ? document.activeElement : null;
+          if (!root || !active || typeof root.contains !== 'function') return false;
+          return (
+            root.contains(active) &&
+            active.classList &&
+            typeof active.classList.contains === 'function' &&
+            active.classList.contains('ca-smart-select-option')
+          );
+        },
+
+        bindKeyboardNavigation() {
+          const root = this.$el || (typeof document !== 'undefined' ? document : null);
+          if (!root || typeof root.querySelector !== 'function') return;
+          const handleKeydown = (event) => {
+            const target = event.target;
+            const isInput = target && target.classList && target.classList.contains('ca-smart-select-input');
+            const isOption = target && target.classList && target.classList.contains('ca-smart-select-option');
+            if (isInput || (isOption && (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Escape'))) {
+              this.onKeydown(event);
+            }
+          };
+          if (root.dataset && typeof root.addEventListener === 'function') {
+            if (root.dataset.smartSelectKeyboard === 'on') return;
+            root.dataset.smartSelectKeyboard = 'on';
+            root.addEventListener('keydown', handleKeydown);
+            return;
+          }
+          const input = root.querySelector('.ca-smart-select-input');
+          if (input && input.dataset && input.addEventListener && input.dataset.smartSelectKeyboard !== 'on') {
+            input.dataset.smartSelectKeyboard = 'on';
+            input.addEventListener('keydown', handleKeydown);
+          }
+        },
+
+        _visibleOptionCount() {
+          return Array.isArray(this.options) ? this.options.length : 0;
+        },
+
+        highlightNext() {
+          const total = this._visibleOptionCount();
+          this.highlightedIndex = total ? (this.highlightedIndex + 1) % total : -1;
+          return this.highlightedIndex;
+        },
+
+        highlightPrevious() {
+          const total = this._visibleOptionCount();
+          this.highlightedIndex = total ? (this.highlightedIndex <= 0 ? total - 1 : this.highlightedIndex - 1) : -1;
+          return this.highlightedIndex;
+        },
+
+        highlightedOption() {
+          const total = this._visibleOptionCount();
+          if (this.highlightedIndex < 0 || this.highlightedIndex >= total) return null;
+          return this.options[this.highlightedIndex];
+        },
+
+        onKeydown(event) {
+          const key = event && event.key;
+          if (key === 'ArrowDown') {
+            if (event.preventDefault) event.preventDefault();
+            if (!this.open) this.openMenu();
+            this.highlightNext();
+            return;
+          }
+          if (key === 'ArrowUp') {
+            if (event.preventDefault) event.preventDefault();
+            if (!this.open) this.openMenu();
+            this.highlightPrevious();
+            return;
+          }
+          if (key === 'Enter' && this.open) {
+            const option = this.highlightedOption();
+            if (option) {
+              if (event.preventDefault) event.preventDefault();
+              this.selectOption(option);
+            }
+            return;
+          }
+          if (key === 'Escape') {
+            if (event.preventDefault) event.preventDefault();
+            this.closeMenu();
+          }
         },
 
         openMenu() {
@@ -471,6 +592,7 @@
 
         closeMenu() {
           this._cancelCloseSoon();
+          this.highlightedIndex = -1;
           this.open = false;
           this.unbindMenuPositionListeners();
           this.clearMenuPosition();

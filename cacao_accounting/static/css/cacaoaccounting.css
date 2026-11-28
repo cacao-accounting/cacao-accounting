@@ -1046,7 +1046,8 @@ nav[aria-label="breadcrumb"] {
 }
 
 .ca-smart-select-option:hover,
-.ca-smart-select-option:focus {
+.ca-smart-select-option:focus,
+.ca-smart-select-option.is-highlighted {
   background: var(--ca-surface-hover);
   outline: none;
 }

@@ -4,10 +4,12 @@
 """Utilidades de autenticación."""
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import uuid4
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from flask import current_app, redirect, session, url_for
 from jwt import encode
 from jwt.exceptions import PyJWTError
@@ -17,6 +19,8 @@ from cacao_accounting.logs import log
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 ph = PasswordHasher()
+
+TOKEN_USE_API_CREDENTIAL = "api_credential"
 
 
 def obtener_usuario(usuario: str) -> Optional[User]:
@@ -35,7 +39,15 @@ def autenticar_usuario(usuario: str, clave: str) -> Optional[User]:
     try:
         ph.verify(registro.password, clave)
         return registro
+    except InvalidHashError:
+        log.warning("Hash de contraseña inválido para el usuario {}", registro.id)
+        return None
     except VerifyMismatchError:
+        return None
+    except VerificationError:
+        # Un hash con encabezado Argon2 reconocible pero cuerpo ilegible no es
+        # una credencial válida: se trata como intento fallido, sin 500 (#1965).
+        log.warning("Hash de contraseña ilegible para el usuario {}", registro.id)
         return None
 
 
@@ -72,27 +84,89 @@ def puede_iniciar_en_escritorio(identidad: User) -> bool:
     return True
 
 
-def asignar_token_para_usuario(identidad: User) -> None:
-    """Genera y asigna el token de autenticación para la API REST."""
-    try:
-        from datetime import datetime, timedelta, timezone
+def _utcnow() -> datetime:
+    """Devuelve el instante UTC actual para la emisión del token."""
+    return datetime.now(timezone.utc)
 
-        ahora = datetime.now(timezone.utc)
+
+def asignar_token_para_usuario(identidad: User) -> str | None:
+    """Genera, asigna y devuelve el token de autenticación de la API REST.
+
+    El valor se devuelve para que una emisión explícita pueda mostrarlo una
+    única vez sin depender de la caché, que es opcional. La huella persistida
+    en ``api_token_hash`` sigue siendo la autoridad de validación.
+    """
+    token: str | None = None
+    try:
+        ahora = _utcnow()
         payload = {
             "user_id": identidad.id,
+            "auth_version": identidad.auth_version,
             "iat": ahora,
             "nbf": ahora,
             "exp": ahora + timedelta(hours=8),
+            # Un identificador único evita que dos emisiones en el mismo
+            # segundo produzcan el mismo JWT y reactiven uno revocado.
+            "jti": uuid4().hex,
         }
-        identidad.token = encode(
+        token = encode(
             payload,
             current_app.config["SECRET_KEY"],
             algorithm="HS256",
         )
-        assert identidad.token is not None  # nosec
+        identidad.token = token
+        # La huella persistida es la autoridad cuando la caché no está disponible.
+        database.session.commit()
     except (KeyError, PyJWTError) as exc:
         assert exc is not None  # nosec
         log.warning("No se pudo generar auth token.")
+        return None
+    return token
+
+
+def revocar_credenciales_usuario(identidad: User) -> None:
+    """Invalidate every browser session and API token issued to a user."""
+    identidad.auth_version = User.auth_version + 1
+    identidad.token = None
+
+
+def asignar_credencial_api(identidad: User) -> str | None:
+    """Genera y persiste una credencial de integración independiente.
+
+    Se distingue de ``asignar_token_para_usuario`` porque el login de
+    navegador reemplaza su propia huella en cada acceso; la credencial de
+    integración conserva una huella separada y solo cambia por emisión,
+    rotación o revocación explícita (#2285).
+    """
+    token: str | None = None
+    try:
+        ahora = _utcnow()
+        payload = {
+            "user_id": identidad.id,
+            "auth_version": identidad.auth_version,
+            "token_use": TOKEN_USE_API_CREDENTIAL,
+            "iat": ahora,
+            "nbf": ahora,
+            "exp": ahora + timedelta(hours=8),
+            "jti": uuid4().hex,
+        }
+        token = encode(
+            payload,
+            current_app.config["SECRET_KEY"],
+            algorithm="HS256",
+        )
+        identidad.set_api_credential(token)
+        database.session.commit()
+    except (KeyError, PyJWTError) as exc:
+        assert exc is not None  # nosec
+        log.warning("No se pudo generar la credencial API.")
+        return None
+    return token
+
+
+def revocar_credencial_api(identidad: User) -> None:
+    """Elimina la credencial de integración sin cerrar la sesión web."""
+    identidad.set_api_credential(None)
 
 
 def redireccion_despues_de_login():
@@ -106,9 +180,10 @@ def redireccion_despues_de_login():
     from flask_login import current_user
 
     if current_user.is_authenticated:
-        if current_user.is_portal_customer:
-            return redirect("/portal/customer")
-        if current_user.is_portal_supplier:
-            return redirect("/portal/supplier")
+        from cacao_accounting.portal import portal_home_for_user
+
+        portal_home = portal_home_for_user()
+        if portal_home:
+            return redirect(portal_home)
 
     return redirect(url_for("cacao_app.pagina_inicio"))

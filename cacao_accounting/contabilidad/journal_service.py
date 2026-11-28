@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 
 from cacao_accounting.contabilidad.journal_repository import (
     add_journal,
@@ -19,7 +20,15 @@ from cacao_accounting.contabilidad.journal_repository import (
     list_journal_lines,
     replace_journal_lines,
 )
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_comprobante_contable
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
+from cacao_accounting.contabilidad.posting import (
+    PostingError,
+    _journal_line_book_rate,
+    _ledger_exchange_rate,
+    _to_company_currency,
+    cancel_document,
+    post_comprobante_contable,
+)
 from cacao_accounting.audit_trail_service import (
     log_cancel,
     log_comment,
@@ -32,6 +41,7 @@ from cacao_accounting.audit_trail_service import (
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
+    BankAccount,
     Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
@@ -41,10 +51,13 @@ from cacao_accounting.database import (
     DocumentRelation,
     Entity,
     FiscalYear,
+    GLEntry,
     NamingSeries,
     Party,
+    Project,
     RecurringJournalApplication,
     RecurringJournalTemplate,
+    Unit,
     User,
     database,
 )
@@ -55,6 +68,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_boolean
 
 JOURNAL_ENTITY_TYPE = "journal_entry"
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
@@ -63,6 +77,7 @@ JOURNAL_STATUS_REJECTED = "rejected"
 JOURNAL_STATUS_SUBMITTED = "submitted"
 JOURNAL_STATUS_CANCELLED = "cancelled"
 JOURNAL_DUPLICABLE_STATUSES = {JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_REJECTED, JOURNAL_STATUS_SUBMITTED}
+JOURNAL_REVERSAL_RETRY_LIMIT = 99_999
 AR_AP_ACCOUNT_TYPES = {"receivable", "payable", "customer_advance", "supplier_advance"}
 CUSTOMER_AR_AP_ACCOUNT_TYPES = {"receivable", "customer_advance"}
 
@@ -98,6 +113,7 @@ class JournalLineInput:
     remarks: str | None
     is_advance: bool
     bank_account_id: str | None
+    economic_line_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,9 +142,27 @@ def create_journal_draft(
     *,
     allow_closing: bool = False,
     allow_fiscal_year_closing: bool = False,
+    commit: bool = True,
+    source_economic_line_ids: Sequence[str] | None = None,
 ) -> ComprobanteContable:
-    """Crea un comprobante contable manual en borrador."""
+    """Crea un comprobante contable manual en borrador.
+
+    ``commit=False`` permite componer el borrador dentro de una transacción
+    mayor, de modo que quien lo invoca controle el límite transaccional y sus
+    bloqueos. El comportamiento predeterminado sigue confirmando el borrador.
+    ``source_economic_line_ids`` solo lo usa el servicio interno de reversión
+    para conservar la relación de cada línea con su origen.
+    """
     data = _normalize_journal_payload(payload)
+    if source_economic_line_ids is not None:
+        if len(source_economic_line_ids) != len(data.lines) or any(not line_id for line_id in source_economic_line_ids):
+            raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+        data = replace(
+            data,
+            lines=[
+                replace(line, economic_line_id=str(line_id)) for line, line_id in zip(data.lines, source_economic_line_ids)
+            ],
+        )
     if data.is_closing and not allow_closing:
         raise JournalValidationError(_("El comprobante de cierre solo puede crearse desde un flujo autorizado."))
     if data.is_fiscal_year_closing and not allow_fiscal_year_closing:
@@ -139,9 +173,9 @@ def create_journal_draft(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "crear"),
     )
-    _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
+    _validate_balanced_lines(data, allow_inactive_accounts=source_economic_line_ids is not None)
     _validate_line_books(data.company, data.books, data.lines)
-    _validate_ar_ap_lines(data.company, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines, validate_references=source_economic_line_ids is None)
     primary_book = data.books[0] if data.books else None
     journal = ComprobanteContable(
         entity=data.company,
@@ -162,11 +196,14 @@ def create_journal_draft(
         fiscal_year_id=data.fiscal_year_id,
     )
     lines = [_line_model(data.company, data.posting_date, data.transaction_currency, line) for line in data.lines]
-    journal = add_journal(journal, lines)
+    journal = add_journal(journal, lines, commit=commit)
     if assign_identifier:
         _assign_identifier_if_needed(journal, data.naming_series_id)
     log_create(journal)
-    database.session.commit()
+    if commit:
+        database.session.commit()
+    else:
+        database.session.flush()
     return journal
 
 
@@ -181,7 +218,44 @@ def _validate_fiscal_year_closing(journal: ComprobanteContable) -> FiscalYear | 
         raise JournalValidationError(_("El año fiscal del cierre no es válido o no está cerrado administrativamente."))
     if fiscal_year.financial_closed and fiscal_year.closing_voucher_id != journal.id:
         raise JournalValidationError(_("El año fiscal ya tiene un cierre contable."))
+    from cacao_accounting.contabilidad.fiscal_year_closing import _cross_year_reversal_pairs
+
+    reversal_pairs = _cross_year_reversal_pairs(journal.entity, fiscal_year)
+    if reversal_pairs:
+        details = ", ".join(f"{original} → {reversal}" for original, reversal in reversal_pairs)
+        raise JournalValidationError(
+            _("No se puede cerrar el año fiscal: existen reversas publicadas posteriormente (%(details)s).")
+            % {"details": details}
+        )
     return fiscal_year
+
+
+def _lock_reversal_origin_fiscal_year(journal: ComprobanteContable) -> None:
+    """Serialize reversals against approval of a fiscal-year close."""
+    if not journal.reversal_of:
+        return
+
+    source = database.session.execute(
+        select(ComprobanteContable)
+        .where(ComprobanteContable.id == journal.reversal_of)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if source is None:
+        return
+
+    fiscal_year_id = source.fiscal_year_id
+    if not fiscal_year_id:
+        fiscal_year_id = database.session.execute(
+            select(GLEntry.fiscal_year_id).where(GLEntry.voucher_id == source.id, GLEntry.fiscal_year_id.is_not(None)).limit(1)
+        ).scalar_one_or_none()
+    if fiscal_year_id:
+        database.session.execute(
+            select(FiscalYear.id)
+            .where(FiscalYear.id == fiscal_year_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
 
 
 def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[Any]:
@@ -224,17 +298,21 @@ def _process_recurrent_application(journal: ComprobanteContable, commit: bool) -
 
 
 def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = None) -> list[Any]:
-    """Contabiliza un comprobante manual en borrador."""
+    """Contabiliza un comprobante en borrador o tras su aprobación independiente."""
     journal = get_journal(journal_id)
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
-    if journal.status != JOURNAL_STATUS_DRAFT:
-        raise JournalValidationError(_("Solo se puede contabilizar un comprobante en borrador."))
 
     from cacao_accounting.internal_control_service import audit_actor, current_audit_actor
 
     actor_id = user_id or current_audit_actor()[0]
-    from cacao_accounting.approval_engine import assert_execution_authorized
+    from cacao_accounting.approval_engine import PENDING_APPROVAL_STATUS, assert_execution_authorized, execution_actor
+
+    approved_pending_submission = journal.status == PENDING_APPROVAL_STATUS and execution_actor(str(journal.id)) == str(
+        actor_id
+    )
+    if journal.status != JOURNAL_STATUS_DRAFT and not approved_pending_submission:
+        raise JournalValidationError(_("Solo se puede contabilizar un comprobante en borrador."))
 
     assert_execution_authorized(journal, actor_id=actor_id)
     if not actor_id:
@@ -248,7 +326,11 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
 
     actor = database.session.get(User, actor_id)
     actor_name = str((actor.name or actor.user) if actor else actor_id)
+    from cacao_accounting.contabilidad.arap_ledger_service import lock_journal_open_item_references
+
+    lock_journal_open_item_references(journal)
     with audit_actor(str(actor_id), actor_name):
+        _lock_reversal_origin_fiscal_year(journal)
         fiscal_year = _validate_fiscal_year_closing(journal)
 
         if not journal.document_no:
@@ -349,6 +431,10 @@ def cancel_submitted_journal(
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError(_("Solo se puede anular un comprobante contabilizado."))
+    from cacao_accounting.contabilidad.exchange_revaluation_service import EXCHANGE_REVALUATION_ENTITY_TYPE
+
+    if str(getattr(journal, "voucher_type", "") or "") == EXCHANGE_REVALUATION_ENTITY_TYPE:
+        raise JournalValidationError(_("La revaluación cambiaria se anula desde su flujo dedicado."))
     # Manual journal posting predates DocBase transitions and may leave this
     # flag at draft; cancel_document requires the approved state as a guard.
     journal.docstatus = 1
@@ -452,20 +538,43 @@ def duplicate_journal_as_reversal_draft(
     reason: str | None = None,
 ) -> ComprobanteContable:
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
-    source = get_journal(journal_id)
+    try:
+        _reserve_sqlite_reversal_writer()
+        return _create_journal_reversal_draft(journal_id, user_id, reversal_date_raw, reason)
+    except Exception:
+        database.session.rollback()
+        raise
+
+
+def _create_journal_reversal_draft(
+    journal_id: str,
+    user_id: str,
+    reversal_date_raw: date | str,
+    reason: str | None = None,
+) -> ComprobanteContable:
+    """Validate and persist a reversal attempt inside the reserved transaction."""
+    source = database.session.execute(
+        select(ComprobanteContable)
+        .where(ComprobanteContable.id == journal_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if source is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError(_("Solo se puede revertir un comprobante contabilizado."))
-    existing_reversal = database.session.execute(
-        select(DocumentTransition.id).where(
-            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
-            DocumentTransition.source_id == source.id,
-            DocumentTransition.transition_type == "reversal",
+    transitions = _journal_reversal_transitions(source.id)
+    if _journal_reversal_transition_exists(source.id, transitions):
+        raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
+    active_reversal = database.session.execute(
+        select(ComprobanteContable.id).where(
+            ComprobanteContable.reversal_of == source.id,
+            ComprobanteContable.status.in_((JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_SUBMITTED)),
         )
     ).scalar_one_or_none()
-    if existing_reversal is not None:
+    if active_reversal is not None:
         raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
+    transition_type = _next_journal_reversal_transition_type(transitions)
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
         raise JournalValidationError(_("Debe indicar el motivo de la reversión."))
@@ -483,7 +592,8 @@ def duplicate_journal_as_reversal_draft(
         raise JournalValidationError(_("No puede crear una reversión en un periodo contable cerrado o deshabilitado."))
     if source.is_fiscal_year_closing:
         raise JournalValidationError(_("El cierre fiscal debe revertirse desde el flujo de cierre fiscal."))
-    payload = serialize_journal_for_form(source)
+    source_lines = list_journal_lines(source.id)
+    payload = serialize_journal_for_form(source, lines=source_lines)
     payload["posting_date"] = reversal_date.isoformat()
     payload["reference"] = source.document_no or source.id
     payload["memo"] = f"Reversión de {source.document_no or source.id}"
@@ -493,29 +603,113 @@ def duplicate_journal_as_reversal_draft(
     payload["reversal_of"] = source.id
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
-    reversed_draft = create_journal_draft(payload, user_id=user_id, assign_identifier=False)
-    reversed_draft.status = JOURNAL_STATUS_DRAFT
-    reversed_draft.reversal_of = source.id
-    _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
-    database.session.add(reversed_draft)
-    database.session.flush()
-    database.session.add(
-        DocumentTransition(
-            source_type=JOURNAL_TRANSACTION_TYPE,
-            source_id=source.id,
-            target_type=JOURNAL_TRANSACTION_TYPE,
-            target_id=reversed_draft.id,
-            transition_type="reversal",
-            company=source.entity,
-            posting_date=reversal_date,
-            accounting_period_id=reversal_period.id,
-            actor_user_id=user_id,
-            reason=normalized_reason,
+    try:
+        reversed_draft = create_journal_draft(
+            payload,
+            user_id=user_id,
+            assign_identifier=False,
+            commit=False,
+            source_economic_line_ids=[str(line.economic_line_id or line.id) for line in source_lines],
         )
-    )
-    log_reversal_draft_created(reversed_draft)
-    database.session.commit()
+        reversed_draft.status = JOURNAL_STATUS_DRAFT
+        reversed_draft.reversal_of = source.id
+        _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
+        database.session.add(reversed_draft)
+        database.session.flush()
+        database.session.add(
+            DocumentTransition(
+                source_type=JOURNAL_TRANSACTION_TYPE,
+                source_id=source.id,
+                target_type=JOURNAL_TRANSACTION_TYPE,
+                target_id=reversed_draft.id,
+                transition_type=transition_type,
+                company=source.entity,
+                posting_date=reversal_date,
+                accounting_period_id=reversal_period.id,
+                actor_user_id=user_id,
+                reason=normalized_reason,
+            )
+        )
+        log_reversal_draft_created(reversed_draft)
+        database.session.commit()
+    except DBAPIError as exc:
+        database.session.rollback()
+        if _journal_reversal_transition_exists(source.id):
+            raise JournalValidationError(_("El comprobante ya tiene una reversión registrada.")) from exc
+        raise
+    except Exception:
+        database.session.rollback()
+        raise
     return reversed_draft
+
+
+def _reserve_sqlite_reversal_writer() -> None:
+    """Reserve SQLite's writer before reading source reversal attempts."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    connection = database.session.connection()
+    raw_connection = connection.connection.driver_connection
+    if raw_connection is not None and not raw_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+def _journal_reversal_transitions(source_id: str) -> list[DocumentTransition]:
+    """Return immutable reversal attempts recorded for a source journal."""
+    transitions = database.session.execute(
+        select(DocumentTransition)
+        .where(
+            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.source_id == source_id,
+        )
+        .with_for_update()
+    ).scalars()
+    return [row for row in transitions if _is_journal_reversal_transition_type(row.transition_type)]
+
+
+def _is_journal_reversal_transition_type(transition_type: str) -> bool:
+    """Identify the original reservation and append-only retry event types."""
+    return transition_type == "reversal" or transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX)
+
+
+def _journal_reversal_transition_exists(source_id: str, transitions: list[DocumentTransition] | None = None) -> bool:
+    """Return whether a non-rejected attempt still reserves or reversed its source."""
+    for transition in transitions if transitions is not None else _journal_reversal_transitions(source_id):
+        if transition.target_type != JOURNAL_TRANSACTION_TYPE or not transition.target_id:
+            return True
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == transition.target_id)
+        ).scalar_one_or_none()
+        if target_status != JOURNAL_STATUS_REJECTED:
+            return True
+    return False
+
+
+def _next_journal_reversal_transition_type(transitions: list[DocumentTransition]) -> str:
+    """Choose a unique append-only transition type for the next retry attempt."""
+    if not transitions:
+        return "reversal"
+    retry_numbers = []
+    for transition in transitions:
+        if transition.transition_type == "reversal":
+            continue
+        suffix = transition.transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)
+        if not suffix.isdigit() or len(suffix) != 5:
+            raise JournalValidationError(_("El historial de reversión del comprobante no es válido."))
+        retry_numbers.append(int(suffix))
+    next_number = max(retry_numbers, default=0) + 1
+    if next_number > JOURNAL_REVERSAL_RETRY_LIMIT:
+        raise JournalValidationError(_("El comprobante alcanzó el límite de intentos de reversión."))
+    return f"{JOURNAL_REVERSAL_RETRY_PREFIX}{next_number:05d}"
+
+
+def _journal_edit_exchange_rate(journal: ComprobanteContable, data: JournalDraftInput) -> Decimal | None:
+    """Resuelve la tasa efectiva al editar sin confundir una tasa nueva con la obsoleta."""
+    basis_changed = journal.transaction_currency != data.transaction_currency or journal.base_currency != data.base_currency
+    if basis_changed:
+        if data.exchange_rate is None or data.exchange_rate == journal.exchange_rate:
+            return None
+        return data.exchange_rate
+    return data.exchange_rate if data.exchange_rate is not None else journal.exchange_rate
 
 
 def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str) -> ComprobanteContable:
@@ -525,20 +719,31 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError(_("Solo se puede editar un comprobante en borrador."))
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(journal)
+    except ValueError as exc:
+        raise JournalValidationError(str(exc)) from exc
 
     before = serialize_journal_for_form(journal)
     previous_posting_date = journal.date
     previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
+    if journal.reversal_of:
+        data = _preserve_reversal_line_identities(journal, data)
+        _validate_reversal_line_currencies(journal, data)
     if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
         raise JournalValidationError(_("Los flags de cierre no pueden cambiarse al editar un borrador."))
     data = replace(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
     )
-    _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
+    exchange_rate = _journal_edit_exchange_rate(journal, data)
+    data = replace(data, exchange_rate=exchange_rate)
+    _validate_balanced_lines(data, allow_inactive_accounts=bool(journal.reversal_of))
     _validate_line_books(data.company, data.books, data.lines)
-    _validate_ar_ap_lines(data.company, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines, validate_references=not bool(journal.reversal_of))
     primary_book = data.books[0] if data.books else None
 
     journal.entity = data.company
@@ -549,7 +754,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     journal.memo = data.memo
     journal.naming_series_id = data.naming_series_id
     journal.transaction_currency = data.transaction_currency
-    journal.exchange_rate = data.exchange_rate
+    journal.base_currency = data.base_currency
+    journal.exchange_rate = exchange_rate
     journal.is_closing = data.is_closing
     journal.is_fiscal_year_closing = data.is_fiscal_year_closing
     journal.fiscal_year_id = data.fiscal_year_id
@@ -571,9 +777,13 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     return journal
 
 
-def serialize_journal_for_form(journal: ComprobanteContable) -> dict[str, Any]:
+def serialize_journal_for_form(
+    journal: ComprobanteContable,
+    *,
+    lines: Sequence[ComprobanteContableDetalle] | None = None,
+) -> dict[str, Any]:
     """Convierte un comprobante manual a un payload compatible con el formulario."""
-    lines = list_journal_lines(journal.id)
+    lines = list(lines) if lines is not None else list_journal_lines(journal.id)
     selected_books = _selected_books_for_journal(journal)
     account_codes = {line.account for line in lines if line.account}
     cost_center_codes = {line.cost_center for line in lines if line.cost_center}
@@ -734,8 +944,14 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         raise JournalValidationError(_("Cada linea del comprobante debe ser un objeto."))
     debit = _decimal(raw_line.get("debit"))
     credit = _decimal(raw_line.get("credit"))
+    raw_order = raw_line.get("order")
+    order = _parse_line_order(raw_order, fallback_order)
+    try:
+        is_advance = coerce_boolean(raw_line.get("is_advance"), "is_advance")
+    except ValueError as exc:
+        raise JournalValidationError(str(exc)) from exc
     return JournalLineInput(
-        order=int(raw_line.get("order") or fallback_order),
+        order=order,
         book=_optional_text(raw_line.get("book")),
         account=_optional_text(raw_line.get("account")) or "",
         cost_center=_optional_text(raw_line.get("cost_center")),
@@ -754,13 +970,26 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         reference1=_optional_text(raw_line.get("reference1")),
         reference2=_optional_text(raw_line.get("reference2")),
         remarks=_optional_text(raw_line.get("remarks")),
-        is_advance=bool(raw_line.get("is_advance")),
+        is_advance=is_advance,
         bank_account_id=_optional_text(raw_line.get("bank_account") or raw_line.get("bank_account_id")),
     )
 
 
-def _validate_journal_line(company: str, line: JournalLineInput, account_cache: dict[str, Accounts | None]) -> None:
-    """Valida una linea individual del comprobante."""
+def _validate_journal_line(
+    company: str,
+    line: JournalLineInput,
+    account_cache: dict[str, Accounts | None],
+    *,
+    allow_inactive_account: bool = False,
+    allow_inactive_currency: bool = False,
+) -> None:
+    """Valida una linea individual del comprobante.
+
+    ``allow_inactive_account`` solo lo usa la creación de reversiones: la cuenta
+    histórica puede estar desactivada, pero debe existir, pertenecer a la
+    compañía y seguir siendo una cuenta hoja. El posteo revalida además que la
+    cuenta coincida con la línea GL de origen.
+    """
     if not line.account:
         raise JournalValidationError(_("Cada linea debe tener una cuenta contable."))
     if line.debit < 0 or line.credit < 0:
@@ -769,44 +998,109 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
         raise JournalValidationError(_("Una linea no puede tener debe y haber positivos al mismo tiempo."))
     if line.debit == 0 and line.credit == 0:
         raise JournalValidationError(_("Cada linea debe tener un importe en debe o en haber."))
+    if line.currency:
+        _validate_journal_line_currency(line.currency, allow_inactive=allow_inactive_currency)
     if line.exchange_rate is not None and line.exchange_rate <= 0:
         raise JournalValidationError(_("El tipo de cambio de la línea debe ser mayor que cero."))
     if line.reference_exchange_rate is not None and line.reference_exchange_rate <= 0:
         raise JournalValidationError(_("El tipo de cambio de la referencia debe ser mayor que cero."))
+    _validate_journal_line_dimensions(company, line)
     account = account_cache.get(line.account)
     if line.account not in account_cache:
         account = _account_record(company, line.account)
         account_cache[line.account] = account
-    if account is not None and account.account_type == "expense" and not line.cost_center:
+    if account is None:
+        raise JournalValidationError(_("La cuenta contable indicada no existe para la compañia."))
+    inactive = not account.active or not account.enabled
+    if account.group or (inactive and not allow_inactive_account):
+        raise JournalValidationError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
+    if account.account_type == "expense" and not line.cost_center:
         raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
 
 
-def _validate_balanced_lines(
-    company: str,
-    lines: list[JournalLineInput],
-    transaction_currency: str | None = None,
-    header_exchange_rate: Decimal | None = None,
-    books: list[str] | None = None,
-) -> None:
+def _validate_journal_line_currency(currency_code: str, *, allow_inactive: bool = False) -> None:
+    """Reject unknown or inactive line currencies on new manual journals."""
+    currency = database.session.execute(select(Currency).where(Currency.code == currency_code)).scalar_one_or_none()
+    if currency is None:
+        raise JournalValidationError(_("La moneda de la l\u00ednea no existe."))
+    if not bool(currency.active) and not allow_inactive:
+        raise JournalValidationError(_("La moneda de la l\u00ednea est\u00e1 inactiva."))
+
+
+def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> None:
+    """Validate the company ownership of dimensions attached to a journal line."""
+    if line.bank_account_id:
+        bank_account = database.session.get(BankAccount, line.bank_account_id)
+        if not bank_account or bank_account.company != company:
+            raise JournalValidationError(_("La cuenta bancaria no existe o no pertenece a la compañía del comprobante."))
+    if line.unit:
+        unit = database.session.query(Unit).filter_by(code=line.unit).first()
+        if not unit or unit.entity != company:
+            raise JournalValidationError(_("La unidad no existe o no pertenece a la compañía del comprobante."))
+    if line.project:
+        project = database.session.query(Project).filter_by(code=line.project).first()
+        if not project or project.entity != company:
+            raise JournalValidationError(_("El proyecto no existe o no pertenece a la compañía del comprobante."))
+
+
+def _validate_balanced_lines(data: JournalDraftInput, *, allow_inactive_accounts: bool = False) -> None:
+    """Valida cada libro con las mismas tasas efectivas que usará el posting."""
     account_cache: dict[str, Accounts | None] = {}
-    totals: dict[str | None, tuple[Decimal, Decimal]] = {}
-    explicit_books = {line.book for line in lines if line.book}
-    if explicit_books and any(not line.book for line in lines):
+    explicit_books = {line.book for line in data.lines if line.book}
+    if explicit_books and any(not line.book for line in data.lines):
         raise JournalValidationError(_("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro."))
-    company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
-    for line in lines:
-        _validate_journal_line(company, line, account_cache)
-        line_currency = line.currency or transaction_currency or company_currency
-        rate = line.exchange_rate
-        if rate is None and line_currency != company_currency:
-            rate = header_exchange_rate if line_currency == transaction_currency else None
-        # Un borrador puede conservar moneda extranjera sin tasa; el posting
-        # exige resolverla (por línea, cabecera o tabla histórica) antes de GL.
-        effective_rate = rate or Decimal("1")
-        debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
-        totals[line.book] = debit + line.debit * effective_rate, credit + line.credit * effective_rate
-    if any(debit != credit for debit, credit in totals.values()):
-        raise JournalValidationError(_("El comprobante contable no esta balanceado por libro."))
+    for line in data.lines:
+        _validate_journal_line(
+            data.company,
+            line,
+            account_cache,
+            allow_inactive_account=allow_inactive_accounts,
+            allow_inactive_currency=allow_inactive_accounts,
+        )
+
+    books = list(database.session.execute(select(Book).where(Book.entity == data.company, Book.status == "activo")).scalars())
+    if data.books:
+        selected = set(data.books)
+        books = [book for book in books if book.id in selected or book.code in selected]
+    if not books:
+        raise JournalValidationError(_("La compañía no tiene libro contable activo."))
+    for book in books:
+        total = Decimal("0")
+        for line in data.lines:
+            if line.book and line.book not in {book.id, book.code}:
+                continue
+            effective_rate = _journal_line_rate_for_book(line, data, book)
+            total += _to_company_currency(line.debit - line.credit, effective_rate)
+        if total != 0:
+            raise JournalValidationError(_("El comprobante contable no esta balanceado por libro."))
+
+
+def _journal_line_rate_for_book(line: JournalLineInput, data: JournalDraftInput, book: Book) -> Decimal:
+    """Reproduce la conversión de posting para una línea y un libro destino."""
+    line_currency = line.currency or data.transaction_currency or data.base_currency
+    if not line_currency or not data.transaction_currency or not data.base_currency or not book.currency:
+        raise JournalValidationError(_("El comprobante requiere monedas para validar su balance."))
+    try:
+        header_rate = _ledger_exchange_rate(
+            transaction_currency=data.transaction_currency,
+            ledger_currency=book.currency,
+            document_base_currency=data.base_currency,
+            document_exchange_rate=data.exchange_rate,
+            posting_date=data.posting_date,
+            is_fiscal_year_closing=data.is_fiscal_year_closing,
+        )
+        return _journal_line_book_rate(
+            line_currency=line_currency,
+            book_currency=book.currency,
+            header_currency=data.transaction_currency,
+            base_currency=data.base_currency,
+            line_exchange_rate=line.exchange_rate,
+            header_exchange_rate=header_rate,
+            document_exchange_rate=data.exchange_rate,
+            posting_date=data.posting_date,
+        )
+    except PostingError as exc:
+        raise JournalValidationError(str(exc)) from exc
 
 
 def _normalize_party_type(value: str | None) -> str | None:
@@ -910,7 +1204,9 @@ def _find_ar_ap_reference_targets(
     return [
         item
         for item in list_open_items(company=company, party_type=party_type, party_id=party_id)
-        if item.document_type == document_type and item.document_id == reference_name and item.outstanding > 0
+        if item.document_type == document_type
+        and (item.document_id == reference_name or item.document_no == reference_name)
+        and item.outstanding > 0
     ]
 
 
@@ -934,7 +1230,7 @@ def _validate_ar_ap_reference(
         raise JournalValidationError(_("La referencia AP/AR debe tener sentido contrario al movimiento."))
 
 
-def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
+def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput], *, validate_references: bool = True) -> None:
     """Valida terceros y referencias AP/AR antes de guardar el borrador."""
     for line in lines:
         account = _account_record(company, line.account)
@@ -943,7 +1239,8 @@ def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
         party_type = _normalize_party_type(line.party_type)
         if ar_ap_type:
             _validate_ar_ap_party(company, line, account_type, party_type)
-        _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
+        if validate_references:
+            _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
 
 
 def _validate_line_books(company: str, books: list[str] | None, lines: list[JournalLineInput]) -> None:
@@ -952,7 +1249,9 @@ def _validate_line_books(company: str, books: list[str] | None, lines: list[Jour
     if not requested:
         return
 
-    company_books = list(database.session.execute(select(Book).where(Book.entity == company)).scalars())
+    company_books = list(
+        database.session.execute(select(Book).where(Book.entity == company, Book.status == "activo")).scalars()
+    )
     book_ids = {value: book.id for book in company_books for value in (book.id, book.code)}
     invalid = requested - book_ids.keys()
     if invalid:
@@ -970,8 +1269,8 @@ def _authorized_journal_books(
     requested_books: list[str] | None,
     user_id: str,
     action: str,
-) -> list[str] | None:
-    """Valida el alcance de compañía y devuelve todos los libros activos."""
+) -> list[str]:
+    """Validate access and preserve the explicitly requested active books."""
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
@@ -986,12 +1285,24 @@ def _authorized_journal_books(
     }.get(action, "crear")
     if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
         raise JournalValidationError(_("El usuario no tiene acceso a la compañía seleccionada."))
-    return [
-        book.code
-        for book in database.session.execute(
+    active_books = list(
+        database.session.execute(
             select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.is_primary.desc(), Book.code)
         ).scalars()
-    ]
+    )
+    if not active_books:
+        raise JournalValidationError(_("La compañía no tiene libro contable activo."))
+    if not requested_books:
+        return [book.code for book in active_books]
+
+    requested = set(requested_books)
+    books_by_identifier = {identifier: book for book in active_books for identifier in (book.id, book.code)}
+    invalid = requested - books_by_identifier.keys()
+    if invalid:
+        raise JournalValidationError(
+            _("Libro contable no válido para la compañía: %(ledger_code)s.") % {"ledger_code": sorted(invalid)[0]}
+        )
+    return [book.code for book in active_books if book.id in requested or book.code in requested]
 
 
 def _validate_journal_book_access(company: str, books: list[str] | None, user_id: str, action: str) -> None:
@@ -1035,8 +1346,47 @@ def _line_model(
         third_code=_party_id_for_line(company, line.party),
         bank_account_id=line.bank_account_id,
         is_advance=line.is_advance,
+        economic_line_id=line.economic_line_id,
         voucher_type=JOURNAL_TRANSACTION_TYPE,
     )
+
+
+def _preserve_reversal_line_identities(journal: ComprobanteContable, data: JournalDraftInput) -> JournalDraftInput:
+    """Carry trusted source-line identities through edits to a reversal draft."""
+    source_ids_by_order: dict[int, str] = {}
+    for source_line in list_journal_lines(journal.id):
+        if source_line.order is None or source_line.order in source_ids_by_order or not source_line.economic_line_id:
+            raise JournalValidationError(_("No se puede editar una reversión sin identidad única por línea."))
+        source_ids_by_order[source_line.order] = str(source_line.economic_line_id)
+    if len(source_ids_by_order) != len(data.lines):
+        raise JournalValidationError(_("No se puede cambiar la cantidad de líneas de una reversión."))
+
+    updated_lines: list[JournalLineInput] = []
+    for line in data.lines:
+        source_id = source_ids_by_order.pop(line.order, None)
+        if source_id is None:
+            raise JournalValidationError(_("No se puede cambiar la identidad de las líneas de una reversión."))
+        updated_lines.append(replace(line, economic_line_id=source_id))
+    return replace(data, lines=updated_lines)
+
+
+def _validate_reversal_line_currencies(journal: ComprobanteContable, data: JournalDraftInput) -> None:
+    """Impide sustituir la moneda histórica de una línea al editar la reversión."""
+    source = get_journal(str(journal.reversal_of))
+    if source is None:
+        raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+    source_lines = list_journal_lines(source.id)
+    currencies_by_line_id = {
+        str(line.economic_line_id or line.id): str(line.currency_id or source.transaction_currency or "")
+        for line in source_lines
+        if line.economic_line_id or line.id
+    }
+    if len(currencies_by_line_id) != len(data.lines):
+        raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+    for line in data.lines:
+        source_currency = currencies_by_line_id.get(str(line.economic_line_id or ""))
+        if not source_currency or line.currency != source_currency:
+            raise JournalValidationError(_("La moneda debe coincidir con el documento origen."))
 
 
 def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id: str | None) -> None:
@@ -1049,6 +1399,7 @@ def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id:
             posting_date_raw=journal.date,
             naming_series_id=naming_series_id,
             allow_closing=allow_closing,
+            allow_fiscal_year_closing=bool(getattr(journal, "is_fiscal_year_closing", False)),
         )
     except IdentifierConfigurationError:
         return
@@ -1186,7 +1537,7 @@ def _cost_center_labels_for_company(company: str, cost_center_codes: set[str]) -
 
 def _reversed_payload_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reversed_lines: list[dict[str, Any]] = []
-    for line in lines:
+    for order, line in enumerate(lines, start=1):
         if not isinstance(line, dict):
             continue
         debit_value = line.get("debit") or ""
@@ -1194,6 +1545,7 @@ def _reversed_payload_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]
         reversed_line = dict(line)
         reversed_line["debit"] = credit_value
         reversed_line["credit"] = debit_value
+        reversed_line["order"] = order
         reversed_lines.append(reversed_line)
     return reversed_lines
 
@@ -1305,3 +1657,20 @@ def _optional_bool(value: Any) -> bool:
         return False
     normalized = str(value).strip().lower()
     return normalized in ("true", "1", "yes", "on")
+
+
+def _parse_line_order(raw_order: Any, fallback_order: int) -> int:
+    """Valida que el orden de línea sea entero sin coerciones con pérdida."""
+    error_message = _("El orden de la línea debe ser un número entero.")
+    if raw_order is None or raw_order == "":
+        return fallback_order
+    if isinstance(raw_order, bool):
+        raise JournalValidationError(error_message)
+    if isinstance(raw_order, int):
+        return raw_order
+    if isinstance(raw_order, str):
+        try:
+            return int(raw_order)
+        except ValueError as exc:
+            raise JournalValidationError(error_message) from exc
+    raise JournalValidationError(error_message)

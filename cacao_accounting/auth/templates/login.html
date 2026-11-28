@@ -1,6 +1,6 @@
 {% import "macros.html" as macros %}
 <!DOCTYPE html>
-<html lang="{{ session.get('lang', 'es') }}">
+<html lang="{{ locale_actual() }}">
 
 <head>
   <title>{{ _("Cacao Accounting — Inicio de Sesión") }}</title>
@@ -19,10 +19,10 @@
       </div>
       <form method="post">
         {{ form.csrf_token }}
-        {% with messages = get_flashed_messages() %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-        {% for message in messages %}
-        <div class="alert alert-success py-2 small">{{ message }}</div>
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category if category in ['success', 'danger', 'warning', 'info'] else 'info' }} py-2 small">{{ message }}</div>
         {% endfor %}
         {% endif %}
         {% endwith %}

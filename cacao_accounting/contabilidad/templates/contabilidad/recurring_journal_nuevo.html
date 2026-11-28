@@ -56,7 +56,7 @@
         naming_series_id: (config.initialJournal && config.initialJournal.naming_series_id) || '',
         naming_series_label: (config.initialJournal && config.initialJournal.naming_series_label) || '',
         ledger_id: (config.initialJournal && config.initialJournal.ledger_id) || '',
-        start_date: (config.initialJournal && config.initialJournal.start_date) || new Date().toISOString().slice(0, 10),
+        start_date: (config.initialJournal && config.initialJournal.start_date) || globalThis.cacaoLocalIsoDate(new Date()),
         end_date: (config.initialJournal && config.initialJournal.end_date) || '',
         frequency: (config.initialJournal && config.initialJournal.frequency) || 'monthly',
         currency: (config.initialJournal && config.initialJournal.currency) || '',
@@ -70,6 +70,7 @@
       books: [],
       selectedBooks: (config.initialJournal && config.initialJournal.books) || [],
       initialBooksSelectionApplied: false,
+      booksRequestSequence: 0,
 
       init: function () {
         if (!this.lines.length) this.addMultipleRows(2);
@@ -114,10 +115,18 @@
       get isBalanced() { return Math.abs(this.totalDebit - this.totalCredit) < 0.001 && this.totalDebit > 0; },
 
       async loadBooks(company) {
-        if (!company) { this.books = []; return; }
+        const requestId = ++this.booksRequestSequence;
+        if (!company) {
+          this.books = [];
+          this.selectedBooks = [];
+          return;
+        }
         try {
           const resp = await fetch(`{{ url_for('contabilidad.journal_books') }}?company=${company}`);
           const data = await resp.json();
+          // Solo la respuesta de la compañía vigente puede actualizar el
+          // formulario; una petición anterior no debe reemplazar los libros.
+          if (requestId !== this.booksRequestSequence || this.header.company !== company) return;
           this.books = data.results;
           if (!this.initialBooksSelectionApplied) {
             if (this.selectedBooks.length) {
@@ -188,6 +197,7 @@
     </div>
     <div class="d-flex gap-2">
       <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-floppy me-1"></i>{{ _('Guardar plantilla') }}</button>
     </div>
   </div>
 
@@ -212,13 +222,14 @@
           initialValue: header.company,
           initialLabel: header.company_label,
           onSelect: function(opt) { header.company = opt.value; loadBooks(opt.value); },
+          onClear: function() { header.company = ''; loadBooks(''); },
           messages: { placeholder: "{{ _('Buscar compañía') }}" }
         })'>
           <input type="hidden" id="company" name="company" x-model="selectedValue">
           <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -257,7 +268,7 @@
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)">
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon">
                 <span x-text="opt.display_name"></span>
               </button>
             </template>
@@ -307,13 +318,14 @@
           name: "currency",
           initialValue: header.currency,
           initialLabel: header.currency_label,
-          onSelect: function(opt) { header.currency = opt.value; }
+          onSelect: function(opt) { header.currency = opt.value; },
+          onClear: function() { header.currency = ''; }
         })'>
           <input type="hidden" name="currency" x-model="selectedValue">
           <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -347,13 +359,15 @@
                 <div class="ca-smart-select" x-data='smartSelect({
                   doctype: "account",
                   filters: { company: function() { return header.company; } },
+                  filterSources: ["#company"],
                   initialValue: line.account_code,
                   initialLabel: line.account_label,
-                  onSelect: function(opt) { line.account_code = opt.value; line.account_label = opt.display_name; }
+                  onSelect: function(opt) { line.account_code = opt.value; line.account_label = opt.display_name; },
+                  onClear: function() { line.account_code = ''; line.account_label = ''; }
                 })'>
                   <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon" placeholder="{{ _('Buscar cuenta') }}">
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                    <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                    <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                   </div>
                 </div>
               </td>
@@ -397,7 +411,8 @@
   {# Modal de detalle avanzado #}
   <div class="modal fade" id="lineDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-      <div class="modal-content" x-if="modalLine">
+      <template x-if="modalLine">
+      <div class="modal-content">
         <div class="modal-header"><h5 class="modal-title">{{ _('Detalle de línea') }}</h5><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
           <div class="ca-journal-modal-grid">
@@ -406,12 +421,14 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "cost_center",
                 filters: { company: function() { return header.company; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.cost_center,
-                onSelect: function(opt) { modalLine.cost_center = opt.value; }
+                onSelect: function(opt) { modalLine.cost_center = opt.value; },
+                onClear: function() { modalLine.cost_center = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -420,12 +437,14 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "unit",
                 filters: { company: function() { return header.company; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.unit,
-                onSelect: function(opt) { modalLine.unit = opt.value; }
+                onSelect: function(opt) { modalLine.unit = opt.value; },
+                onClear: function() { modalLine.unit = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -434,12 +453,14 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "project",
                 filters: { company: function() { return header.company; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.project,
-                onSelect: function(opt) { modalLine.project = opt.value; }
+                onSelect: function(opt) { modalLine.project = opt.value; },
+                onClear: function() { modalLine.project = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -456,12 +477,14 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "party",
                 filters: { company: function() { return header.company; }, party_type: function() { return modalLine.party_type; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.party_id,
-                onSelect: function(opt) { modalLine.party_id = opt.value; }
+                onSelect: function(opt) { modalLine.party_id = opt.value; },
+                onClear: function() { modalLine.party_id = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button></template>
+                  <template x-for="opt in options" :key="opt.value"><button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button></template>
                 </div>
               </div>
             </div>
@@ -469,6 +492,7 @@
         </div>
         <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cerrar') }}</button><button class="btn btn-primary" type="button" @click="saveModalLine()">{{ _('Actualizar') }}</button></div>
       </div>
+      </template>
     </div>
   </div>
 

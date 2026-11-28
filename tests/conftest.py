@@ -1,62 +1,202 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
-
-"""Fixtures compartidas y control de recolección de la suite de pruebas."""
+﻿"""Infraestructura moderna para pytest con SQLite en memoria y aislamiento transaccional."""
 
 from __future__ import annotations
 
+import os
+import sqlite3
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import Any
+
 import pytest
+from argon2 import PasswordHasher
+from flask import Flask
+from sqlalchemy import inspect, or_, select
+from sqlalchemy.dialects import sqlite as sqlite_dialect
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+from sqlalchemy.schema import CreateIndex, CreateTable
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.database import (
+    Accounts,
+    AccountingPeriod,
+    Book,
+    CompanyDefaultAccount,
+    CompanyParty,
+    Currency,
+    Entity,
+    ExchangeRate,
+    FiscalYear,
+    Item,
+    Modules,
+    Party,
+    PartyAccount,
+    Roles,
+    RolesUser,
+    UOM,
+    User,
+    UserCompanyAccess,
+    Warehouse,
+    database,
+)
+
+ph = PasswordHasher()
+
+_sqlite_schema_template: sqlite3.Connection | None = None
+_create_all_original = database.create_all
+
+
+def _sqlite_schema_ddl() -> str:
+    """Compila una sola vez el DDL completo del esquema para el motor SQLite."""
+    dialect = sqlite_dialect.dialect()
+    statements: list[str] = []
+    for table in database.metadata.tables.values():
+        statements.append(str(CreateTable(table).compile(dialect=dialect)))
+        statements.extend(str(CreateIndex(index).compile(dialect=dialect)) for index in table.indexes)
+    return ";\n".join(statements) + ";\n"
+
+
+def _schema_template_connection() -> sqlite3.Connection:
+    """Devuelve la base SQLite en memoria con el esquema, construida una sola vez."""
+    global _sqlite_schema_template
+    if _sqlite_schema_template is None:
+        connection = sqlite3.connect(":memory:")
+        connection.executescript(_sqlite_schema_ddl())
+        connection.commit()
+        _sqlite_schema_template = connection
+    return _sqlite_schema_template
+
+
+def _create_all_fast(*args: Any, **kwargs: Any) -> None:
+    """Crea el esquema SQLite copiando una plantilla, en lugar de emitir cada DDL.
+
+    ``metadata.create_all`` ejecuta más de mil sentencias DDL (tablas e índices)
+    por cada app de prueba, lo que domina el tiempo de la suite. Copiar el
+    esquema ya compilado con la API ``backup`` de SQLite conserva el mismo
+    resultado en una fracción del tiempo. Cualquier otro motor, o una base que
+    ya tenga esquema, delega en el comportamiento original (idempotente).
+    """
+    engine = database.engine
+    if engine.dialect.name != "sqlite" or inspect(engine).has_table("user"):
+        return _create_all_original(*args, **kwargs)
+
+    raw = engine.raw_connection()
+    try:
+        _schema_template_connection().backup(raw.driver_connection)
+    except sqlite3.Error:
+        raw.close()
+        return _create_all_original(*args, **kwargs)
+    raw.close()
+
+
+database.create_all = _create_all_fast
+
+
+def _suspend_other_admins() -> list[tuple[str, str, list[tuple[str, bool]]]]:
+    """Retira temporalmente el privilegio administrativo de las filas existentes.
+
+    Los motores externos de CI usan una base ya inicializada que siempre contiene
+    al administrador base. Las pruebas del invariante de último administrador
+    necesitan un escenario controlado, por lo que este helper oculta esos
+    privilegios y devuelve un snapshot para restaurarlos al finalizar la prueba.
+    """
+    admin_role = database.session.execute(select(Roles).where(Roles.name == "admin")).scalar_one_or_none()
+    asignaciones: dict[str, list[RolesUser]] = {}
+    if admin_role is not None:
+        activas = (
+            database.session.execute(select(RolesUser).where(RolesUser.role_id == admin_role.id, RolesUser.active.is_(True)))
+            .scalars()
+            .all()
+        )
+        for asignacion in activas:
+            asignaciones.setdefault(asignacion.user_id, []).append(asignacion)
+
+    condiciones = [User.classification == "admin"]
+    if asignaciones:
+        condiciones.append(User.id.in_(list(asignaciones)))
+    usuarios = database.session.execute(select(User).where(User.active.is_(True), or_(*condiciones))).scalars().all()
+
+    snapshot: list[tuple[str, str, list[tuple[str, bool]]]] = []
+    for usuario in usuarios:
+        roles_usuario = asignaciones.get(usuario.id, [])
+        snapshot.append((usuario.id, usuario.classification, [(rol.id, rol.active) for rol in roles_usuario]))
+        if usuario.classification == "admin":
+            usuario.classification = "system"
+        for asignacion in roles_usuario:
+            asignacion.active = False
+    database.session.commit()
+    return snapshot
+
+
+def _restore_admins(snapshot: list[tuple[str, str, list[tuple[str, bool]]]]) -> None:
+    """Restaura la clasificación y los roles suspendidos por ``_suspend_other_admins``."""
+    for user_id, classification, asignaciones in snapshot:
+        usuario = database.session.get(User, user_id)
+        if usuario is not None:
+            usuario.classification = classification
+        for asignacion_id, estaba_activa in asignaciones:
+            asignacion = database.session.get(RolesUser, asignacion_id)
+            if asignacion is not None:
+                asignacion.active = estaba_activa
+    database.session.commit()
+
+
+@pytest.fixture
+def isolated_admin_registry():
+    """Aísla el registro global de administradores durante una prueba."""
+
+    @contextmanager
+    def _aislar(app: Flask):
+        with app.app_context():
+            database.create_all()
+            snapshot = _suspend_other_admins()
+        try:
+            yield
+        finally:
+            with app.app_context():
+                _restore_admins(snapshot)
+
+    return _aislar
 
 
 def pytest_addoption(parser):
-    """Registrar las banderas historicas --slow y --full de la suite."""
-    parser.addoption("--slow", action="store", default="False", help="Run all tests, even those that take the longest.")
-    parser.addoption(
-        "--full",
-        action="store_true",
-        default=False,
-        help="Run and report full end-to-end business-cycle tests.",
-    )
+    """Registrar banderas históricas del proyecto."""
+    parser.addoption("--slow", action="store", default="False", help="Run all tests, even the slowest ones.")
+    parser.addoption("--full", action="store_true", default=False, help="Run full end-to-end business-cycle tests.")
 
 
 def _check_database_habilitado() -> bool:
-    """Verifica si CHECK_DATABASE habilita la ejecución de pruebas de motor real."""
-    import os
-
+    """Verifica si las pruebas de motor real están habilitadas."""
     return os.environ.get("CHECK_DATABASE", "").strip().lower() in {"1", "true", "yes"}
 
 
 def pytest_collection_modifyitems(config, items):
-    """Salta las pruebas marcadas ``database`` salvo que CHECK_DATABASE este habilitado."""
-    if _check_database_habilitado():
+    """Skip external-engine cases unless explicitly enabled; keep SQLite coverage by default."""
+    database_uri = str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
+    if _check_database_habilitado() or database_uri.startswith("sqlite:"):
         return
-    skip_database = pytest.mark.skip(reason="Habilita CHECK_DATABASE=true para validar contra el motor configurado")
+    skip_database = pytest.mark.skip(reason="Habilita CHECK_DATABASE=true para validar contra un motor real")
     for item in items:
         if "database" in item.keywords:
             item.add_marker(skip_database)
 
 
-@pytest.fixture
-def app():
-    """Aplicación de prueba en SQLite en memoria con datos semilla mínimos."""
-    application = create_app(
-        {
-            **configuracion,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "WTF_CSRF_ENABLED": False,
-            "TESTING": True,
-        }
-    )
-    with application.app_context():
-        from cacao_accounting.database import Book, Entity, Modules, User, database
-
+def _seed_worker_base_data(app: Flask) -> None:
+    """Crea únicamente los datos base necesarios para cada worker."""
+    with app.app_context():
+        database.session.expire_on_commit = False
         database.create_all()
-        database.session.add_all(
-            [
+
+        for code, name in (("NIO", "Córdoba"), ("USD", "Dólar")):
+            if database.session.execute(select(Currency).filter_by(code=code)).scalar_one_or_none() is None:
+                database.session.add(Currency(code=code, name=name, decimals=2, active=True, default=code == "NIO"))
+
+        if database.session.execute(select(Entity).filter_by(code="cacao")).scalar_one_or_none() is None:
+            database.session.add(
                 Entity(
                     code="cacao",
                     name="Cacao Accounting",
@@ -65,9 +205,11 @@ def app():
                     currency="NIO",
                     enabled=True,
                     status="default",
-                ),
-                Modules(module="accounting", default=True, enabled=True),
-                User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                )
+            )
+
+        if database.session.execute(select(Book).filter_by(code="DEFAULT_BOOK")).scalar_one_or_none() is None:
+            database.session.add(
                 Book(
                     entity="cacao",
                     code="DEFAULT_BOOK",
@@ -75,19 +217,558 @@ def app():
                     status="activo",
                     is_primary=True,
                     currency="NIO",
-                ),
-            ]
-        )
-        database.session.commit()
-    yield application
-    with application.app_context():
-        from cacao_accounting.database import database
+                )
+            )
 
+        for module_name in ("accounting", "sales", "purchases", "cash", "inventory", "admin", "imports"):
+            if database.session.execute(select(Modules).filter_by(module=module_name)).scalar_one_or_none() is None:
+                database.session.add(Modules(module=module_name, default=module_name == "accounting", enabled=True))
+
+        admin_user = database.session.execute(select(User).filter_by(user="admin")).scalar_one_or_none()
+        if admin_user is None:
+            database.session.add(
+                User(
+                    user="admin",
+                    name="Admin",
+                    password=ph.hash("AdminPass!123").encode(),
+                    classification="admin",
+                    active=True,
+                    company="cacao",
+                )
+            )
+
+        database.session.commit()
+
+
+def _seed_reference_users(app: Flask) -> dict[str, User]:
+    """Crea los usuarios y roles de referencia usados por la autenticación de pruebas."""
+    with app.app_context():
+        session = database.session()
+        session.expire_on_commit = False
+        if session.execute(select(Entity).filter_by(code="alpha")).scalar_one_or_none() is None:
+            session.add(
+                Entity(
+                    code="alpha",
+                    name="Alpha",
+                    company_name="Alpha Company",
+                    tax_id="J0002",
+                    currency="USD",
+                    enabled=True,
+                    status="default",
+                )
+            )
+
+        users: dict[str, User] = {}
+        for username, classification, company_code, password in (
+            ("admin", "admin", "cacao", "AdminPass!123"),
+            ("reader", "reader", "cacao", "ReaderPass!123"),
+            ("writer", "writer", "cacao", "WriterPass!123"),
+            ("no_access", "user", "cacao", "NoAccessPass!123"),
+            ("other_company", "user", "alpha", "OtherCompanyPass!123"),
+            ("limited_company", "user", "cacao", "LimitedPass!123"),
+        ):
+            user = session.execute(select(User).filter_by(user=username)).scalar_one_or_none()
+            if user is None:
+                user = User(
+                    user=username,
+                    name=username.title(),
+                    password=ph.hash(password).encode(),
+                    classification=classification,
+                    active=True,
+                    company=company_code,
+                )
+                session.add(user)
+            users[username] = user
+
+        session.flush()
+
+        for username, company_code in (
+            ("admin", "cacao"),
+            ("reader", "cacao"),
+            ("writer", "cacao"),
+            ("limited_company", "cacao"),
+            ("other_company", "alpha"),
+        ):
+            access = session.execute(
+                select(UserCompanyAccess).filter_by(user_id=users[username].id, company_code=company_code)
+            ).scalar_one_or_none()
+            if access is None:
+                session.add(UserCompanyAccess(user_id=users[username].id, company_code=company_code))
+
+        for role_name in ("admin", "reader", "writer", "auditor"):
+            role = session.execute(select(Roles).filter_by(name=role_name)).scalar_one_or_none()
+            if role is None:
+                role = Roles(name=role_name, note=f"{role_name} role")
+                session.add(role)
+            session.flush()
+            if role_name == "admin":
+                assignment = session.execute(
+                    select(RolesUser).filter_by(user_id=users["admin"].id, role_id=role.id)
+                ).scalar_one_or_none()
+                if assignment is None:
+                    session.add(RolesUser(user_id=users["admin"].id, role_id=role.id, active=True))
+
+        session.commit()
+        return users
+
+
+_seeded_db_template: sqlite3.Connection | None = None
+
+
+def _capture_seeded_db_template() -> None:
+    """Congela el estado inicial del worker para restaurarlo antes de cada prueba.
+
+    La app se comparte por worker para no reconstruir todo el esquema en cada
+    prueba, pero el estado de datos sí debe aislarse: una prueba que desactiva
+    un módulo, revoca un rol o altera la compañía no puede condicionar a las
+    siguientes. La copia con la API ``backup`` de SQLite es barata y conserva
+    exactamente el esquema y los datos base sembrados.
+    """
+    global _seeded_db_template
+    engine = database.engine
+    if engine.dialect.name != "sqlite":
+        return
+    raw = engine.raw_connection()
+    try:
+        template = sqlite3.connect(":memory:")
+        raw.driver_connection.backup(template)
+        template.commit()
+        _seeded_db_template = template
+    finally:
+        raw.close()
+
+
+def _restore_seeded_db_template() -> None:
+    """Devuelve la base SQLite del worker al estado congelado al iniciar la sesión."""
+    if _seeded_db_template is None:
+        return
+    engine = database.engine
+    if engine.dialect.name != "sqlite":
+        return
+    database.session.remove()
+    raw = engine.raw_connection()
+    try:
+        raw.driver_connection.rollback()
+        _seeded_db_template.backup(raw.driver_connection)
+    finally:
+        raw.close()
+
+
+@pytest.fixture(autouse=True)
+def contexto_de_aplicacion_por_prueba(app):
+    """Ejecuta cada prueba dentro de su propio contexto de aplicación aislado.
+
+    Varias pruebas abren contextos anidados y dejan ``g`` con el usuario de una
+    sesión anterior; al compartir el contexto, la siguiente prueba puede ver un
+    ``current_user`` ajeno. Además del contexto propio, la base SQLite se
+    restaura al estado base del worker para que las mutaciones de una prueba no
+    alteren a las siguientes.
+    """
+    contexto = app.app_context()
+    contexto.push()
+    _restore_seeded_db_template()
+    configuracion_inicial = dict(app.config)
+    try:
+        yield
+    finally:
+        database.session.remove()
+        app.config.clear()
+        app.config.update(configuracion_inicial)
+        contexto.pop()
+
+
+@pytest.fixture(scope="session")
+def app():
+    """App de prueba con SQLite en memoria creada una sola vez por worker."""
+    settings = {
+        **configuracion,
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "SQLALCHEMY_ENGINE_OPTIONS": {
+            "poolclass": StaticPool,
+            "connect_args": {"check_same_thread": False},
+        },
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
+        "TESTING": True,
+        "SECRET_KEY": "test-worker-secret",
+    }
+    application: Flask = create_app(settings)
+
+    with application.app_context():
+        _seed_worker_base_data(application)
+        _seed_reference_users(application)
+        _capture_seeded_db_template()
+
+    yield application
+
+    with application.app_context():
         database.session.remove()
         database.engine.dispose()
 
 
 @pytest.fixture
+def db_session(app):
+    """Cada prueba recibe su propia sesión y transacción externa de aislamiento."""
+    with app.app_context():
+        connection = database.engine.connect()
+        connection.connection.cursor().execute("PRAGMA foreign_keys=ON")
+        transaction = connection.begin()
+        session = Session(bind=connection, join_transaction_mode="create_savepoint")
+        session.begin_nested()
+        try:
+            yield session
+        finally:
+            session.rollback()
+            session.close()
+            transaction.rollback()
+            connection.close()
+
+
+@pytest.fixture
 def client(app):
-    """Cliente de prueba HTTP sobre la aplicación sembrada."""
-    return app.test_client()
+    """Cliente HTTP independiente por prueba."""
+    with app.test_client() as test_client:
+        yield test_client
+
+
+@pytest.fixture(scope="session")
+def reference_users(app):
+    """Usuarios base reutilizados por perfil para la autenticación de pruebas."""
+    with app.app_context():
+        users = _seed_reference_users(app)
+        yield users
+        database.session.remove()
+
+
+@pytest.fixture
+def authenticated_client(app, reference_users):
+    """Cliente HTTP autenticado por perfil sin repetir el hash de password."""
+
+    def _factory(username: str = "admin"):
+        user_id = str(reference_users[username].id)
+        with app.app_context():
+            user = database.session.get(User, user_id)
+            if user is None:
+                raise AssertionError(f"The reference user {username!r} is missing from the test database.")
+            if username == "admin":
+                user.classification = "admin"
+                user.active = True
+                admin_role = database.session.execute(select(Roles).filter_by(name="admin")).scalar_one()
+                role_assignment = database.session.execute(
+                    select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id)
+                ).scalar_one_or_none()
+                if role_assignment is None:
+                    database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
+                else:
+                    role_assignment.active = True
+                company_access = database.session.execute(
+                    select(UserCompanyAccess).filter_by(user_id=user_id, company_code="cacao")
+                ).scalar_one_or_none()
+                if company_access is None:
+                    database.session.add(UserCompanyAccess(user_id=user_id, company_code="cacao"))
+                database.session.commit()
+            auth_version = user.auth_version
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["_user_id"] = user_id
+            session["_auth_version"] = auth_version
+            session["_fresh"] = True
+        return client
+
+    return _factory
+
+
+@dataclass(frozen=True)
+class EntornoContable:
+    """Escenario mínimo para pruebas contables y operativas."""
+
+    app: Any
+    company: Any
+    book_primary: Any
+    book_secondary: Any
+    fiscal_year: Any
+    period: Any
+    currency_nio: Any
+    currency_usd: Any
+    caja: Any
+    banco: Any
+    cxc: Any
+    inv_account: Any
+    cxp: Any
+    iva_por_pagar: Any
+    ventas: Any
+    cogs: Any
+    gastos: Any
+    defaults: Any
+    customer: Any
+    supplier: Any
+    uom: Any
+    item: Any
+    warehouse: Any
+    admin_user: Any
+
+
+def _sembrar_entorno(
+    app: Flask, request: pytest.FixtureRequest, *, restaurar_libro_secundario: bool = True
+) -> EntornoContable:
+    """Semilla mínima para escenarios contables y operativos."""
+    with app.app_context():
+        company = database.session.execute(select(Entity).filter_by(code="cacao")).scalar_one()
+        admin_user = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
+        book_primary = database.session.execute(select(Book).filter_by(code="DEFAULT_BOOK")).scalar_one()
+
+        # #1828: en Cloud la clasificación admin no concede compañías por sí
+        # sola; las pruebas que ejercen servicios con Permisos necesitan el
+        # acceso explícito a la compañía del escenario.
+        access = database.session.execute(
+            select(UserCompanyAccess).filter_by(user_id=admin_user.id, company_code="cacao")
+        ).scalar_one_or_none()
+        if access is None:
+            database.session.add(UserCompanyAccess(user_id=admin_user.id, company_code="cacao"))
+            database.session.commit()
+
+        book_secondary = database.session.execute(select(Book).filter_by(code="NIIF")).scalar_one_or_none()
+        if book_secondary is None:
+            book_secondary = Book(
+                entity="cacao",
+                code="NIIF",
+                name="Libro NIIF",
+                status="activo",
+                is_primary=False,
+                currency="NIO",
+            )
+            database.session.add(book_secondary)
+        book_secondary.currency = "NIO"
+
+        for code, name in (("NIO", "Córdoba"), ("USD", "Dólar")):
+            if database.session.execute(select(Currency).filter_by(code=code)).scalar_one_or_none() is None:
+                database.session.add(Currency(code=code, name=name, decimals=2, active=True, default=code == "NIO"))
+
+        fy = database.session.get(FiscalYear, "FY2026")
+        if fy is None:
+            fy = FiscalYear(
+                id="FY2026",
+                entity="cacao",
+                name="2026",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+                is_closed=False,
+            )
+            database.session.add(fy)
+
+        period = database.session.get(AccountingPeriod, "P2026-05")
+        if period is None:
+            period = AccountingPeriod(
+                id="P2026-05",
+                entity="cacao",
+                fiscal_year_id="FY2026",
+                name="Mayo 2026",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+            database.session.add(period)
+
+        for code, name, classification, account_type in (
+            ("1101", "Caja General", "asset", "cash"),
+            ("1102", "Bancos", "asset", "bank"),
+            ("1105", "Cuentas por Cobrar", "asset", "receivable"),
+            ("1109", "Inventarios", "asset", "stock"),
+            ("2101", "Cuentas por Pagar", "liability", "payable"),
+            ("2105", "IVA por Pagar", "liability", "tax"),
+            ("4101", "Ventas", "revenue", "income"),
+            ("5101", "Costo de Ventas", "expense", "expense"),
+            ("5201", "Gastos Operativos", "expense", "expense"),
+        ):
+            account = database.session.execute(select(Accounts).filter_by(entity="cacao", code=code)).scalar_one_or_none()
+            if account is None:
+                database.session.add(
+                    Accounts(
+                        entity="cacao",
+                        code=code,
+                        name=name,
+                        classification=classification,
+                        account_type=account_type,
+                        group=False,
+                        active=True,
+                        enabled=True,
+                    )
+                )
+            else:
+                if account.active is None:
+                    account.active = True
+                if account.enabled is None:
+                    account.enabled = True
+                if account.group is None:
+                    account.group = False
+
+        database.session.flush()
+
+        caja = database.session.execute(select(Accounts).filter_by(entity="cacao", code="1101")).scalar_one()
+        banco = database.session.execute(select(Accounts).filter_by(entity="cacao", code="1102")).scalar_one()
+        cxc = database.session.execute(select(Accounts).filter_by(entity="cacao", code="1105")).scalar_one()
+        inv_account = database.session.execute(select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
+        cxp = database.session.execute(select(Accounts).filter_by(entity="cacao", code="2101")).scalar_one()
+        iva_por_pagar = database.session.execute(select(Accounts).filter_by(entity="cacao", code="2105")).scalar_one()
+        ventas = database.session.execute(select(Accounts).filter_by(entity="cacao", code="4101")).scalar_one()
+        cogs = database.session.execute(select(Accounts).filter_by(entity="cacao", code="5101")).scalar_one()
+        gastos = database.session.execute(select(Accounts).filter_by(entity="cacao", code="5201")).scalar_one()
+
+        defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one_or_none()
+        if defaults is None:
+            defaults = CompanyDefaultAccount(company="cacao")
+            database.session.add(defaults)
+        # Repara los valores canónicos en cada prueba: una prueba previa no debe
+        # poder dejar la app compartida con, por ejemplo, la caja como cuenta de
+        # cartera y romper el posting de otra prueba por orden de ejecución.
+        defaults.default_receivable = cxc.id
+        defaults.default_payable = cxp.id
+        defaults.default_cash = caja.id
+        defaults.default_bank = banco.id
+        defaults.default_income = ventas.id
+        defaults.default_expense = gastos.id
+
+        if database.session.execute(select(UOM).filter_by(code="UND")).scalar_one_or_none() is None:
+            database.session.add(UOM(code="UND", name="Unidad"))
+
+        customer = database.session.execute(select(Party).filter_by(code="CLI001")).scalar_one_or_none()
+        if customer is None:
+            customer = Party(code="CLI001", name="Cliente Principal SA", is_customer=True, tax_id="J0002")
+            database.session.add(customer)
+
+        supplier = database.session.execute(select(Party).filter_by(code="PRV001")).scalar_one_or_none()
+        if supplier is None:
+            supplier = Party(code="PRV001", name="Proveedor Principal SA", is_supplier=True, tax_id="J0003")
+            database.session.add(supplier)
+
+        database.session.flush()
+        for party, active in ((customer, True), (supplier, True)):
+            link = database.session.execute(
+                select(CompanyParty).filter_by(company="cacao", party_id=party.id)
+            ).scalar_one_or_none()
+            if link is None:
+                database.session.add(CompanyParty(company="cacao", party_id=party.id, is_active=active))
+
+        # Repara también los mapeos por tercero: una cuenta de caja asignada por
+        # error como cartera haría fallar el posting de cualquier prueba posterior.
+        for party in (customer, supplier):
+            mapping = database.session.execute(
+                select(PartyAccount).filter_by(party_id=party.id, company="cacao")
+            ).scalar_one_or_none()
+            if mapping is None:
+                mapping = PartyAccount(party_id=party.id, company="cacao")
+                database.session.add(mapping)
+            mapping.receivable_account_id = cxc.id
+            mapping.payable_account_id = cxp.id
+
+        warehouse = database.session.execute(select(Warehouse).filter_by(code="BOD01")).scalar_one_or_none()
+        if warehouse is None:
+            warehouse = Warehouse(code="BOD01", name="Bodega Central", company="cacao")
+            database.session.add(warehouse)
+
+        item = database.session.execute(select(Item).filter_by(code="ART01")).scalar_one_or_none()
+        if item is None:
+            item = Item(code="ART01", name="Articulo Comercial", item_type="goods", is_stock_item=True, default_uom="UND")
+            database.session.add(item)
+
+        exchange_rate = database.session.execute(
+            select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date(2026, 5, 1))
+        ).scalar_one_or_none()
+        if exchange_rate is None:
+            database.session.add(
+                ExchangeRate(
+                    origin="USD",
+                    destination="NIO",
+                    rate=Decimal("36.50"),
+                    date=date(2026, 5, 1),
+                )
+            )
+            database.session.add(
+                ExchangeRate(
+                    origin="NIO",
+                    destination="USD",
+                    rate=Decimal("1") / Decimal("36.50"),
+                    date=date(2026, 5, 1),
+                )
+            )
+
+        database.session.commit()
+
+        secondary_book_id = book_secondary.id
+
+        def restore_secondary_book_currency() -> None:
+            """Restore the shared secondary book after tests that customize it."""
+            with app.app_context():
+                secondary_book = database.session.get(Book, secondary_book_id)
+                if secondary_book is not None and secondary_book.currency != "NIO":
+                    secondary_book.currency = "NIO"
+                    database.session.commit()
+
+        if restaurar_libro_secundario:
+            request.addfinalizer(restore_secondary_book_currency)
+
+        return EntornoContable(
+            app=app,
+            company=company,
+            book_primary=book_primary,
+            book_secondary=book_secondary,
+            fiscal_year=fy,
+            period=period,
+            currency_nio=database.session.execute(select(Currency).filter_by(code="NIO")).scalar_one(),
+            currency_usd=database.session.execute(select(Currency).filter_by(code="USD")).scalar_one(),
+            caja=caja,
+            banco=banco,
+            cxc=cxc,
+            inv_account=inv_account,
+            cxp=cxp,
+            iva_por_pagar=iva_por_pagar,
+            ventas=ventas,
+            cogs=cogs,
+            gastos=gastos,
+            defaults=defaults,
+            customer=customer,
+            supplier=supplier,
+            uom=database.session.execute(select(UOM).filter_by(code="UND")).scalar_one(),
+            item=item,
+            warehouse=warehouse,
+            admin_user=admin_user,
+        )
+
+
+@pytest.fixture
+def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
+    """Escenario contable sobre la app compartida del worker de pruebas."""
+    return _sembrar_entorno(app, request)
+
+
+@pytest.fixture
+def entorno_contable_aislado(request: pytest.FixtureRequest) -> EntornoContable:
+    """Escenario contable con app y base SQLite propias de la prueba.
+
+    Aísla el estado de estos escenarios del resto de la suite: permite
+    ejecutarlos en cualquier orden y en paralelo sin que pruebas previas
+    alteren cuentas, series o secuencias.
+    """
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                "poolclass": StaticPool,
+                "connect_args": {"check_same_thread": False},
+            },
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "SECRET_KEY": "test-isolated-scenario-secret",
+        }
+    )
+    with application.app_context():
+        _seed_worker_base_data(application)
+        escenario = _sembrar_entorno(application, request, restaurar_libro_secundario=False)
+        try:
+            yield escenario
+        finally:
+            database.session.remove()
+            database.engine.dispose()

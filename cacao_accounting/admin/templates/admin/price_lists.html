@@ -2,6 +2,7 @@
 {% block contenido %}
 <div class="ca-page-header"><h4>{{ _("Listas de Precio") }}</h4></div>
 <form method="post" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <div class="row g-2">
     <div class="col-md-3"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
     <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}"></div>
@@ -15,5 +16,5 @@
 </form>
 <table class="table table-sm">
   <caption>{{ _("Lista de listas de precio") }}</caption>
-  <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Moneda") }}</th><th>{{ _("Compra") }}</th><th>{{ _("Venta") }}</th><th>{{ _("Predeterminada") }}</th></tr></thead><tbody>{% for price_list in price_lists %}<tr><td>{{ price_list.name }}</td><td>{{ price_list.company or "" }}</td><td>{{ price_list.currency or "" }}</td><td>{{ price_list.is_buying }}</td><td>{{ price_list.is_selling }}</td><td>{{ price_list.is_default }}</td></tr>{% endfor %}</tbody></table>
+  <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Moneda") }}</th><th>{{ _("Compra") }}</th><th>{{ _("Venta") }}</th><th>{{ _("Predeterminada") }}</th></tr></thead><tbody>{% for price_list in price_lists %}<tr><td>{{ price_list.name }}</td><td>{{ price_list.company or "" }}</td><td>{{ price_list.currency or "" }}</td><td>{{ _('Sí') if price_list.is_buying else _('No') }}</td><td>{{ _('Sí') if price_list.is_selling else _('No') }}</td><td>{{ _('Sí') if price_list.is_default else _('No') }}</td></tr>{% endfor %}</tbody></table>
 {% endblock %}

@@ -8,7 +8,7 @@
 {%- endif -%}
 
 <div class="ca-module-workspace">
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
@@ -38,12 +38,14 @@
         <a href="{{ url_for('compras.compras_proveedor_lista') }}">{{ _('Proveedores') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      {% if can_manage_supplier_groups %}
       <li>
         <a href="{{ url_for('admin.lista_grupos_terceros', group_type='supplier') }}">{{ _('Tipos de Proveedor') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      {% endif %}
       <li>
-        <a href="{{ url_for('compras.compras_proveedor_lista') }}#contactos-direcciones">{{ _('Contactos y Direcciones de Proveedores') }}</a>
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}">{{ _('Contactos y Direcciones de Proveedores') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
@@ -163,11 +165,11 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('compras.compras_reconciliation_panel') }}">{{ _('Panel de Conciliaciones') }}</a>
+        <a href="{{ url_for('compras.compras_reconciliation_panel', company=company) }}">{{ _('Panel de Conciliaciones') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_purchase_reconciliation') }}">{{ _('Conciliaciones Pendientes') }}</a>
+        <a href="{{ url_for('compras.compras_purchase_reconciliation', company=company) }}">{{ _('Conciliaciones Pendientes') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}

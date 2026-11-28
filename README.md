@@ -105,6 +105,12 @@ personalizar `CACAO_HOST`, `CACAO_PORT`, `CACAO_USER`, `CACAO_PSWD`,
 defecto utiliza `cacaoaccounting.db` en la raíz del proyecto, incluso en modo
 de pruebas, para que la inicialización sobreviva entre procesos.
 
+Configura `SECRET_KEY` con un valor estable para que los enlaces de
+recuperación de contraseña y los dispositivos reconocidos sigan validándose
+entre procesos y reinicios. Sin esa clave, la verificación por dispositivo y
+la recuperación de contraseña fallan de forma cerrada. Configúrala también
+antes de ejecutar `cacaoctl db migrate` para transformar los secretos legados.
+
 Para un servidor WSGI usa `cacaoctl serve`. En Docker, el entrypoint ejecuta
 `cacaoctl db init` y `cacaoctl db migrate` de forma idempotente antes de
 arrancar la aplicación.

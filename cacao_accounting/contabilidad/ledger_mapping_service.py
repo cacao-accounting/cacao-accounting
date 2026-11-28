@@ -32,17 +32,28 @@ def create_ledger_mapping_rule(
     Rules intentionally map only from the primary book to one secondary book;
     this makes reversal/posting semantics identical in both directions.
     """
+    # Serializa la comprobación de duplicados y la inserción por identidad de
+    # regla. En Cloud, dos administradores concurrentes no pueden confirmar
+    # destinos distintos para la misma cuenta origen (#2138).
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("ledger_mapping", source_book, target_book, source_account_id)
+
     source, target, source_account, target_account = _validate_rule_references(
         source_book, target_book, source_account_id, target_account_id
     )
-    duplicate = database.session.execute(
-        select(LedgerMappingRule).where(
-            LedgerMappingRule.source_book == source.code,
-            LedgerMappingRule.target_book == target.code,
-            LedgerMappingRule.source_account_id == source_account.id,
-            LedgerMappingRule.is_active.is_(True),
-        )
-    ).scalar_one_or_none()
+    duplicate_query = select(LedgerMappingRule).where(
+        LedgerMappingRule.source_book == source.code,
+        LedgerMappingRule.target_book == target.code,
+        LedgerMappingRule.source_account_id == source_account.id,
+        LedgerMappingRule.is_active.is_(True),
+    )
+    if database.session.get_bind().dialect.name != "sqlite":
+        # MySQL REPEATABLE READ puede conservar el snapshot previo al lock; la
+        # lectura bloqueante observa la regla confirmada por la transacción
+        # ganadora antes de decidir si hay duplicado activo.
+        duplicate_query = duplicate_query.with_for_update()
+    duplicate = database.session.execute(duplicate_query).scalar_one_or_none()
     if duplicate is not None:
         raise LedgerMappingError(_("Ya existe una regla activa para la cuenta origen y el libro destino."))
     rule = LedgerMappingRule(

@@ -3,6 +3,8 @@
 
 """Modulo administrativo."""
 
+from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 from typing import Any
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -32,6 +34,7 @@ from cacao_accounting.database import (
     ApprovalRequest,
     Book,
     CompanyDefaultAccount,
+    Currency,
     DimensionType,
     DimensionValue,
     Entity,
@@ -39,19 +42,22 @@ from cacao_accounting.database import (
     ItemPrice,
     Modules,
     PartyGroup,
+    Party,
     PriceList,
     PurchaseMatchingConfig,
     Roles,
     RolesAccess,
-    RolesUser,
     SalesMatchingConfig,
+    TAX_TYPES,
     Tax,
     TaxTemplate,
     TaxTemplateItem,
+    UOM,
     User,
     UserCompanyAccess,
     database,
 )
+from cacao_accounting.email_identity import normalize_user_email
 
 
 from cacao_accounting.contabilidad.default_accounts import (
@@ -89,11 +95,15 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 
 from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 from cacao_accounting.admin.services import (
+    LAST_ADMIN_REQUIRED_MESSAGE,
+    _acquire_last_admin_lock,
     _apply_user_edit,
     _can_create_user,
+    _commit_last_admin_transition,
     _crear_usuario_desde_form,
     _date_form,
     _decimal_form,
+    replace_user_company_access,
     _email_settings_values,
     _handle_approval_matrix_post,
     _obtener_modulos_disponibles,
@@ -102,20 +112,24 @@ from cacao_accounting.admin.services import (
     _obtener_roles_disponibles,
     _obtener_roles_por_usuario,
     _obtener_usuario,
-    _pending_approval_info,
     _populate_portal_choices,
     _process_pending_approval_post,
     _require_system_admin,
     _save_email_settings,
+    _set_user_active,
     _send_email_test,
+    _user_email_is_taken,
+    visible_pending_approval_items,
     _validar_creacion_usuario,
     _validate_portal_fields,
+    _would_leave_no_admin,
 )
 
 from cacao_accounting.admin.session_security_service import (
     desbloquear_cuenta_usuario,
     is_session_security_enabled,
     listar_cuentas_bloqueadas,
+    lockout_minutes_remaining,
     listar_todos_dispositivos,
     revocar_dispositivo,
     set_session_security_enabled,
@@ -127,7 +141,7 @@ from cacao_accounting.ventas.services import is_sales_price_editor
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
     create_tax_rule,
-    delete_tax_rule,
+    deactivate_tax_rule,
     get_tax_rule,
     list_tax_rules,
     update_tax_rule,
@@ -142,6 +156,7 @@ from cacao_accounting.contabilidad.ledger_mapping_service import (
 
 
 from cacao_accounting.i18n import _, _l
+from cacao_accounting.tax_pricing_service import TaxPricingError, validate_tax_template_applicability
 
 
 def _require_price_list_editor() -> None:
@@ -150,19 +165,40 @@ def _require_price_list_editor() -> None:
         abort(403)
 
 
-def _can_manage_price_list(price_list: PriceList) -> bool:
-    """Return whether the current catalog editor may manage this company list."""
+def _price_list_reference_error(company: str | None, currency: str | None) -> str | None:
+    """Valida que compañía y moneda existan antes de crear una lista."""
+    if company:
+        company_id = database.session.execute(database.select(Entity.id).filter_by(code=company)).scalar_one_or_none()
+        if company_id is None:
+            return _("La compañía seleccionada no existe.")
+    if currency:
+        currency_id = database.session.execute(
+            database.select(Currency.id).filter_by(code=currency, active=True)
+        ).scalar_one_or_none()
+        if currency_id is None:
+            return _("La moneda seleccionada no existe o no está activa.")
+    return None
+
+
+def _can_access_price_list_company(price_list: PriceList) -> bool:
+    """Comprueba que la lista pertenezca al alcance de compañía del usuario.
+
+    La autorización de escritura la exige `_require_price_list_editor`; esta
+    guarda solo resuelve el alcance por compañía de una lista concreta.
+    """
     if current_user.classification == "admin":
         return True
     if not price_list.company:
         return False
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("sales"), usuario=current_user.id)
-    return bool(permissions.tiene_acceso_compania(price_list.company))
+    # #2011: la pertenencia a la compañía no sustituye un rol de ventas
+    # vigente; una asignación revocada no conserva la gestión de precios.
+    return bool(permissions.consultar and permissions.tiene_acceso_compania(price_list.company))
 
 
 def _require_price_list_company_access(price_list: PriceList) -> None:
     """Forbid sales managers from changing a list outside their companies."""
-    if not _can_manage_price_list(price_list):
+    if not _can_access_price_list_company(price_list):
         abort(403)
 
 
@@ -179,6 +215,7 @@ LISTA_USUARIOS = "admin.lista_usuarios"
 LISTA_ROLES = "admin.lista_roles"
 
 ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
+_PARTY_GROUP_TYPES = frozenset({"customer", "supplier"})
 
 DESKTOP_SINGLE_ADMIN_MESSAGE = _l("En modo escritorio solo se permite un usuario administrador.")
 
@@ -294,10 +331,18 @@ def external_document_validation_settings():
     """Administra la validacion externa de documentos impresos."""
     _require_system_admin()
     if request.method == "POST":
-        save_external_validation_settings(
-            enabled=request.form.get("enabled") == "on",
-            base_url=request.form.get("base_url") or DEFAULT_VALIDATION_BASE_URL,
-        )
+        enabled = request.form.get("enabled") == "on"
+        base_url = request.form.get("base_url") or DEFAULT_VALIDATION_BASE_URL
+        try:
+            save_external_validation_settings(enabled=enabled, base_url=base_url)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template(
+                "admin/external_document_validation.html",
+                enabled=enabled,
+                base_url=(base_url or "").strip(),
+                fallback_url=DEFAULT_VALIDATION_BASE_URL,
+            )
         flash(_("Configuración de validación externa guardada correctamente."), "success")
         return redirect(url_for("admin.external_document_validation_settings"))
 
@@ -322,8 +367,12 @@ def email_settings():
         if request.form.get("action") == "test_email":
             _send_email_test()
             return redirect(url_for("admin.email_settings"))
-        _save_email_settings()
-        flash(_("Configuración de correo electrónico guardada correctamente."), "success")
+        try:
+            _save_email_settings()
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Configuración de correo electrónico guardada correctamente."), "success")
         return redirect(url_for("admin.email_settings"))
 
     settings = _email_settings_values()
@@ -408,6 +457,10 @@ def configuracion_valuacion_inventario():
     _require_system_admin()
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     selected_company = request.form.get("company") or request.args.get("company") or (companies[0].code if companies else "")
+    company_codes = {str(company.code) for company in companies}
+    if selected_company and selected_company not in company_codes:
+        flash(_("La compañía seleccionada no existe."), "danger")
+        return redirect(url_for(LISTA_VALUACION_INVENTARIO))
 
     if request.method == "POST":
         if not selected_company:
@@ -446,22 +499,41 @@ def lista_impuestos():
     """Administra impuestos y cargos de compra/venta."""
     _require_system_admin()
     if request.method == "POST":
-        rate = _decimal_form("rate")
+        try:
+            rate = _decimal_form("rate")
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
         if not rate.is_finite():
             flash(_("La tasa debe ser finita."), "danger")
             return redirect(url_for("admin.lista_impuestos"))
+        tax_type = request.form.get("tax_type") or "percentage"
+        if tax_type not in TAX_TYPES:
+            flash(_("El tipo de impuesto seleccionado no es válido."), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
+        account_id = (request.form.get("account_id") or "").strip() or None
+        if account_id:
+            account = database.session.get(Accounts, account_id)
+            if not account or not account.active:
+                flash(_("La cuenta contable seleccionada no es válida."), "danger")
+                return redirect(url_for("admin.lista_impuestos"))
         tax = Tax(
             name=request.form.get("name") or "",
             rate=rate,
-            tax_type=request.form.get("tax_type") or "percentage",
+            tax_type=tax_type,
             applies_to=request.form.get("applies_to") or "both",
-            account_id=request.form.get("account_id") or None,
+            account_id=account_id,
             is_charge=bool(request.form.get("is_charge")),
             is_capitalizable=bool(request.form.get("is_capitalizable")),
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
         )
         database.session.add(tax)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("No se pudo guardar el impuesto. Verifique las referencias seleccionadas."), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
         flash(_("Impuesto o cargo creado correctamente."), "success")
         return redirect(url_for("admin.lista_impuestos"))
     taxes = database.session.execute(database.select(Tax).order_by(Tax.name)).scalars().all()
@@ -475,19 +547,108 @@ def lista_plantillas_impuesto():
     """Administra plantillas de impuestos."""
     _require_system_admin()
     if request.method == "POST":
+        company = (request.form.get("company") or "").strip() or None
+        currency = (request.form.get("currency") or "").strip() or None
+        if company:
+            entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
+            if not entity or not bool(getattr(entity, "enabled", False)):
+                flash(_("La compañía seleccionada no es válida."), "danger")
+                return redirect(url_for("admin.lista_plantillas_impuesto"))
+        if currency:
+            currency_ok = database.session.execute(
+                database.select(Currency.id).filter_by(code=currency, active=True)
+            ).scalar_one_or_none()
+            if currency_ok is None:
+                flash(_("La moneda seleccionada no es válida."), "danger")
+                return redirect(url_for("admin.lista_plantillas_impuesto"))
         template = TaxTemplate(
             name=request.form.get("name") or "",
-            company=request.form.get("company") or None,
+            company=company,
             template_type=request.form.get("template_type") or "selling",
-            currency=request.form.get("currency") or None,
-            is_active=bool(request.form.get("is_active", "1")),
+            currency=currency,
+            is_active=request.form.get("is_active") is not None,
         )
         database.session.add(template)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("No se pudo guardar la plantilla de impuestos. Verifique las referencias seleccionadas."), "danger")
+            return redirect(url_for("admin.lista_plantillas_impuesto"))
         flash(_("Plantilla de impuestos creada correctamente."), "success")
         return redirect(url_for("admin.lista_plantillas_impuesto"))
     templates = database.session.execute(database.select(TaxTemplate).order_by(TaxTemplate.name)).scalars().all()
     return render_template("admin/tax_templates.html", templates=templates, titulo=_("Plantillas de Impuestos"))
+
+
+def _create_tax_template_item_from_post(template: TaxTemplate):
+    """Valida y persiste una línea de plantilla de impuestos desde el formulario."""
+    try:
+        sequence = int(request.form.get("sequence") or 10)
+    except (TypeError, ValueError):
+        flash(_("La secuencia debe ser un número entero."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    tax_id = (request.form.get("tax_id") or "").strip()
+    tax = database.session.get(Tax, tax_id) if tax_id else None
+    if not tax or not tax.is_active:
+        flash(_("Selecciona un impuesto activo."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    try:
+        validate_tax_template_applicability(template.template_type, tax.applies_to)
+    except TaxPricingError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    item = TaxTemplateItem(
+        tax_template_id=template.id,
+        tax_id=tax.id,
+        sequence=sequence,
+        calculation_base=request.form.get("calculation_base") or "net_document",
+        behavior=request.form.get("behavior") or "additive",
+        is_inclusive=bool(request.form.get("is_inclusive")),
+    )
+    if item.calculation_base not in {"net_document", "previous_total"}:
+        flash(_("La base de cálculo del impuesto no es válida."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    if item.behavior not in {"additive", "deductive"}:
+        flash(_("El comportamiento del impuesto no es válido."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    database.session.add(item)
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se pudo agregar la línea de impuesto. Verifique las referencias seleccionadas."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    flash(_("Linea de impuesto agregada correctamente."), "success")
+    return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+
+
+def _tax_template_item_context(template: TaxTemplate) -> dict[str, Any]:
+    """Construye las listas y etiquetas fiscales para la vista de líneas."""
+    items = (
+        database.session.execute(
+            database.select(TaxTemplateItem).filter_by(tax_template_id=template.id).order_by(TaxTemplateItem.sequence)
+        )
+        .scalars()
+        .all()
+    )
+    applicable_values = {
+        "buying": {"purchase", "both"},
+        "selling": {"sales", "both"},
+    }.get(template.template_type, set())
+    taxes = (
+        database.session.execute(
+            database.select(Tax).filter(Tax.is_active.is_(True), Tax.applies_to.in_(applicable_values)).order_by(Tax.name)
+        )
+        .scalars()
+        .all()
+    )
+    tax_labels = {tax.id: tax.name for tax in taxes}
+    referenced_tax_ids = {item.tax_id for item in items if item.tax_id}
+    if referenced_tax_ids:
+        referenced = database.session.execute(database.select(Tax).where(Tax.id.in_(referenced_tax_ids))).scalars().all()
+        tax_labels.update({tax.id: tax.name for tax in referenced if tax.id not in tax_labels})
+    return {"template": template, "items": items, "taxes": taxes, "tax_labels": tax_labels}
 
 
 @admin.route("/settings/tax-templates/<template_id>/items", methods=["GET", "POST"])
@@ -500,27 +661,56 @@ def items_plantilla_impuesto(template_id: str):
     if not template:
         abort(404)
     if request.method == "POST":
-        item = TaxTemplateItem(
-            tax_template_id=template.id,
-            tax_id=request.form.get("tax_id") or "",
-            sequence=int(request.form.get("sequence") or 10),
-            calculation_base=request.form.get("calculation_base") or "net_document",
-            behavior=request.form.get("behavior") or "additive",
-            is_inclusive=bool(request.form.get("is_inclusive")),
-        )
-        database.session.add(item)
-        database.session.commit()
-        flash(_("Linea de impuesto agregada correctamente."), "success")
-        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-    items = (
-        database.session.execute(
-            database.select(TaxTemplateItem).filter_by(tax_template_id=template.id).order_by(TaxTemplateItem.sequence)
-        )
-        .scalars()
-        .all()
+        return _create_tax_template_item_from_post(template)
+    return render_template("admin/tax_template_items.html", **_tax_template_item_context(template))
+
+
+def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:
+    """Reconstruye una regla fiscal con los valores enviados para el re-render."""
+    defaults = {
+        "name": "",
+        "company": "",
+        "concept": "",
+        "applies_to": "both",
+        "level": "transaction",
+        "tax_type": "tax",
+        "calculation_method": "percentage",
+        "rate": "0",
+        "amount": "0",
+        "base_mode": "goods",
+        "include_concepts": "",
+        "exclude_concepts": "",
+        "allowed_item_categories": "",
+        "sequence": "10",
+        "accounting_treatment": "separate_tax_account",
+        "recognition_event": "invoice",
+        "account_id": "",
+        "currency": "",
+        "country": "",
+        "valid_from": None,
+        "valid_to": None,
+        "allocation_method": "",
+    }
+    # #2017: `form.get(field, default)` conserva una cadena vacía enviada por
+    # el usuario; solo aplica el default cuando el campo no viene en el POST.
+    values = {field: form.get(field, default) for field, default in defaults.items()}
+    values.update(
+        {
+            field: form.get(field) is not None
+            for field in (
+                "affects_inventory",
+                "affects_cost",
+                "affects_document_total",
+                "affects_settlement",
+                "participates_in_next_base",
+                "is_active",
+            )
+        }
     )
-    taxes = database.session.execute(database.select(Tax).filter_by(is_active=True).order_by(Tax.name)).scalars().all()
-    return render_template("admin/tax_template_items.html", template=template, items=items, taxes=taxes)
+    return SimpleNamespace(
+        id=getattr(rule, "id", None),
+        **values,
+    )
 
 
 @admin.route("/settings/tax-rules", methods=["GET", "POST"])
@@ -538,11 +728,26 @@ def lista_reglas_fiscales():
         except TaxRuleServiceError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
+            editing_rule = _tax_rule_form_state(editing_rule, request.form)
         else:
             flash(_("Regla fiscal creada correctamente."), "success")
             return redirect(url_for("admin.lista_reglas_fiscales", edit=rule.id))
     rules = list_tax_rules()
     return render_template("admin/tax_rules.html", rules=rules, editing_rule=editing_rule)
+
+
+def _party_group_type_change_blocked(group: PartyGroup, submitted_type: str) -> bool:
+    """Indica si el cambio de tipo dejaría terceros incompatibles con el grupo."""
+    if submitted_type == group.group_type:
+        return False
+    if submitted_type == "customer":
+        incompatible = database.or_(Party.is_customer.is_(False), Party.is_supplier.is_(True))
+    else:
+        incompatible = database.or_(Party.is_supplier.is_(False), Party.is_customer.is_(True))
+    dependiente = database.session.execute(
+        database.select(Party.id).where(Party.party_group_id == group.id, incompatible)
+    ).first()
+    return dependiente is not None
 
 
 @admin.route("/settings/party-groups", methods=["GET", "POST"])
@@ -552,29 +757,86 @@ def lista_grupos_terceros():
     """Administra tipos globales de clientes y proveedores."""
     _require_system_admin()
     group_type = request.args.get("group_type") or request.form.get("group_type") or ""
-    if group_type not in ("customer", "supplier"):
+    if group_type not in _PARTY_GROUP_TYPES:
         group_type = ""
     if request.method == "POST":
-        group = PartyGroup(
-            group_type=request.form.get("group_type") or "customer",
-            name=request.form.get("name") or "",
-            description=request.form.get("description") or None,
-            is_active=request.form.get("is_active") is not None,
-        )
-        database.session.add(group)
-        try:
-            database.session.commit()
-        except IntegrityError:
-            database.session.rollback()
-            flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        submitted_type = request.form.get("group_type") or "customer"
+        if submitted_type not in _PARTY_GROUP_TYPES:
+            flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
         else:
-            flash(_("Tipo de tercero creado correctamente."), "success")
-            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+            group = PartyGroup(
+                group_type=submitted_type,
+                name=request.form.get("name") or "",
+                description=request.form.get("description") or None,
+                is_active=request.form.get("is_active") is not None,
+            )
+            database.session.add(group)
+            try:
+                database.session.commit()
+            except IntegrityError:
+                database.session.rollback()
+                flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+            else:
+                flash(_("Tipo de tercero creado correctamente."), "success")
+                return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
     query = database.select(PartyGroup)
     if group_type:
         query = query.filter(PartyGroup.group_type == group_type)
     groups = database.session.execute(query.order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
     return render_template("admin/party_groups.html", groups=groups, group_type=group_type)
+
+
+def _party_group_update_error(group: PartyGroup, submitted_type: str) -> str | None:
+    """Valida el tipo solicitado para un grupo de terceros."""
+    if submitted_type not in _PARTY_GROUP_TYPES:
+        return _("El tipo de grupo de terceros debe ser cliente o proveedor.")
+    if _party_group_type_change_blocked(group, submitted_type):
+        # #1724: el FK conservar? el grupo y dejar? terceros con un rol
+        # incompatible; se exige reasignarlos antes de cambiar el tipo.
+        return _(
+            "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
+            "incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
+        )
+    return None
+
+
+def _apply_party_group_form(group: PartyGroup, submitted_type: str) -> None:
+    """Aplica los campos editables del formulario al grupo de terceros."""
+    group.group_type = submitted_type
+    group.name = request.form.get("name") or ""
+    group.description = request.form.get("description") or None
+    group.is_active = request.form.get("is_active") is not None
+
+
+def _update_party_group_from_post(group: PartyGroup) -> str | None:
+    """Procesa el POST de edición y devuelve el tipo al que redirigir, si aplica."""
+    from cacao_accounting.party_management import locked_party_group
+
+    try:
+        locked_group = locked_party_group(group.id)
+        if not locked_group:
+            abort(404)
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return None
+
+    submitted_type = request.form.get("group_type") or locked_group.group_type
+    if not submitted_type:
+        return None
+    error = _party_group_update_error(locked_group, submitted_type)
+    if error:
+        flash(error, "danger")
+        return None
+    _apply_party_group_form(locked_group, submitted_type)
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        return None
+    flash(_("Tipo de tercero actualizado correctamente."), "success")
+    return locked_group.group_type
 
 
 @admin.route("/settings/party-groups/<group_id>/edit", methods=["GET", "POST"])
@@ -587,18 +849,11 @@ def editar_grupo_tercero(group_id: str):
     if not group:
         abort(404)
     if request.method == "POST":
-        group.group_type = request.form.get("group_type") or group.group_type
-        group.name = request.form.get("name") or ""
-        group.description = request.form.get("description") or None
-        group.is_active = request.form.get("is_active") is not None
-        try:
-            database.session.commit()
-        except IntegrityError:
-            database.session.rollback()
-            flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
-        else:
-            flash(_("Tipo de tercero actualizado correctamente."), "success")
-            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+        redirect_type = _update_party_group_from_post(group)
+        if redirect_type is not None:
+            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=redirect_type))
+        group = database.session.get(PartyGroup, group_id) or group
+
     groups = (
         database.session.execute(database.select(PartyGroup).order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
     )
@@ -629,7 +884,7 @@ def _create_dimension_type_from_request() -> Any:
     if not name:
         flash(_("El nombre del tipo de dimensión es obligatorio."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
-    dimension_type = DimensionType(name=name, is_active=bool(request.form.get("is_active", "1")))
+    dimension_type = DimensionType(name=name, is_active=request.form.get("is_active") is not None)
     database.session.add(dimension_type)
     try:
         database.session.commit()
@@ -642,13 +897,22 @@ def _create_dimension_type_from_request() -> Any:
 
 
 def _add_dimension_value_from_request() -> Any:
-    """Agrega un valor de dimensión y devuelve la redirección de resultado."""
-    dimension_type_id = request.form.get("dimension_type_id") or ""
+    """Agrega un valor de dimensi?n y devuelve la redirecci?n de resultado."""
+    dimension_type_id = (request.form.get("dimension_type_id") or "").strip()
     value = (request.form.get("value") or "").strip()
     company = (request.form.get("company") or "").strip() or None
     if not dimension_type_id or not value:
         flash(_("Seleccione un tipo de dimensión y proporcione un valor."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    dimension_type = database.session.get(DimensionType, dimension_type_id)
+    if not dimension_type or not dimension_type.is_active:
+        flash(_("El tipo de dimensión seleccionado no es válido."), "danger")
+        return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    if company:
+        entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
+        if not entity or not bool(getattr(entity, "enabled", False)):
+            flash(_("La compañía seleccionada no es válida."), "danger")
+            return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     database.session.add(
         DimensionValue(
             dimension_type_id=dimension_type_id,
@@ -657,7 +921,12 @@ def _add_dimension_value_from_request() -> Any:
             is_active=True,
         )
     )
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se pudo agregar el valor de dimensión. Verifique las referencias seleccionadas."), "danger")
+        return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     flash(_("Valor de dimensión agregado correctamente."), "success")
     return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
 
@@ -736,6 +1005,7 @@ def editar_regla_fiscal(rule_id: str):
     if rule is None:
         abort(404)
     assert rule is not None
+    form_state = None
     if request.method == "POST":
         try:
             update_tax_rule(rule, request.form)
@@ -743,26 +1013,27 @@ def editar_regla_fiscal(rule_id: str):
         except TaxRuleServiceError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
+            form_state = _tax_rule_form_state(rule, request.form)
         else:
             flash(_("Regla fiscal actualizada correctamente."), "success")
             return redirect(url_for("admin.editar_regla_fiscal", rule_id=rule.id))
     rules = list_tax_rules()
-    return render_template("admin/tax_rules.html", rules=rules, editing_rule=rule)
+    return render_template("admin/tax_rules.html", rules=rules, editing_rule=form_state or rule)
 
 
-@admin.route("/settings/tax-rules/<rule_id>/delete", methods=["POST"])
+@admin.route("/settings/tax-rules/<rule_id>/deactivate", methods=["POST"])
 @login_required
 @modulo_activo("admin")
-def eliminar_regla_fiscal(rule_id: str):
-    """Elimina una regla fiscal."""
+def desactivar_regla_fiscal(rule_id: str):
+    """Desactiva una regla fiscal sin borrar su evidencia histórica."""
     _require_system_admin()
     rule = get_tax_rule(rule_id)
     if rule is None:
         abort(404)
     assert rule is not None
-    delete_tax_rule(rule)
+    deactivate_tax_rule(rule)
     database.session.commit()
-    flash(_("Regla fiscal eliminada correctamente."), "success")
+    flash(_("Regla fiscal desactivada correctamente."), "success")
     return redirect(url_for("admin.lista_reglas_fiscales"))
 
 
@@ -824,16 +1095,31 @@ def lista_precios():
     """Administra listas de precios."""
     _require_price_list_editor()
     if request.method == "POST":
+        company = request.form.get("company") or None
+        currency = request.form.get("currency") or None
+        if error := _price_list_reference_error(company, currency):
+            flash(error, "danger")
+            return redirect(url_for("admin.lista_precios"))
         price_list = PriceList(
             name=request.form.get("name") or "",
-            currency=request.form.get("currency") or None,
-            company=request.form.get("company") or None,
+            currency=currency,
+            company=company,
             is_buying=bool(request.form.get("is_buying")),
-            is_selling=bool(request.form.get("is_selling", "1")),
+            is_selling=request.form.get("is_selling") is not None,
             is_default=bool(request.form.get("is_default")),
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
         )
         _require_price_list_company_access(price_list)
+        if price_list.is_default and not price_list.is_active:
+            flash(_("Una lista inactiva no puede ser predeterminada."), "danger")
+            return redirect(url_for("admin.lista_precios"))
+        if price_list.is_default and price_list.is_selling:
+            from cacao_accounting.default_scope import lock_default_scope
+
+            # Serializa la sustitución de la lista predeterminada por compañía.
+            # Sin el lock, dos altas concurrentes pueden desmarcarse entre sí
+            # sobre snapshots distintos y dejar dos predeterminadas activas.
+            lock_default_scope("price_list_default", company, "selling")
         database.session.add(price_list)
         database.session.flush()
         if price_list.is_default and price_list.is_selling:
@@ -844,7 +1130,12 @@ def lista_precios():
             )
             for item in database.session.execute(
                 database.select(Item).where(
-                    Item.is_active.is_(True), Item.is_sale_item.is_(True), Item.standard_rate.is_not(None)
+                    Item.is_active.is_(True),
+                    Item.is_sale_item.is_(True),
+                    Item.standard_rate.is_not(None),
+                    # Una tarifa legacy negativa no puede convertirse en precio
+                    # utilizable de la lista (#1741).
+                    Item.standard_rate >= 0,
                 )
             ).scalars():
                 database.session.add(
@@ -861,9 +1152,65 @@ def lista_precios():
     price_lists = [
         price_list
         for price_list in database.session.execute(database.select(PriceList).order_by(PriceList.name)).scalars().all()
-        if _can_manage_price_list(price_list)
+        if _can_access_price_list_company(price_list)
     ]
     return render_template("admin/price_lists.html", price_lists=price_lists, titulo=_("Listas de Precios"))
+
+
+def _validated_item_price_references(item_code: str, uom: str | None) -> str | None:
+    """Devuelve un mensaje si el artículo o la unidad de medida no están disponibles."""
+    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        return _("El artículo seleccionado no existe.")
+    if not item.is_active:
+        return _("El artículo seleccionado no está activo.")
+    if not uom:
+        return None
+    unidad = database.session.execute(database.select(UOM).filter_by(code=uom)).scalar_one_or_none()
+    if unidad is None:
+        return _("La unidad de medida seleccionada no existe.")
+    if not unidad.is_active:
+        return _("La unidad de medida seleccionada no está activa.")
+    return None
+
+
+def _item_price_criteria_match(candidate: Any, min_qty: Any, valid_from: Any, valid_upto: Any) -> bool:
+    """Compara criterios efectivos con igualdad exacta para valores NULL."""
+    return candidate.min_qty == min_qty and candidate.valid_from == valid_from and candidate.valid_upto == valid_upto
+
+
+def _lock_item_price_list(price_list_id: str) -> None:
+    """Serializa la validación y escritura de tarifas de una misma lista."""
+    if database.session.get_bind().dialect.name == "sqlite":
+        connection = database.session.connection()
+        raw_connection = getattr(connection.connection, "driver_connection", None)
+        if raw_connection is not None and not raw_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+    database.session.execute(database.select(PriceList.id).filter_by(id=price_list_id).with_for_update()).scalar_one_or_none()
+
+
+def _duplicate_item_price_error(
+    price_list_id: str,
+    item_code: str,
+    uom: str | None,
+    min_qty: Any,
+    valid_from: Any,
+    valid_upto: Any,
+    *,
+    exclude_id: str | None = None,
+) -> str | None:
+    """Rechaza tarifas contradictorias con criterios idénticos."""
+    query = database.select(ItemPrice).filter_by(price_list_id=price_list_id, item_code=item_code).with_for_update()
+    if uom is None:
+        query = query.where(ItemPrice.uom.is_(None))
+    else:
+        query = query.filter_by(uom=uom)
+    if exclude_id:
+        query = query.where(ItemPrice.id != exclude_id)
+    for candidate in database.session.execute(query).scalars().all():
+        if _item_price_criteria_match(candidate, min_qty, valid_from, valid_upto):
+            return _("Ya existe una tarifa con los mismos criterios para este artículo.")
+    return None
 
 
 @admin.route("/settings/item-prices", methods=["GET", "POST"])
@@ -877,21 +1224,49 @@ def precios_item():
         if not price_list:
             abort(404)
         _require_price_list_company_access(price_list)
-        price_value = _decimal_form("price")
+        try:
+            price_value = _decimal_form("price", non_negative=True, max_fractional_digits=4)
+            min_qty = _decimal_form("min_qty", "0")
+            valid_from = _date_form("valid_from")
+            valid_upto = _date_form("valid_upto")
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.precios_item"))
         if not price_value.is_finite():
             flash(_("El precio debe ser finito."), "danger")
             return redirect(url_for("admin.precios_item"))
+        item_code = request.form.get("item_code") or ""
+        uom = request.form.get("uom") or None
+        reference_error = _validated_item_price_references(item_code, uom)
+        if reference_error:
+            flash(reference_error, "danger")
+            return redirect(url_for("admin.precios_item"))
+        # SQLite reserva el turno de escritura; PostgreSQL/MySQL bloquean la lista.
+        # La consulta de duplicados es corriente para releer tras adquirir el lock.
+        _lock_item_price_list(price_list.id)
+        duplicate_error = _duplicate_item_price_error(
+            request.form.get("price_list_id") or "", item_code, uom, min_qty, valid_from, valid_upto
+        )
+        if duplicate_error:
+            database.session.rollback()
+            flash(duplicate_error, "danger")
+            return redirect(url_for("admin.precios_item"))
         item_price = ItemPrice(
-            item_code=request.form.get("item_code") or "",
+            item_code=item_code,
             price_list_id=request.form.get("price_list_id") or "",
-            uom=request.form.get("uom") or None,
+            uom=uom,
             price=price_value,
-            min_qty=_decimal_form("min_qty", "0"),
-            valid_from=_date_form("valid_from"),
-            valid_upto=_date_form("valid_upto"),
+            min_qty=min_qty,
+            valid_from=valid_from,
+            valid_upto=valid_upto,
         )
         database.session.add(item_price)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe una tarifa con los mismos criterios para este artículo."), "danger")
+            return redirect(url_for("admin.precios_item"))
         flash(_("Precio de item creado correctamente."), "success")
         return redirect(url_for("admin.precios_item"))
     price_lists = [
@@ -901,7 +1276,7 @@ def precios_item():
         )
         .scalars()
         .all()
-        if _can_manage_price_list(price_list)
+        if _can_access_price_list_company(price_list)
     ]
     allowed_list_ids = {price_list.id for price_list in price_lists}
     item_prices = [
@@ -927,17 +1302,127 @@ def actualizar_precio_item(item_price_id: str):
     if not price_list:
         abort(404)
     _require_price_list_company_access(price_list)
-    price_value = _decimal_form("price")
+    # La fila se recarga bajo lock: los formularios abiertos antes de otro cambio
+    # no deben reescribir precio ni criterios con valores desfasados.
+    database.session.expire(item_price)
+    item_price = database.session.execute(
+        database.select(ItemPrice).filter_by(id=item_price_id).with_for_update()
+    ).scalar_one_or_none()
+    if item_price is None:
+        abort(404)
+    reference_error = _validated_item_price_references(item_price.item_code, item_price.uom)
+    if reference_error:
+        flash(reference_error, "danger")
+        return redirect(url_for("admin.precios_item"))
+    try:
+        price_value = _decimal_form("price", non_negative=True, max_fractional_digits=4)
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+        return redirect(url_for("admin.precios_item"))
     if not price_value.is_finite():
         flash(_("El precio debe ser finito."), "danger")
         return redirect(url_for("admin.precios_item"))
-    item_price.price = price_value
-    item_price.min_qty = _decimal_form("min_qty", "0")
-    item_price.valid_from = _date_form("valid_from")
-    item_price.valid_upto = _date_form("valid_upto")
-    database.session.commit()
+    expected_price = request.form.get("expected_price")
+    if not expected_price or not expected_price.strip():
+        flash(_("La versión del precio enviada no es válida."), "danger")
+        return redirect(url_for("admin.precios_item"))
+    try:
+        expected = Decimal(expected_price)
+    except (InvalidOperation, ValueError):
+        flash(_("La versión del precio enviada no es válida."), "danger")
+        return redirect(url_for("admin.precios_item"))
+    if not expected.is_finite() or expected != item_price.price:
+        flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
+        return redirect(url_for("admin.precios_item"))
+    _lock_item_price_list(item_price.price_list_id)
+    duplicate_error = _duplicate_item_price_error(
+        item_price.price_list_id,
+        item_price.item_code,
+        item_price.uom,
+        item_price.min_qty,
+        item_price.valid_from,
+        item_price.valid_upto,
+        exclude_id=item_price.id,
+    )
+    if duplicate_error:
+        database.session.rollback()
+        flash(duplicate_error, "danger")
+        return redirect(url_for("admin.precios_item"))
+    # Transición atómica por versión: en SQLite FOR UPDATE no bloquea la fila y
+    # dos POST con el mismo expected_price podrían perder una actualización.
+    # MySQL no informa filas encontradas cuando el UPDATE no cambia el valor,
+    # así que guardar el mismo precio no debe interpretarse como conflicto.
+    if price_value != expected:
+        updated = database.session.execute(
+            database.update(ItemPrice)
+            .where(ItemPrice.id == item_price.id, ItemPrice.price == expected)
+            .values(price=price_value)
+        )
+        if getattr(updated, "rowcount", 0) != 1:
+            database.session.rollback()
+            flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
+            return redirect(url_for("admin.precios_item"))
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("Ya existe una tarifa con los mismos criterios para este artículo."), "danger")
+        return redirect(url_for("admin.precios_item"))
     flash(_("Precio de item actualizado correctamente."), "success")
     return redirect(url_for("admin.precios_item"))
+
+
+def _matching_config_form_is_complete(model: str) -> bool:
+    """Valida en servidor todos los campos obligatorios del formulario de matching."""
+    if request.form.get("config_form") != "complete":
+        return False
+    obligatorios = {
+        "matching_type",
+        "price_tolerance_type",
+        "price_tolerance_value",
+    }
+    if model == "purchase":
+        obligatorios.update({"qty_tolerance_type", "qty_tolerance_value"})
+        booleanos = {
+            "require_purchase_order",
+            "bridge_account_required",
+            "auto_reconcile",
+            "allow_price_difference",
+            "apply_advances_automatically",
+        }
+    else:
+        booleanos = {"require_sales_order", "allow_price_difference"}
+    if any(not str(request.form.get(campo) or "").strip() for campo in obligatorios | booleanos):
+        return False
+    # La casilla omitida se representa con ``_no``; así un False intencional
+    # es indistinguible de un campo no enviado y el POST se rechaza.
+    return all(request.form.get(campo) in {"on", "_no"} for campo in booleanos)
+
+
+def _save_purchase_matching_config(company: str):
+    """Crea o actualiza la configuración de matching de compras desde el formulario."""
+    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+    from cacao_accounting.matching_config_service import update_matching_config
+
+    config = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company=company)).scalar_one_or_none()
+    if config is None:
+        seed_matching_config_for_company(company)
+        database.session.flush()
+    return update_matching_config(
+        "purchase",
+        company,
+        {
+            "matching_type": request.form.get("matching_type") or "3-way",
+            "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
+            "price_tolerance_value": _decimal_form("price_tolerance_value"),
+            "qty_tolerance_type": request.form.get("qty_tolerance_type") or "percentage",
+            "qty_tolerance_value": _decimal_form("qty_tolerance_value"),
+            "require_purchase_order": request.form.get("require_purchase_order") == "on",
+            "bridge_account_required": request.form.get("bridge_account_required") == "on",
+            "auto_reconcile": request.form.get("auto_reconcile") == "on",
+            "allow_price_difference": request.form.get("allow_price_difference") == "on",
+        },
+    )
 
 
 @admin.route("/settings/purchase-reconciliation", methods=["GET", "POST"])
@@ -947,45 +1432,38 @@ def config_conciliacion_compras():
     """Administra la configuracion de conciliacion de compras por compania."""
     _require_system_admin()
     from cacao_accounting.database import Entity
-    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.args.get("company") or ""
+    selected_config = None
+    selected_advances = False
+    if selected_company:
+        selected_config = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company=selected_company)
+        ).scalar_one_or_none()
+        cuenta_default = get_company_default_accounts(selected_company)
+        selected_advances = bool(cuenta_default.apply_advances_automatically) if cuenta_default else False
 
     if request.method == "POST":
         company = request.form.get("company") or ""
         if not company:
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_compras"))
+        if not _matching_config_form_is_complete("purchase"):
+            flash(_("El formulario de configuración de matching está incompleto; no se guardaron cambios."), "danger")
+            return redirect(url_for("admin.config_conciliacion_compras", company=company))
 
-        config = database.session.execute(
-            database.select(PurchaseMatchingConfig).filter_by(company=company)
-        ).scalar_one_or_none()
-        if config is None:
-            config = seed_matching_config_for_company(company)
-            database.session.flush()
-
-        from cacao_accounting.matching_config_service import update_matching_config
-
-        pending = update_matching_config(
-            "purchase",
-            company,
-            {
-                "matching_type": request.form.get("matching_type") or "3-way",
-                "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
-                "price_tolerance_value": _decimal_form("price_tolerance_value"),
-                "qty_tolerance_type": request.form.get("qty_tolerance_type") or "percentage",
-                "qty_tolerance_value": _decimal_form("qty_tolerance_value"),
-                "require_purchase_order": bool(request.form.get("require_purchase_order")),
-                "bridge_account_required": bool(request.form.get("bridge_account_required")),
-                "auto_reconcile": bool(request.form.get("auto_reconcile")),
-                "allow_price_difference": bool(request.form.get("allow_price_difference")),
-            },
-        )
+        try:
+            pending = _save_purchase_matching_config(company)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.config_conciliacion_compras", company=company))
         default_accounts = get_company_default_accounts(company)
         if default_accounts is None:
             default_accounts = CompanyDefaultAccount(company=company)
             database.session.add(default_accounts)
-        default_accounts.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
+        default_accounts.apply_advances_automatically = request.form.get("apply_advances_automatically") == "on"
         database.session.commit()
         if isinstance(pending, ApprovalRequest):
             flash(
@@ -994,7 +1472,7 @@ def config_conciliacion_compras():
             )
         else:
             flash(_("Configuración de conciliación de compras guardada correctamente."), "success")
-        return redirect(url_for("admin.config_conciliacion_compras"))
+        return redirect(url_for("admin.config_conciliacion_compras", company=company))
 
     configs = (
         database.session.execute(database.select(PurchaseMatchingConfig).order_by(PurchaseMatchingConfig.company))
@@ -1013,6 +1491,9 @@ def config_conciliacion_compras():
         configs=configs,
         companies=companies,
         advance_settings=advance_settings,
+        selected_company=selected_company,
+        selected_config=selected_config,
+        selected_advances=selected_advances,
         titulo=_("Configuración de Conciliación de Compras"),
     )
 
@@ -1026,6 +1507,10 @@ def config_abastecimiento_compras():
     if request.method == "POST":
         try:
             minimum = int(request.form.get("minimum_offers") or "2")
+        except (TypeError, ValueError):
+            flash(_("El mínimo de ofertas debe ser un número entero."), "danger")
+            return redirect(url_for("admin.config_abastecimiento_compras"))
+        try:
             set_purchase_sourcing_config(bool(request.form.get("require_comparison")), minimum)
             database.session.commit()
             flash(_("Configuración de abastecimiento guardada correctamente."), "success")
@@ -1048,12 +1533,21 @@ def config_conciliacion_ventas():
     _require_system_admin()
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.args.get("company") or ""
+    selected_config = None
+    if selected_company:
+        selected_config = database.session.execute(
+            database.select(SalesMatchingConfig).filter_by(company=selected_company)
+        ).scalar_one_or_none()
 
     if request.method == "POST":
         company = request.form.get("company") or ""
         if not company:
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_ventas"))
+        if not _matching_config_form_is_complete("sales"):
+            flash(_("El formulario de configuración de matching está incompleto; no se guardaron cambios."), "danger")
+            return redirect(url_for("admin.config_conciliacion_ventas", company=company))
 
         config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company=company)).scalar_one_or_none()
         if config is None:
@@ -1063,17 +1557,22 @@ def config_conciliacion_ventas():
 
         from cacao_accounting.matching_config_service import update_matching_config
 
-        pending = update_matching_config(
-            "sales",
-            company,
-            {
-                "matching_type": request.form.get("matching_type") or "3-way",
-                "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
-                "price_tolerance_value": _decimal_form("price_tolerance_value"),
-                "require_sales_order": bool(request.form.get("require_sales_order")),
-                "allow_price_difference": bool(request.form.get("allow_price_difference")),
-            },
-        )
+        try:
+            pending = update_matching_config(
+                "sales",
+                company,
+                {
+                    "matching_type": request.form.get("matching_type") or "3-way",
+                    "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
+                    "price_tolerance_value": _decimal_form("price_tolerance_value"),
+                    "require_sales_order": request.form.get("require_sales_order") == "on",
+                    "allow_price_difference": request.form.get("allow_price_difference") == "on",
+                },
+            )
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.config_conciliacion_ventas", company=company))
         database.session.commit()
         if isinstance(pending, ApprovalRequest):
             flash(
@@ -1082,7 +1581,7 @@ def config_conciliacion_ventas():
             )
         else:
             flash(_("Configuración de conciliación de ventas guardada correctamente."), "success")
-        return redirect(url_for("admin.config_conciliacion_ventas"))
+        return redirect(url_for("admin.config_conciliacion_ventas", company=company))
 
     configs = (
         database.session.execute(database.select(SalesMatchingConfig).order_by(SalesMatchingConfig.company)).scalars().all()
@@ -1092,6 +1591,8 @@ def config_conciliacion_ventas():
         "admin/sales_matching_config.html",
         configs=configs,
         companies=companies,
+        selected_company=selected_company,
+        selected_config=selected_config,
         titulo=_("Configuración de Conciliación de Ventas"),
     )
 
@@ -1171,21 +1672,27 @@ def cuentas_predeterminadas():
             return redirect(url_for(CUENTAS_PREDETERMINADAS))
 
         if action == "delete":
-            config = get_company_default_accounts(selected_company)
-            if config:
-                database.session.delete(config)
-                database.session.commit()
-                flash(_("Configuración de cuentas predeterminadas eliminada correctamente."), "success")
-            return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
+            abort(400)
 
         values = {field: request.form.get(field) or None for field in DEFAULT_ACCOUNT_FIELDS}
         try:
-            config = upsert_company_default_accounts(selected_company, values)
+            previous_config = get_company_default_accounts(selected_company)
+            before = (
+                {field: getattr(previous_config, field) for field in (*DEFAULT_ACCOUNT_FIELDS, "apply_advances_automatically")}
+                if previous_config is not None
+                else None
+            )
+            # Do not flush a partially updated configuration between account
+            # lookups: the sensitive-model audit records one complete change.
+            with database.session.no_autoflush:
+                config = upsert_company_default_accounts(selected_company, values)
+                config.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
+            database.session.flush()
+            _audit_default_accounts_without_internal_controls(config, before)
         except DefaultAccountError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
             return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
-        config.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
         database.session.commit()
         flash(_("Cuentas predeterminadas guardadas correctamente."), "success")
         return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
@@ -1196,17 +1703,59 @@ def cuentas_predeterminadas():
         .scalars()
         .all()
     )
+    configured_counts = {
+        cfg.company: sum(1 for field in DEFAULT_ACCOUNT_FIELDS if getattr(cfg, field, None)) for cfg in configs
+    }
 
     return render_template(
         "admin/default_accounts.html",
         companies=companies,
         configs=configs,
+        configured_counts=configured_counts,
         definitions=DEFAULT_ACCOUNT_DEFINITIONS,
         rows=default_account_rows(config),
         selected_company=selected_company,
         config=config,
         titulo=_("Cuentas por defecto"),
     )
+
+
+def _audit_default_accounts_without_internal_controls(config: CompanyDefaultAccount, before: dict[str, Any] | None) -> None:
+    """Record the configuration once when automatic sensitive auditing is disabled."""
+    from cacao_accounting.audit_trail_service import log_create, log_update
+    from cacao_accounting.internal_control_service import _enabled
+
+    if _enabled():
+        return
+    after = {field: getattr(config, field) for field in (*DEFAULT_ACCOUNT_FIELDS, "apply_advances_automatically")}
+    if before is None:
+        log_create(config)
+    elif before != after:
+        log_update(config, before, after)
+
+
+def _handle_user_toggle(user_id: str):
+    """Procesa el cambio de estado de un usuario preservando al último administrador."""
+    if not _acquire_last_admin_lock(user_id):
+        flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    usuario = _obtener_usuario(user_id)
+    if usuario is None:
+        database.session.rollback()
+        flash(str(USUARIO_NO_ENCONTRADO), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    nuevo_estado = not bool(usuario.active)
+    if _would_leave_no_admin(usuario, active=nuevo_estado, classification=usuario.classification):
+        database.session.rollback()
+        flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    _set_user_active(usuario, nuevo_estado)
+    if not _commit_last_admin_transition():
+        flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    estado = _("habilitado") if usuario.active else _("deshabilitado")
+    flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")
+    return redirect(url_for(LISTA_USUARIOS))
 
 
 @admin.route("/settings/users", methods=["GET", "POST"])
@@ -1218,17 +1767,13 @@ def lista_usuarios():
     if request.method == "POST":
         user_id = request.form.get("user_id")
         action = request.form.get("action")
-        usuario = _obtener_usuario(user_id) if user_id else None
 
+        if action == "toggle" and user_id:
+            return _handle_user_toggle(user_id)
+
+        usuario = _obtener_usuario(user_id) if user_id else None
         if usuario is None:
             flash(str(USUARIO_NO_ENCONTRADO), "danger")
-            return redirect(url_for(LISTA_USUARIOS))
-
-        if action == "toggle":
-            usuario.active = not bool(usuario.active)
-            database.session.commit()
-            estado = _("habilitado") if usuario.active else _("deshabilitado")
-            flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")
             return redirect(url_for(LISTA_USUARIOS))
 
     usuarios = database.session.execute(database.select(User).order_by(User.user)).scalars().all()
@@ -1261,15 +1806,22 @@ def crear_usuario():
     if form.validate_on_submit() and _validate_portal_fields(form) and _validar_creacion_usuario(form):
         nuevo_usuario = _crear_usuario_desde_form(form)
         database.session.add(nuevo_usuario)
-        database.session.commit()
-        flash(_("Usuario creado correctamente."), "success")
-        return redirect(url_for(LISTA_USUARIOS))
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            if not _user_email_is_taken(form.e_mail.data):
+                raise
+            form.e_mail.errors.append(_("El correo electrónico ya está en uso."))
+        else:
+            flash(_("Usuario creado correctamente."), "success")
+            return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",
         form=form,
         titulo=_("Crear Usuario"),
-        accion="Nuevo Usuario",
+        accion=_("Nuevo Usuario"),
         tiene_clave=True,
     )
 
@@ -1287,16 +1839,33 @@ def editar_usuario(user_id: str):
 
     form = UserEditForm(obj=usuario)
     _populate_portal_choices(form)
-    if form.validate_on_submit() and _validate_portal_fields(form) and _apply_user_edit(form, usuario):
-        database.session.commit()
-        flash(_("Usuario actualizado correctamente."), "success")
-        return redirect(url_for(LISTA_USUARIOS))
+    if form.validate_on_submit() and _validate_portal_fields(form):
+        if not _acquire_last_admin_lock(user_id):
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
+        database.session.refresh(usuario)
+        email_changed = normalize_user_email(form.e_mail.data) != normalize_user_email(usuario.e_mail)
+        if _apply_user_edit(form, usuario):
+            try:
+                committed = _commit_last_admin_transition()
+            except IntegrityError:
+                database.session.rollback()
+                if not email_changed or not _user_email_is_taken(form.e_mail.data, exclude_user_id=usuario.id):
+                    raise
+                form.e_mail.errors.append(_("El correo electrónico ya está en uso."))
+            else:
+                if not committed:
+                    flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+                    return redirect(url_for(LISTA_USUARIOS))
+                flash(_("Usuario actualizado correctamente."), "success")
+                return redirect(url_for(LISTA_USUARIOS))
+        database.session.rollback()
 
     return render_template(
         "admin/usuario_form.html",
         form=form,
         titulo=_("Editar Usuario"),
-        accion="Actualizar Usuario",
+        accion=_("Actualizar Usuario"),
         usuario=usuario,
         tiene_clave=False,
     )
@@ -1325,14 +1894,31 @@ def usuario_roles(user_id: str):
         form.roles.data = [rol.id for rol in _obtener_roles_por_usuario(usuario.id)]
 
     if form.validate_on_submit():
-        seleccionado = [rol_id for rol_id in form.roles.data if rol_id]
-        for assignment in database.session.execute(
-            database.select(RolesUser).where(RolesUser.user_id == usuario.id)
-        ).scalars():
-            database.session.delete(assignment)
-        for rol_id in seleccionado:
-            database.session.add(RolesUser(user_id=usuario.id, role_id=rol_id, active=True))
-        database.session.commit()
+        seleccionado = {rol_id for rol_id in (form.roles.data or []) if rol_id}
+        if not _acquire_last_admin_lock(usuario.id):
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
+        database.session.refresh(usuario)
+        if _would_leave_no_admin(
+            usuario,
+            active=bool(usuario.active),
+            classification=usuario.classification,
+            role_ids=seleccionado,
+        ):
+            database.session.rollback()
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
+        from cacao_accounting.auth.roles import replace_user_roles
+
+        try:
+            replace_user_roles(usuario.id, seleccionado)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
+        if not _commit_last_admin_transition():
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
         flash(_("Roles actualizados correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
 
@@ -1376,14 +1962,12 @@ def usuario_companias(user_id: str):
         )
     if form.validate_on_submit():
         selected = set(form.companies.data or [])
-        for assignment in database.session.execute(
-            database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == usuario.id)
-        ).scalars():
-            database.session.delete(assignment)
-        database.session.add_all(
-            [UserCompanyAccess(user_id=usuario.id, company_code=company_code) for company_code in selected]
-        )
-        database.session.commit()
+        try:
+            replace_user_company_access(usuario.id, selected)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+            return render_template("admin/usuario_companias.html", form=form, usuario=usuario)
         flash(_("Compañías actualizadas correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
     return render_template("admin/usuario_companias.html", form=form, usuario=usuario)
@@ -1404,10 +1988,11 @@ def usuario_password(user_id: str):
     if form.validate_on_submit():
         if not helpers.validar_clave_segura(form.password.data):
             form.password.errors.append(
-                "Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos."
+                _("Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos.")
             )
         else:
             usuario.password = proteger_passwd(form.password.data)
+            helpers.revocar_credenciales_usuario(usuario)
             database.session.commit()
             flash(_("Contraseña actualizada correctamente."), "success")
             return redirect(url_for(LISTA_USUARIOS))
@@ -1439,7 +2024,7 @@ def crear_rol():
     if form.validate_on_submit():
         existe_rol = database.session.execute(database.select(Roles).filter_by(name=form.name.data)).scalar_one_or_none()
         if existe_rol is not None:
-            form.name.errors.append("El nombre del rol ya está en uso.")
+            form.name.errors.append(_("El nombre del rol ya está en uso."))
         else:
             nuevo_rol = Roles(name=form.name.data, note=form.note.data or "")
             database.session.add(nuevo_rol)
@@ -1451,7 +2036,7 @@ def crear_rol():
         "admin/rol_form.html",
         form=form,
         titulo=_("Crear Rol"),
-        accion="Guardar rol",
+        accion=_("Guardar rol"),
     )
 
 
@@ -1472,7 +2057,7 @@ def editar_rol(role_id: str):
             database.select(Roles).filter(Roles.name == form.name.data).filter(Roles.id != rol.id)
         ).scalar_one_or_none()
         if existe_rol is not None:
-            form.name.errors.append("El nombre del rol ya está en uso.")
+            form.name.errors.append(_("El nombre del rol ya está en uso."))
         else:
             rol.name = form.name.data
             rol.note = form.note.data or ""
@@ -1484,27 +2069,27 @@ def editar_rol(role_id: str):
         "admin/rol_form.html",
         form=form,
         titulo=_("Editar Rol"),
-        accion="Actualizar rol",
+        accion=_("Actualizar rol"),
         rol=rol,
     )
 
 
 _PERMISOS_ACCIONES = [
-    ("access", "Acceso"),
-    ("update", "Actualizar"),
-    ("set_null", "Anular"),
-    ("approve", "Autorizar"),
-    ("bi", "BI"),
-    ("close", "Cerrar"),
-    ("setup", "Configurar"),
-    ("view", "Consultar"),
-    ("create", "Crear"),
-    ("edit", "Editar"),
-    ("delete", "Eliminar"),
-    ("import_", "Importar"),
-    ("report", "Reportes"),
-    ("request", "Solicitar"),
-    ("validate", "Validar"),
+    ("access", _l("Acceso")),
+    ("update", _l("Actualizar")),
+    ("set_null", _l("Anular")),
+    ("approve", _l("Autorizar")),
+    ("bi", _l("BI")),
+    ("close", _l("Cerrar")),
+    ("setup", _l("Configurar")),
+    ("view", _l("Consultar")),
+    ("create", _l("Crear")),
+    ("edit", _l("Editar")),
+    ("delete", _l("Eliminar")),
+    ("import_", _l("Importar")),
+    ("report", _l("Reportes")),
+    ("request", _l("Solicitar")),
+    ("validate", _l("Validar")),
 ]
 
 
@@ -1527,7 +2112,7 @@ def _save_rol_permisos(role_id, modulos, acciones, rangos_existentes) -> bool:
     ranks = {modulo.id: request.form.get(f"rank_{modulo.id}", "") for modulo in modulos}
     if any(value not in {"", "1", "2", "3"} for value in ranks.values()):
         abort(400)
-    for row in _obtener_permisos_por_rol(role_id):
+    for row in _obtener_permisos_por_rol(role_id, for_update=True):
         database.session.delete(row)
     for modulo in modulos:
         permiso_kwargs = _rol_permiso_kwargs(role_id, modulo, acciones, ranks, rangos_existentes)
@@ -1544,19 +2129,24 @@ def _save_rol_permisos(role_id, modulos, acciones, rangos_existentes) -> bool:
 def rol_permisos(role_id: str):
     """Asigna permisos a un rol por módulo."""
     _require_system_admin()
-    rol = _obtener_rol(role_id)
+    # El bloqueo precede a la lectura de RolesAccess para que cada reemplazo
+    # parta de la matriz confirmada por el reemplazo anterior.
+    rol = _obtener_rol(role_id, for_update=request.method == "POST")
     if rol is None:
         flash(_("Rol no encontrado."), "danger")
         return redirect(url_for(LISTA_ROLES))
 
     modulos = _obtener_modulos_disponibles()
     acciones = _PERMISOS_ACCIONES
+    reemplazando_permisos = request.method == "POST"
     permisos_existentes = {
         perm.module_id: {accion: getattr(perm, accion, False) for accion, _label in acciones}
-        for perm in _obtener_permisos_por_rol(role_id)
+        for perm in _obtener_permisos_por_rol(role_id, for_update=reemplazando_permisos)
     }
 
-    rangos_existentes = {perm.module_id: perm.approval_rank for perm in _obtener_permisos_por_rol(role_id)}
+    rangos_existentes = {
+        perm.module_id: perm.approval_rank for perm in _obtener_permisos_por_rol(role_id, for_update=reemplazando_permisos)
+    }
     if _save_rol_permisos(role_id, modulos, acciones, rangos_existentes):
         return redirect(url_for(LISTA_ROLES))
 
@@ -1599,9 +2189,10 @@ def config_approval_matrix():
     roles = database.session.execute(database.select(Roles).order_by(Roles.name)).scalars().all()
     users = database.session.execute(database.select(User).order_by(User.user)).scalars().all()
 
+    from cacao_accounting.approval_engine import APPROVAL_SUBMIT_DOCTYPES
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
-    doc_types = [(k, v.label) for k, v in DOCUMENT_TYPES.items()]
+    doc_types = [(k, v.label) for k, v in DOCUMENT_TYPES.items() if k in APPROVAL_SUBMIT_DOCTYPES]
 
     return render_template(
         "admin/approval_matrix.html",
@@ -1613,6 +2204,7 @@ def config_approval_matrix():
         roles=roles,
         users=users,
         doc_types=doc_types,
+        supported_doctypes=APPROVAL_SUBMIT_DOCTYPES,
         titulo=_("Matriz de Aprobaciones"),
     )
 
@@ -1621,23 +2213,13 @@ def config_approval_matrix():
 @login_required
 def pending_approvals():
     """Listado de documentos que requieren la aprobación del usuario actual."""
-    from cacao_accounting.approval_engine import ApprovalEngine, get_model_class
-    from cacao_accounting.database import ApprovalRequest, User
-    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+    from cacao_accounting.approval_engine import get_model_class
 
     if request.method == "POST":
         _process_pending_approval_post(ApprovalRequest, get_model_class)
         return redirect(url_for("admin.pending_approvals"))
 
-    stmt_all = (
-        database.select(ApprovalRequest)
-        .filter(ApprovalRequest.status.startswith("Pending"))
-        .order_by(ApprovalRequest.created_at.desc())
-    )
-    all_pending = database.session.execute(stmt_all).scalars().all()
-
-    my_pending = [_pending_approval_info(req, get_model_class, ApprovalEngine, User, DOCUMENT_TYPES) for req in all_pending]
-    my_pending = [item for item in my_pending if item is not None]
+    my_pending = visible_pending_approval_items()
 
     return render_template(
         "admin/pending_approvals.html",
@@ -1650,10 +2232,10 @@ def _handle_session_security_post():
     """Process a session-security action POST, returning a redirect or None."""
     action = request.form.get("action")
     if action == "toggle":
-        if not smtp_is_configured():
+        new_state = request.form.get("enabled") == "on"
+        if new_state and not smtp_is_configured():
             flash(_("Debe configurar el servidor SMTP antes de activar la protección de orígenes."), "danger")
             return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
-        new_state = request.form.get("enabled") == "on"
         set_session_security_enabled(new_state)
         database.session.commit()
         estado = _("activada") if new_state else _("desactivada")
@@ -1691,7 +2273,9 @@ def session_security_settings():
     enabled = is_session_security_enabled()
     smtp_ok = smtp_is_configured()
     dispositivos = listar_todos_dispositivos()
-    cuentas_bloqueadas = listar_cuentas_bloqueadas()
+    cuentas_bloqueadas = [
+        (usuario, segundos, lockout_minutes_remaining(segundos)) for usuario, segundos in listar_cuentas_bloqueadas()
+    ]
 
     return render_template(
         "admin/session_security.html",

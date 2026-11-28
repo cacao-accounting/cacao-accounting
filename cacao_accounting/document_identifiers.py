@@ -22,6 +22,8 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
+from cacao_accounting.default_scope import lock_default_scope
+from sqlalchemy.exc import IntegrityError
 
 
 from cacao_accounting.i18n import _
@@ -65,13 +67,21 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
         raise IdentifierConfigurationError(_("La fecha de contabilizacion es inválida.")) from exc
 
 
-def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
-    """Aplica el cierre operativo y su excepción exclusiva para cierres contables.
+def validate_accounting_period(
+    company: str | None,
+    posting_date: date,
+    allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
+) -> None:
+    """Aplica el cierre contable y sus dos excepciones exclusivas de cierre.
 
     Compras, ventas, bancos e inventario deben postear con ``allow_closing=False`` y
-    quedan bloqueados cuando el periodo está cerrado o deshabilitado. Solo un
-    comprobante de diario marcado como cierre puede usar ``allow_closing=True`` para
-    completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
+    quedan bloqueados cuando el período está cerrado o deshabilitado, así como en
+    un año fiscal cerrado. ``allow_closing=True`` desbloquea únicamente los
+    períodos cerrados o deshabilitados para los comprobantes de cierre operativo.
+    El asiento de cierre de año fiscal (``is_fiscal_year_closing``, creado
+    exclusivamente por el servicio de cierre) usa ``allow_fiscal_year_closing=True``
+    para numerar y postear dentro del propio año que cierra.
     """
     if not company:
         raise IdentifierConfigurationError(_("Debe indicar la compañía del documento."))
@@ -83,26 +93,51 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
         .where(FiscalYear.year_end_date >= posting_date)
     ).scalar_one_or_none()
 
-    if closed_fiscal_year and not allow_closing:
+    if closed_fiscal_year and not allow_fiscal_year_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un año fiscal cerrado."))
 
-    period = (
-        database.session.execute(
-            database.select(AccountingPeriod)
-            .filter_by(entity=company)
-            .where(AccountingPeriod.start <= posting_date)
-            .where(AccountingPeriod.end >= posting_date)
-            .order_by(AccountingPeriod.start.desc())
-        )
-        .scalars()
-        .first()
-    )
+    period = resolve_accounting_period(company, posting_date)
 
     if period and bool(period.is_closed) and not allow_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable cerrado."))
 
     if period and not bool(period.enabled) and not allow_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable deshabilitado."))
+
+
+def resolve_accounting_period(company: str, posting_date: date) -> AccountingPeriod:
+    """Resuelve el único período que cubre una fecha para la compañía.
+
+    El período debe tener un año fiscal asociado, de la misma compañía, que
+    cubra todo el rango del período (#1287). Sin ese vínculo la evidencia GL
+    quedaría con ``fiscal_year_id`` nulo y la anulación posterior no podría
+    resolver el período original.
+    """
+    periods = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=company)
+            .where(AccountingPeriod.start <= posting_date)
+            .where(AccountingPeriod.end >= posting_date)
+            .order_by(AccountingPeriod.start.desc(), AccountingPeriod.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not periods:
+        raise IdentifierConfigurationError(_("No existe un periodo contable configurado para la fecha indicada."))
+    if len(periods) > 1:
+        raise IdentifierConfigurationError(_("La fecha corresponde a más de un periodo contable."))
+    period = periods[0]
+    fiscal_year = database.session.get(FiscalYear, period.fiscal_year_id) if period.fiscal_year_id else None
+    if (
+        fiscal_year is None
+        or fiscal_year.entity != company
+        or fiscal_year.year_start_date > period.start
+        or fiscal_year.year_end_date < period.end
+    ):
+        raise IdentifierConfigurationError(_("El periodo contable no tiene un año fiscal válido para la compañía."))
+    return period
 
 
 def enforce_single_default_series(entity_type: str, company: str | None, exclude_id: str | None = None) -> None:
@@ -116,6 +151,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
         company: Codigo de compania o None para series globales
         exclude_id: ID de la serie que se quiere mantener como predeterminada (se excluye del reset)
     """
+    lock_default_scope("naming_series", entity_type, company)
     query = database.select(NamingSeries).filter(
         NamingSeries.entity_type == entity_type,
         NamingSeries.is_default.is_(True),
@@ -126,6 +162,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
     else:
         query = query.filter(NamingSeries.company.is_(None))
 
+    query = query.with_for_update().execution_options(populate_existing=True)
     existing_defaults = database.session.execute(query).scalars().all()
     for series in existing_defaults:
         if series.id != exclude_id:
@@ -210,7 +247,27 @@ def ensure_default_naming_series_for_company(company: str, entity_types: list[st
             "petty_cash_replenishment",
         ]
     for entity_type in entity_types:
-        _pick_naming_series(entity_type=entity_type, company=company, naming_series_id=None)
+        lock_default_scope("naming_series", entity_type, company)
+        existing = _locked_default_series(entity_type, company)
+        if existing:
+            continue
+        reusable = (
+            database.session.execute(
+                database.select(NamingSeries)
+                .filter_by(entity_type=entity_type, company=company, is_active=True)
+                .order_by(NamingSeries.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            .scalars()
+            .first()
+        )
+        if reusable is not None:
+            reusable.is_default = True
+            _ensure_series_sequence(reusable)
+            database.session.flush()
+            continue
+        _create_default_series(entity_type, company)
 
 
 def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
@@ -223,13 +280,33 @@ def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
     if entity_types is None:
         entity_types = ["customer", "supplier", "item"]
     for entity_type in entity_types:
-        existing = database.session.execute(
-            database.select(NamingSeries).filter_by(entity_type=entity_type, company=None, is_default=True)
-        ).scalar_one_or_none()
+        lock_default_scope("naming_series", entity_type, None)
+        existing = _locked_default_series(entity_type, None)
         if existing:
             continue
 
         code = _default_entity_code(entity_type)
+        reusable = (
+            database.session.execute(
+                database.select(NamingSeries)
+                .filter_by(
+                    entity_type=entity_type,
+                    company=None,
+                    name=f"Global-{code}",
+                    is_active=True,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            .scalars()
+            .first()
+        )
+        if reusable is not None:
+            reusable.is_default = True
+            _ensure_series_sequence(reusable)
+            database.session.flush()
+            continue
+
         padding = 6 if entity_type == "item" else 5
         prefix_template = f"{code}-"
 
@@ -330,12 +407,77 @@ def _default_entity_code(entity_type: str) -> str:
     return map_codes.get(entity_type, entity_type[:3].upper())
 
 
+def _locked_default_series(entity_type: str, company: str | None) -> NamingSeries | None:
+    """Devuelve una sola serie predeterminada y normaliza duplicados heredados.
+
+    La consulta bloquea todas las filas predeterminadas del ámbito. Si existen
+    duplicados de versiones anteriores, conserva la primera por identificador
+    y retira el flag a las demás para que las siguientes lecturas no fallen con
+    ``MultipleResultsFound``.
+    """
+    rows = list(
+        database.session.execute(
+            database.select(NamingSeries)
+            .filter_by(entity_type=entity_type, company=company, is_default=True)
+            .order_by(NamingSeries.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return None
+    keeper = rows[0]
+    changed = False
+    for row in rows[1:]:
+        row.is_default = False
+        changed = True
+    if changed:
+        database.session.flush()
+    return keeper
+
+
+def _ensure_series_sequence(series: NamingSeries) -> None:
+    """Asegura que una serie reutilizable tenga al menos una secuencia mapeada."""
+    mapping = (
+        database.session.execute(database.select(SeriesSequenceMap).filter_by(naming_series_id=series.id)).scalars().first()
+    )
+    if mapping is not None:
+        return
+    sequence = Sequence(
+        name=f"{series.name} sequence",
+        current_value=0,
+        increment=1,
+        padding=6 if series.entity_type == "item" else 5,
+        reset_policy="never",
+    )
+    database.session.add(sequence)
+    database.session.flush()
+    database.session.add(
+        SeriesSequenceMap(
+            naming_series_id=series.id,
+            sequence_id=sequence.id,
+            priority=0,
+            condition=None,
+        )
+    )
+    database.session.flush()
+
+
 def _create_default_series(entity_type: str, company: str | None) -> NamingSeries:
     """Crea una serie y secuencia por defecto para compania + doctype.
 
     La serie creada automaticamente se marca como predeterminada (is_default=True)
     ya que es la primera y unica para esta combinacion.
     """
+    lock_default_scope("naming_series", entity_type, company)
+    existing = _locked_default_series(entity_type, company)
+    if existing:
+        if existing.is_active:
+            return existing
+        raise IdentifierConfigurationError(_("La serie seleccionada no existe o está inactiva."))
+
     code = _default_entity_code(entity_type)
     prefix_template = f"*COMP*-{code}-*YYYY*-*MM*-"
     sequence = Sequence(
@@ -371,22 +513,28 @@ def _create_default_series(entity_type: str, company: str | None) -> NamingSerie
     return naming_series
 
 
-def _pick_sequence_id(naming_series_id: str) -> str:
-    """Selecciona la secuencia con mayor prioridad para la serie."""
-    mapping = (
+def _pick_sequence_id(naming_series_id: str, context: dict | None = None) -> str:
+    """Selecciona la secuencia aplicable de menor prioridad para la serie.
+
+    Los mapeos pueden declarar una condición JSON (banco, método de pago u otra
+    dimensión del documento). Se recorre por prioridad ascendente y se usa el
+    primer mapeo cuya condición coincida con el contexto; un mapeo sin
+    condición actúa como fallback.
+    """
+    mappings = (
         database.session.execute(
             database.select(SeriesSequenceMap)
             .filter_by(naming_series_id=naming_series_id)
-            .order_by(SeriesSequenceMap.priority.asc())
+            .order_by(SeriesSequenceMap.priority.asc(), SeriesSequenceMap.id.asc())
         )
         .scalars()
-        .first()
+        .all()
     )
+    for mapping in mappings:
+        if _condition_matches(mapping.condition, context or {}):
+            return mapping.sequence_id
 
-    if not mapping:
-        raise IdentifierConfigurationError(_("La serie seleccionada no tiene una secuencia asociada."))
-
-    return mapping.sequence_id
+    raise IdentifierConfigurationError(_("La serie seleccionada no tiene una secuencia asociada."))
 
 
 # -------------------------------------------------------------------------------------
@@ -423,21 +571,24 @@ def _resolve_external_counter(
     naming_series_id: str,
     context: dict | None = None,
     explicit_counter_id: str | None = None,
+    company: str | None = None,
 ) -> ExternalCounter | None:
     """Resuelve el contador externo mas apropiado para una serie dada.
 
     Orden de resolucion:
     1. Si explicit_counter_id se provee, usarlo directamente (validando que exista y este activo).
-    2. Buscar en SeriesExternalCounterMap para la serie:
+    2. Buscar en SeriesExternalCounterMap para la serie, descartando los
+       contadores que pertenezcan a otra compania antes de priorizar:
        a. Filtrar candidatos con condicion que coincida con el contexto.
        b. Priorizar por numero de condiciones coincidentes (mas especifico primero).
        c. Fallback: entry sin condicion (condition_json IS NULL).
-    3. Si no hay mapeo, retornar None (sin contador externo).
+    3. Si no hay mapeo elegible, retornar None (sin contador externo).
 
     Args:
         naming_series_id: ID de la NamingSeries activa
         context: Contexto del documento (payment_method, bank_account_id, etc.)
         explicit_counter_id: ID de ExternalCounter explicitamente seleccionado
+        company: Compania del documento; los mapeos de otra compania no compiten
 
     Returns:
         ExternalCounter seleccionado o None si no aplica contador externo.
@@ -445,7 +596,7 @@ def _resolve_external_counter(
     if explicit_counter_id:
         return _get_explicit_counter(explicit_counter_id)
 
-    return _resolve_counter_from_mappings(naming_series_id, context)
+    return _resolve_counter_from_mappings(naming_series_id, context, company)
 
 
 def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
@@ -458,8 +609,10 @@ def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
     return counter
 
 
-def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) -> ExternalCounter | None:
-    """Resuelve contador externo desde mapeos de serie."""
+def _resolve_counter_from_mappings(
+    naming_series_id: str, context: dict | None, company: str | None = None
+) -> ExternalCounter | None:
+    """Resuelve contador externo desde mapeos de serie de la compania."""
     ctx = context or {}
 
     mappings = (
@@ -475,7 +628,7 @@ def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) 
     if not mappings:
         return None
 
-    matched_with_condition, fallback = _collect_matching_counters(list(mappings), ctx)
+    matched_with_condition, fallback = _collect_matching_counters(list(mappings), ctx, company)
 
     if matched_with_condition:
         best = sorted(matched_with_condition, key=lambda x: -x[1])[0][0]
@@ -488,15 +641,24 @@ def _resolve_counter_from_mappings(naming_series_id: str, context: dict | None) 
 
 
 def _collect_matching_counters(
-    mappings: "list | tuple", ctx: dict
+    mappings: "list | tuple", ctx: dict, company: str | None = None
 ) -> tuple[list[tuple[SeriesExternalCounterMap, int]], SeriesExternalCounterMap | None]:
-    """Clasifica mapeos en candidatos con condición y fallback sin condición."""
+    """Clasifica mapeos elegibles en candidatos con condición y fallback.
+
+    Un mapeo solo compite cuando su contador está activo y pertenece a la
+    compañía del documento. Así una regla ajena de mayor prioridad no desplaza
+    ni bloquea el contador propio.
+    """
     matched_with_condition: list[tuple[SeriesExternalCounterMap, int]] = []
     fallback: SeriesExternalCounterMap | None = None
 
     for mapping in mappings:
+        if not mapping.external_counter_id:
+            continue
         counter = database.session.get(ExternalCounter, mapping.external_counter_id)
         if not counter or not counter.is_active:
+            continue
+        if company is not None and counter.company != company:
             continue
         if not mapping.condition_json:
             if fallback is None:
@@ -531,6 +693,7 @@ def assign_document_identifier(
     external_number: str | None = None,
     external_context: dict | None = None,
     allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
 ) -> None:
     """Asigna document_no, naming_series_id y (opcionalmente) external_number a un documento.
 
@@ -559,13 +722,20 @@ def assign_document_identifier(
         external_number: Numero externo fisico a usar (o None para usar el sugerido por el contador)
         external_context: Contexto adicional para seleccion contextual de contador (payment_method, etc.)
         allow_closing: Permite asignar identificador en periodos cerrados si es comprobante de cierre.
+        allow_fiscal_year_closing: Exclusivo del asiento de cierre de año fiscal: permite
+            asignar identificador dentro del propio año fiscal que se cierra.
     """
     if str(getattr(document, "document_no", "") or "").strip():
         return
 
     posting_date = parse_posting_date(posting_date_raw)
     company = getattr(document, "company", None)
-    validate_accounting_period(company=company, posting_date=posting_date, allow_closing=allow_closing)
+    validate_accounting_period(
+        company=company,
+        posting_date=posting_date,
+        allow_closing=allow_closing,
+        allow_fiscal_year_closing=allow_fiscal_year_closing,
+    )
     company_code = cast(str, company)
 
     # 1. Identificador interno
@@ -574,40 +744,52 @@ def assign_document_identifier(
         company=company_code,
         naming_series_id=naming_series_id,
     )
-    sequence_id = _pick_sequence_id(naming_series.id)
-
-    identifier = generate_identifier(
-        entity_type=entity_type,
-        entity_id=getattr(document, "id"),
-        posting_date=posting_date,
-        company=company_code,
+    sequence_id = _pick_sequence_id(naming_series.id, external_context)
+    # #1982: resolver y validar el contador antes de asignar el número interno;
+    # una referencia inactiva no debe dejar document_no parcial.
+    counter = _resolve_external_counter(
         naming_series_id=naming_series.id,
-        sequence_id=sequence_id,
+        context=external_context,
+        explicit_counter_id=external_counter_id,
+        company=company_code,
     )
+    if counter and counter.company != company_code:
+        raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
+
+    # #2332: el rechazo determinista del número externo (prefijo o duplicado
+    # conocido) ocurre antes de consumir la secuencia interna. La generación y
+    # el registro del número se confirman o revierten juntos, de modo que una
+    # carrera de unicidad tampoco deja document_no ni consumo parcial.
+    external_value: str | None = None
+    if counter is not None:
+        external_value = external_number or counter.next_suggested_formatted
+        _validate_external_number(counter, external_value)
+
+    with database.session.begin_nested():
+        identifier = generate_identifier(
+            entity_type=entity_type,
+            entity_id=getattr(document, "id"),
+            posting_date=posting_date,
+            company=company_code,
+            naming_series_id=naming_series.id,
+            sequence_id=sequence_id,
+        )
+        if counter is not None and external_value is not None:
+            _register_external_number(
+                counter=counter,
+                external_number=external_value,
+                entity_type=entity_type,
+                entity_id=getattr(document, "id"),
+            )
 
     setattr(document, "posting_date", posting_date)
     setattr(document, "naming_series_id", naming_series.id)
     setattr(document, "document_no", identifier)
 
     # 2. Identificador externo (opcional)
-    counter = _resolve_external_counter(
-        naming_series_id=naming_series.id,
-        context=external_context,
-        explicit_counter_id=external_counter_id,
-    )
-
-    if counter:
-        if counter.company != company_code:
-            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
-        ext_num = external_number or counter.next_suggested_formatted
-        _validate_and_register_external_number(
-            counter=counter,
-            external_number=ext_num,
-            entity_type=entity_type,
-            entity_id=getattr(document, "id"),
-        )
+    if counter is not None and external_value is not None:
         setattr(document, "external_counter_id", counter.id)
-        setattr(document, "external_number", ext_num)
+        setattr(document, "external_number", external_value)
 
 
 def _validate_and_register_external_number(
@@ -617,11 +799,37 @@ def _validate_and_register_external_number(
     entity_type: str,
     entity_id: str,
 ) -> None:
-    """Valida unicidad y registra el uso de un numero externo.
+    """Valida y registra el uso de un numero externo.
 
     Raises:
         ExternalNumberDuplicateError: Si el numero ya fue utilizado con este contador.
+        IdentifierConfigurationError: Si el numero no respeta el prefijo del contador.
     """
+    _validate_external_number(counter, external_number)
+    _register_external_number(
+        counter=counter,
+        external_number=external_number,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+
+
+def _validate_external_number(counter: ExternalCounter, external_number: str) -> None:
+    """Rechaza un número externo con prefijo inválido o ya registrado.
+
+    No muta el contador, el documento ni la sesión: el llamador puede invocarlo
+    antes de consumir la secuencia interna.
+
+    Raises:
+        ExternalNumberDuplicateError: Si el numero ya fue utilizado con este contador.
+        IdentifierConfigurationError: Si el numero no respeta el prefijo del contador.
+    """
+    prefix = counter.prefix or ""
+    if prefix and not external_number.startswith(prefix):
+        raise IdentifierConfigurationError(
+            _("El número externo debe comenzar con el prefijo '%(prefix)s'.") % {"prefix": prefix}
+        )
+
     existing = database.session.execute(
         database.select(ExternalNumberUsage).filter_by(
             external_counter_id=counter.id,
@@ -642,10 +850,24 @@ def _validate_and_register_external_number(
             }
         )
 
-    # Intentar extraer el valor numerico del numero externo (despues del prefijo)
+
+def _register_external_number(
+    *,
+    counter: ExternalCounter,
+    external_number: str,
+    entity_type: str,
+    entity_id: str,
+) -> None:
+    """Registra el uso del número externo y actualiza la sugerencia.
+
+    La escritura ocurre en un savepoint para que una colisión de unicidad
+    concurrente revierta solo este registro y deje la sesión utilizable.
+
+    Raises:
+        ExternalNumberDuplicateError: Si otro proceso registró el mismo número.
+    """
     prefix = counter.prefix or ""
-    prefix_len = len(prefix)
-    raw = external_number[prefix_len:]
+    raw = external_number[len(prefix) :]
     try:
         sequence_value = int(raw)
     except ValueError:
@@ -658,66 +880,22 @@ def _validate_and_register_external_number(
         entity_id=entity_id,
         sequence_value=sequence_value,
     )
-    database.session.add(usage)
-
-    # Actualizar last_used si el valor numerico es mayor al actual
-    if sequence_value is not None and sequence_value > (counter.last_used or 0):
-        counter.last_used = sequence_value
-
-    database.session.flush()
+    try:
+        with database.session.begin_nested():
+            database.session.add(usage)
+            if sequence_value is not None and sequence_value > (counter.last_used or 0):
+                counter.last_used = sequence_value
+            database.session.flush()
+    except IntegrityError as exc:
+        raise ExternalNumberDuplicateError(
+            _("El número externo '%(external_number)s' ya fue utilizado en este contador.")
+            % {"external_number": external_number}
+        ) from exc
 
 
 # -------------------------------------------------------------------------------------
 # External Counter Services (ajuste manual con auditoria)
 # -------------------------------------------------------------------------------------
-
-
-def suggest_next_external_number(external_counter_id: str) -> str:
-    """Devuelve el siguiente numero externo sugerido para un contador externo.
-
-    Args:
-        external_counter_id: ID del ExternalCounter
-
-    Returns:
-        Cadena con el numero sugerido (prefijo + numero formateado con padding)
-
-    Raises:
-        IdentifierConfigurationError: Si el contador no existe o esta inactivo
-    """
-    counter = database.session.get(ExternalCounter, external_counter_id)
-    if not counter:
-        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
-    if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
-    return counter.next_suggested_formatted
-
-
-def record_external_number_used(
-    *,
-    external_counter_id: str,
-    number_used: int,
-    changed_by: str | None = None,
-) -> None:
-    """Registra el uso de un numero externo incrementando last_used si corresponde.
-
-    Actualiza last_used solo si number_used es mayor al valor actual.
-
-    Args:
-        external_counter_id: ID del ExternalCounter
-        number_used: Numero externo utilizado en el documento
-        changed_by: ID del usuario que realiza el registro
-    """
-    counter = database.session.get(ExternalCounter, external_counter_id)
-    if not counter:
-        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
-    if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
-    if number_used < 0:
-        raise IdentifierConfigurationError(_("El número externo usado no puede ser negativo."))
-
-    if number_used > (counter.last_used or 0):
-        counter.last_used = number_used
-        database.session.flush()
 
 
 def adjust_external_counter(

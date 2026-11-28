@@ -2,6 +2,11 @@
 // SPDX-FileCopyrightText: 2025 - 2026 William Jose MORENO Reyes
 
 const assert = require('assert');
+const { execFileSync } = require('child_process');
+const path = require('path');
+
+const nativeSetTimeout = globalThis.setTimeout;
+const nativeClearTimeout = globalThis.clearTimeout;
 
 function deferred() {
   let resolve;
@@ -87,8 +92,9 @@ describe('transaction-form', function () {
     delete globalThis.Alpine;
     delete globalThis.ExcelJS;
     delete globalThis.fetch;
-    delete globalThis.setTimeout;
-    delete globalThis.clearTimeout;
+    delete globalThis.__CACAO_CURRENCY_DECIMALS__;
+    globalThis.setTimeout = nativeSetTimeout;
+    globalThis.clearTimeout = nativeClearTimeout;
   });
 
   it('returns default visible columns for transactional forms', function () {
@@ -219,6 +225,38 @@ describe('transaction-form', function () {
     assert.strictEqual(fields.includes('amount'), true);
     assert.strictEqual(component.visibleColumns.some((column) => column.field === 'rate'), false);
     assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), false);
+  });
+
+  it('hides pricing for restricted PO sourcing while keeping manual entry visible', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_receipt',
+      showPricing: true,
+      showPricingForManual: true,
+      hidePricingForSourceTypes: ['purchase_order', 'purchase_receipt'],
+      sourcePricingFromApi: true,
+      availableSourceTypes: [{ value: 'purchase_order', label: 'Orden de compra' }],
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    component.updateSourcePricingVisibility('purchase_order');
+    assert.strictEqual(component.showPricing, false);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'rate'), false);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), false);
+
+    component.updateSourcePricingVisibility('');
+    assert.strictEqual(component.showPricing, true);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'rate'), true);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), true);
+
+    component.updateSourcePricingVisibility('purchase_order', true);
+    assert.strictEqual(component.showPricing, false);
+    component.updateSourcePricingVisibility('purchase_order', false);
+    assert.strictEqual(component.showPricing, true);
+    component.updateSourcePricingVisibility('purchase_receipt');
+    assert.strictEqual(component.showPricing, false);
   });
 
   it('adds the discount column when line discounts are enabled', function () {
@@ -432,7 +470,9 @@ describe('transaction-form', function () {
     component.init();
     component.importModal.doctype = 'purchase_request';
     component.importModal.isValidated = true;
-    component.importModal.parsedRows = [{ item_code: 'ITEM-001', item_name: 'Caja de cacao', quantity: 2, uom: 'UND' }];
+    component.importModal.parsedRows = [
+      { item_code: 'ITEM-001', item_name: 'Caja de cacao', description: 'Detalle importado', quantity: 2, uom: 'UND' },
+    ];
 
     component.insertImportedLines();
 
@@ -444,6 +484,29 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines[0].amount, 15);
     assert.strictEqual(component.lines[1].item_code, 'ITEM-001');
     assert.strictEqual(component.lines[1].qty, 2);
+    assert.strictEqual(component.lines[1].description, 'Detalle importado');
+    assert.strictEqual(component.buildFiscalPayload().lines[1].description, 'Detalle importado');
+  });
+
+  it('keeps imported description for operational types without a destination column', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [{ code: 'ITEM-002', name: 'Servicio', uom: 'UND' }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+
+    component.init();
+    component.importModal.doctype = 'sales_order';
+    component.importModal.isValidated = true;
+    component.importModal.parsedRows = [
+      { item_code: 'ITEM-002', item_name: 'Servicio', description: 'Alcance solicitado', quantity: 1, uom: 'UND' },
+    ];
+
+    component.insertImportedLines();
+
+    assert.strictEqual(component.lines[0].description, 'Alcance solicitado');
+    assert.strictEqual(component.buildFiscalPayload().lines[0].description, 'Alcance solicitado');
   });
 
   it('enables line import for operational doctypes', function () {
@@ -600,6 +663,41 @@ describe('transaction-form', function () {
     assert.strictEqual(warnings.length, 1);
   });
 
+  it('drops stale calculated tax lines after a failed preview and preserves manual lines', async function () {
+    const create = loadTransactionForm();
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 422,
+      json: () => Promise.resolve({ errors: ['Circular dependency detected in tax rules.'] }),
+    });
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao', currency: 'NIO' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Caja', qty: 1, rate: 100 }],
+    });
+
+    component.init();
+    component.taxCharges.profile = { name: 'Previous profile' };
+    component.taxCharges.summary = { subtotal: '100', document_tax_total: '15', grand_total: '115' };
+    component.taxCharges.lines = [
+      { concept: 'Old computed tax', amount: 15, manual: false },
+      { concept: 'Manual freight', amount: 3, manual: true, type: 'charge' },
+    ];
+
+    await component.fetchTaxPreview();
+
+    assert.strictEqual(component.taxCharges.error, 'Circular dependency detected in tax rules.');
+    assert.strictEqual(component.taxCharges.profile, null);
+    assert.deepStrictEqual(component.taxCharges.lines.map((line) => line.concept), ['Manual freight']);
+    assert.strictEqual(component.taxCharges.summary.document_tax_total, '3');
+    assert.strictEqual(component.taxCharges.summary.grand_total, '103');
+    assert.strictEqual(component.taxCharges.loading, false);
+    assert.deepStrictEqual(component.mapTaxLinesToPayload().map((line) => line.concept), ['Manual freight']);
+  });
+
   it('adds manual tax or charge lines and updates fiscal totals', function () {
     const create = loadTransactionForm();
     const component = create({
@@ -705,20 +803,303 @@ describe('transaction-form', function () {
     const oldPrice = component.refreshCatalogPrice(line);
     component.header.party = 'CUSTOMER-B';
     const newPrice = component.refreshCatalogPrice(line);
-    newRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '80', price_list_name: 'B' }) });
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '80', price_list_name: 'B', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) });
     await newPrice;
-    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'A' }) });
+    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'A', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) });
     await oldPrice;
 
     assert.strictEqual(line.rate, 80);
     assert.strictEqual(line.price_list_name, 'B');
   });
 
+  it('includes the document currency and ignores a catalog price for a previous currency', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const urls = [];
+    globalThis.fetch = (url) => {
+      urls.push(url);
+      return requests.shift().promise;
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+    });
+    const line = component.newLine();
+    line.item_code = 'ITEM-001';
+    line.uom = 'EA';
+    component.lines = [line];
+
+    const oldPrice = component.refreshCatalogPrice(line);
+    component.header.currency = 'EUR';
+    const newPrice = component.refreshCatalogPrice(line);
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '90', price_list_name: 'EUR', price_list_currency: 'USD', transaction_currency: 'EUR', exchange_rate: '0.9' }),
+    });
+    await newPrice;
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await oldPrice;
+
+    assert.strictEqual(line.rate, 90);
+    assert.strictEqual(new URL(urls[0], 'http://localhost').searchParams.get('currency'), 'USD');
+    assert.strictEqual(new URL(urls[1], 'http://localhost').searchParams.get('currency'), 'EUR');
+  });
+
+  it('refreshes catalog prices and clears the previous currency rate when the currency changes', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const urls = [];
+    globalThis.fetch = (url) => {
+      urls.push(url);
+      return requests.shift().promise;
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const line = component.lines[0];
+
+    assert.strictEqual(typeof watchers['header.currency'], 'function');
+    const initialLookup = component.refreshCatalogPrice(line);
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await initialLookup;
+    assert.strictEqual(line.rate, 100);
+
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    assert.strictEqual(line.rate, 0);
+    assert.strictEqual(line.price_list_name, '');
+
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '92', price_list_name: 'EUR list', price_list_currency: 'USD', transaction_currency: 'EUR', exchange_rate: '0.92' }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(line.rate, 92);
+    assert.strictEqual(line.price_list_name, 'EUR list');
+    assert.strictEqual(new URL(urls[0], 'http://localhost').searchParams.get('currency'), 'USD');
+    assert.strictEqual(new URL(urls[1], 'http://localhost').searchParams.get('currency'), 'EUR');
+  });
+
+  it('does not keep a catalog rate when the new currency has no exchange rate', async function () {
+    const responses = [
+      {
+        ok: true,
+        json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+      },
+      { ok: false, json: () => Promise.resolve({ error: 'No hay tasa de cambio vigente para la fecha.' }) },
+    ];
+    globalThis.fetch = () => responses.shift();
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const line = component.lines[0];
+
+    await component.refreshCatalogPrice(line);
+    assert.strictEqual(line.rate, 100);
+
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(line.rate, 0);
+    assert.strictEqual(line.price_list_name, '');
+  });
+
+  it('keeps a manually edited rate when the catalog lookup for a new currency is pending', async function () {
+    const responses = [
+      {
+        ok: true,
+        json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+      },
+    ];
+    const pending = deferred();
+    globalThis.fetch = () => responses.shift() || pending.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const line = component.lines[0];
+
+    await component.refreshCatalogPrice(line);
+    line.rate = 75;
+    component.onRateInput(line);
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(line.rate, 75);
+  });
+
+  it('keeps the applied catalog marker after saving the line detail modal', async function () {
+    const applied = deferred();
+    globalThis.fetch = () => applied.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const lookup = component.refreshCatalogPrice(component.lines[0]);
+    applied.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await lookup;
+    assert.strictEqual(component.lines[0].rate, 100);
+
+    component.openDetails(0);
+    component.saveModalLine();
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(component.lines[0].rate, 0);
+    assert.strictEqual(component.lines[0].price_list_name, '');
+  });
+
+  it('keeps the applied catalog marker when a line is duplicated', async function () {
+    const applied = deferred();
+    globalThis.fetch = () => applied.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const lookup = component.refreshCatalogPrice(component.lines[0]);
+    applied.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await lookup;
+    component.duplicateRow(0);
+    assert.strictEqual(component.lines.length, 2);
+
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(component.lines[0].rate, 0);
+    assert.strictEqual(component.lines[1].rate, 0);
+  });
+
+  it('clears a catalog price seeded with the initial lines when the currency changes', async function () {
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({ error: 'sin tasa' }) });
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 100, price_list_name: 'USD list' }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(component.lines[0].rate, 0);
+    assert.strictEqual(component.lines[0].price_list_name, '');
+  });
+
+  it('preserves a manual rate equal to the applied catalog rate after editing it', async function () {
+    const applied = deferred();
+    globalThis.fetch = () => applied.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const lookup = component.refreshCatalogPrice(component.lines[0]);
+    applied.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await lookup;
+
+    component.lines[0].rate = 100;
+    component.onRateInput(component.lines[0]);
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(component.lines[0].rate, 100);
+  });
+
   it('refreshes the sales catalog price when the line UOM changes', async function () {
     let requestUrl = '';
     globalThis.fetch = async (url) => {
       requestUrl = url;
-      return { ok: true, json: async () => ({ price: '24', price_list_name: 'Box prices' }) };
+      return { ok: true, json: async () => ({ price: '24', price_list_name: 'Box prices', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) };
     };
     const create = loadTransactionForm();
     const component = create({
@@ -741,8 +1122,8 @@ describe('transaction-form', function () {
 
   it('clears the previous catalog price when the selected item has no price', async function () {
     const responses = [
-      { price: '12', price_list_name: 'List' },
-      { price: null, price_list_name: null },
+      { price: '12', price_list_name: 'List', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' },
+      { price: null, price_list_name: null, price_list_currency: null, transaction_currency: 'USD', exchange_rate: null },
     ];
     globalThis.fetch = async () => ({ ok: true, json: async () => responses.shift() });
     const create = loadTransactionForm();
@@ -784,7 +1165,7 @@ describe('transaction-form', function () {
     const lookup = component.refreshCatalogPrice(line);
     line.rate = 75;
     component.onRateInput(line);
-    request.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'List' }) });
+    request.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'List', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) });
     await lookup;
 
     assert.strictEqual(line.rate, 75);
@@ -1303,6 +1684,152 @@ describe('transaction-form', function () {
     assert.strictEqual(component.importModal.fileLoading, false);
   });
 
+  it('rejects XLSX formulas even when they carry a cached result', async function () {
+    const rows = [
+      [{ value: 'Item' }, { value: 'Quantity' }],
+      [{ value: 'ITEM-1' }, { value: { formula: '1+1', result: 999 } }],
+    ];
+    globalThis.ExcelJS = {
+      Workbook: class {
+        constructor() {
+          this.worksheets = [{
+            eachRow(_options, callback) {
+              for (const values of rows) {
+                callback({ cellCount: values.length, getCell: (index) => values[index - 1] });
+              }
+            },
+          }];
+          this.xlsx = { load: () => Promise.resolve() };
+        }
+      },
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const originalError = console.error;
+    console.error = () => {};
+
+    component.init();
+    component.importModal.schema = {
+      columns: [{ key: 'item_code', label: 'Item' }, { key: 'quantity', label: 'Quantity' }],
+    };
+    await component.handleFileUpload({
+      target: {
+        files: [{ name: 'formulas.xlsx', arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }],
+        value: 'formulas.xlsx',
+      },
+    });
+    console.error = originalError;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, []);
+    assert.strictEqual(component.importModal.errors.length, 1);
+    assert.match(component.importModal.errors[0].message, /fórmulas/);
+  });
+
+  it('rejects a real ExcelJS formula workbook with a cached result', async function () {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Items');
+    sheet.addRow(['Item', 'Quantity']);
+    sheet.addRow(['ITEM-1', { formula: '1+1', result: 2 }]);
+    const buffer = await workbook.xlsx.writeBuffer();
+    globalThis.ExcelJS = ExcelJS;
+
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const originalError = console.error;
+    console.error = () => {};
+
+    component.init();
+    component.importModal.schema = {
+      columns: [{ key: 'item_code', label: 'Item' }, { key: 'quantity', label: 'Quantity' }],
+    };
+    await component.handleFileUpload({
+      target: {
+        files: [{ name: 'real-formulas.xlsx', arrayBuffer: () => Promise.resolve(buffer) }],
+        value: 'real-formulas.xlsx',
+      },
+    });
+    console.error = originalError;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, []);
+    assert.strictEqual(component.importModal.errors.length, 1);
+    assert.match(component.importModal.errors[0].message, /fórmulas/);
+  });
+
+  it('accepts a real ExcelJS workbook with fixed values', async function () {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Items');
+    sheet.addRow(['Item', 'Quantity']);
+    sheet.addRow(['ITEM-2', 3]);
+    const buffer = await workbook.xlsx.writeBuffer();
+    globalThis.ExcelJS = ExcelJS;
+
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.importModal.schema = {
+      columns: [{ key: 'item_code', label: 'Item' }, { key: 'quantity', label: 'Quantity' }],
+    };
+
+    await component.handleFileUpload({
+      target: {
+        files: [{ name: 'real-values.xlsx', arrayBuffer: () => Promise.resolve(buffer) }],
+        value: 'real-values.xlsx',
+      },
+    });
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'ITEM-2', quantity: '3' }]);
+    assert.deepStrictEqual(component.importModal.errors, []);
+  });
+
+  it('clears batch and serial requirements when switching to a plain item', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [
+        { code: 'TRACKED', name: 'Tracked', default_uom: 'UND', has_batch: true, allowed_uoms: ['UND'] },
+        { code: 'PLAIN', name: 'Plain', default_uom: 'UND', has_batch: false, allowed_uoms: ['UND'] },
+      ],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+    component.init();
+    const line = component.newLine();
+    line.item_code = 'TRACKED';
+    component.syncLineFromItem(line, false);
+    line.batch_id = 'BATCH-1';
+    line.batch_no = 'BATCH-1';
+    line.serial_no = 'SERIAL-1';
+
+    line.item_code = 'PLAIN';
+    component.syncLineFromItem(line, false);
+
+    assert.strictEqual(line.has_batch, false);
+    assert.strictEqual(line.has_serial_no, false);
+    assert.strictEqual(line.has_expiry_date, false);
+    assert.strictEqual(line.batch_id, '');
+    assert.strictEqual(line.batch_no, '');
+    assert.strictEqual(line.serial_no, '');
+  });
+
   it('clears the previous XLSX preview when a replacement file cannot be parsed', async function () {
     globalThis.ExcelJS = {
       Workbook: class {
@@ -1367,4 +1894,72 @@ describe('transaction-form', function () {
     assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'NEW' }]);
     assert.strictEqual(component.importModal.fileLoading, false);
   });
+
+  it("keeps a manual tax line base of zero instead of the subtotal", function () {
+    const create = loadTransactionForm();
+    const component = create({ items: [], uoms: [], defaultRows: 1 });
+    component.lines = [{ amount: 200 }];
+    const line = {
+      manual: true,
+      calculation_method: 'percentage',
+      base_amount: 0,
+      rate: 10,
+      amount: 0,
+    };
+
+    component.calcTaxLine(line);
+
+    assert.strictEqual(line.base_amount, 0);
+    assert.strictEqual(line.amount, 0);
+  });
+
+  it("falls back to the subtotal when a manual tax line has no base", function () {
+    const create = loadTransactionForm();
+    const component = create({ items: [], uoms: [], defaultRows: 1 });
+    component.lines = [{ amount: 200 }];
+    const line = {
+      manual: true,
+      calculation_method: 'percentage',
+      base_amount: '',
+      rate: 10,
+      amount: 0,
+    };
+
+    component.calcTaxLine(line);
+
+    assert.strictEqual(line.base_amount, 200);
+    assert.strictEqual(line.amount, 20);
+  });
+
+  it("formats money with the configured currency precision", function () {
+    globalThis.__CACAO_CURRENCY_DECIMALS__ = { TST4: 4, TST0: 0 };
+    const create = loadTransactionForm();
+
+    const precise = create({});
+    precise.header.currency = "TST4";
+    const integer = create({});
+    integer.header.transaction_currency = "TST0";
+    const fallback = create({});
+
+    assert.match(precise.formatMoney(1.004), /^1[.,]0040$/);
+    assert.match(integer.formatMoney(1.6), /^2$/);
+    assert.match(fallback.formatMoney(1.004), /^1[.,]00$/);
+  });
+
+  it("builds the accounting date in the local timezone, not in UTC", function () {
+    const script = [
+      "globalThis.window = { crypto: { randomUUID: () => 'uuid-test' } };",
+      'globalThis.document = { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; } };',
+      'globalThis.Alpine = { data() {} };',
+      `require(${JSON.stringify(path.join(__dirname, '..', 'js', 'transaction-form.js'))});`,
+      'process.stdout.write(globalThis.cacaoLocalIsoDate(new Date("2026-11-01T00:30:00Z")));',
+    ].join('\n');
+    const localDate = execFileSync(process.execPath, ['-e', script], {
+      encoding: 'utf8',
+      env: { ...process.env, TZ: 'America/Managua' },
+    });
+
+    assert.strictEqual(localDate, '2026-10-31');
+  });
+
 });

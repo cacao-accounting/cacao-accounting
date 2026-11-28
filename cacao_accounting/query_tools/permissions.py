@@ -33,6 +33,15 @@ def validate_company_access(context: QueryContext, company_id: str) -> None:
             request_id=context.request_id,
         )
 
+    # #1338: una concesión o allowlist que conserva una compañía deshabilitada
+    # no debe seguir habilitando consultas sobre ella.
+    if entity.enabled is not True:
+        raise QueryToolError(
+            code=ErrorCode.COMPANY_ACCESS_DENIED,
+            message=_("La compañía solicitada no está habilitada."),
+            request_id=context.request_id,
+        )
+
 
 def validate_module_active(module_name: str) -> None:
     """Verifica que el módulo indicado exista y se encuentre habilitado."""

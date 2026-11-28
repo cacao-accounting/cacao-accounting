@@ -3,19 +3,46 @@
 
 """Adaptador para importación de extractos bancarios."""
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
+from sqlalchemy.exc import IntegrityError
+
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
-
-
+from cacao_accounting.imports.readers.base import NumericCellValue
+from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
+
+# SQLite stores NUMERIC values through IEEE-754 floats; cap at 15 significant
+# digits so four decimal places survive identically on both Tier 1 databases.
+MAX_BANK_AMOUNT = Decimal("99999999999.9999")
+
+
+def _text(value: Any, default: str = "") -> str:
+    """Normaliza celdas vacías de XLSX/ODS sin convertirlas en "None"."""
+    if value is None:
+        return default
+    text = str(value)
+    return text if text.strip() else default
+
+
+def _is_bank_identity_conflict(error: IntegrityError) -> bool:
+    """Indica si el error corresponde a la identidad única del movimiento."""
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_bank_transaction_identity":
+        return True
+    message = str(original).lower()
+    return "uq_bank_transaction_identity" in message or "bank_transaction.identity_key" in message
 
 
 class BankStatementAdapter(BaseImportAdapter):
     """Adaptador para Extractos Bancarios."""
+
+    # Una referencia bancaria es informativa; movimientos distintos pueden compartirla.
+    group_by_reference = False
 
     columns = [
         "bank_account_id",
@@ -25,19 +52,64 @@ class BankStatementAdapter(BaseImportAdapter):
         "deposit",
         "withdrawal",
     ]
+    column_aliases = {"reference": "reference_number"}
     required_columns = ["bank_account_id", "posting_date"]
 
     @staticmethod
+    def _valid_grouped_integer(integer_part: str, thousands_sep: str) -> bool:
+        """Valida que la parte entera use agrupación de miles de tres dígitos.
+
+        Con ambos separadores presentes, el que no es decimal solo puede ser
+        separador de miles. ``1,234,567`` y ``1.234.567`` son inequívocos;
+        ``12,34`` no lo es y corrompería el importe si se elimina el separador.
+        """
+        body = integer_part[1:] if integer_part[:1] in "+-" else integer_part
+        groups = body.split(thousands_sep)
+        if len(groups) < 2:
+            return False
+        return (
+            groups[0].isdigit()
+            and 1 <= len(groups[0]) <= 3
+            and all(len(group) == 3 and group.isdigit() for group in groups[1:])
+        )
+
+    @staticmethod
+    def _normalize_amount(amount: Decimal) -> Decimal | None:
+        """Valida el rango de Numeric(20, 4) y normaliza su escala."""
+        if abs(amount) > MAX_BANK_AMOUNT:
+            raise InvalidOperation(_("El monto bancario excede la precisión exacta de 11 dígitos enteros."))
+        return amount.quantize(Decimal("0.0001")) if amount != 0 else None
+
+    @staticmethod
+    def _numeric_cell_amount(value: NumericCellValue) -> Decimal | None:
+        """Convierte una celda numérica sin interpretar separadores de texto."""
+        amount = coerce_decimal(str(value), _("monto"), max_fractional_digits=4)
+        return BankStatementAdapter._normalize_amount(amount)
+
+    @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
-        """Convierte una columna vacía o cero en un lado bancario ausente."""
-        if value is None or (isinstance(value, str) and value == ""):
+        """Convierte una columna vacía o cero en un lado bancario ausente.
+
+        Los importes con separadores ambiguos se rechazan en lugar de
+        interpretarse: un importe con milés por convención europea que se
+        lea como decimales corrompe el extracto por un factor de 1000.
+        ``1.000,00`` y ``1,234.56`` son inequívocos; ``1.000``, ``1,000`` y
+        ``12,34.56`` no lo son y abortan la fila con un error de negocio.
+        """
+        if value is None:
             return None
+        if isinstance(value, NumericCellValue):
+            return BankStatementAdapter._numeric_cell_amount(value)
         normalized = str(value).strip().replace(" ", "")
+        if normalized == "":
+            return None
         if "," in normalized and "." in normalized:
-            if normalized.rfind(",") > normalized.rfind("."):
-                normalized = normalized.replace(".", "").replace(",", ".")
-            else:
-                normalized = normalized.replace(",", "")
+            decimal_sep = "," if normalized.rfind(",") > normalized.rfind(".") else "."
+            thousands_sep = "." if decimal_sep == "," else ","
+            integer_part, decimal_part = normalized.rsplit(decimal_sep, 1)
+            if not decimal_part.isdigit() or not BankStatementAdapter._valid_grouped_integer(integer_part, thousands_sep):
+                raise InvalidOperation(_("Separador de miles ambiguo"))
+            normalized = integer_part.replace(thousands_sep, "") + "." + decimal_part
         elif "," in normalized:
             decimal_part = normalized.rsplit(",", 1)[1]
             if len(decimal_part) > 2:
@@ -45,47 +117,46 @@ class BankStatementAdapter(BaseImportAdapter):
             normalized = normalized.replace(",", ".")
         elif normalized.count(".") > 1:
             raise InvalidOperation(_("Separador de miles ambiguo"))
-        amount = Decimal(normalized)
-        if not amount.is_finite():
-            raise ValueError(_("El monto debe ser finito."))
-        return amount if amount != 0 else None
+        elif "." in normalized:
+            decimal_part = normalized.rsplit(".", 1)[1]
+            if len(decimal_part) == 3:
+                raise InvalidOperation(_("Separador de miles ambiguo"))
+        amount = coerce_decimal(normalized, _("monto"), max_fractional_digits=4)
+        return BankStatementAdapter._normalize_amount(amount)
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single bank statement row."""
         errors = super().validate_row(row_data)
-        bank_account = database.session.get(BankAccount, str(row_data.get("bank_account_id", "")))
+        bank_account = database.session.get(BankAccount, _text(row_data.get("bank_account_id")))
         if bank_account is None:
-            errors.append(f"Cuenta bancaria no encontrada: {row_data.get('bank_account_id')}")
+            errors.append(_("Cuenta bancaria no encontrada: %(account)s") % {"account": row_data.get("bank_account_id")})
         raw_date = row_data.get("posting_date")
         try:
-            if isinstance(raw_date, date):
-                parsed_date = raw_date
-            else:
-                parsed_date = date.fromisoformat(str(raw_date))
-            if not parsed_date:
+            if not parse_import_date(raw_date, field="fecha bancaria"):
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append(f"Fecha bancaria inválida: {raw_date}")
+            errors.append(_("Fecha bancaria inválida: %(date)s") % {"date": raw_date})
 
         amounts: dict[str, Decimal | None] = {}
+        invalid_amount = False
         for field in ("deposit", "withdrawal"):
             try:
                 amounts[field] = self._optional_amount(row_data.get(field))
-            except (InvalidOperation, TypeError, ValueError):
+            except (InvalidOperation, TypeError, ValueError) as exc:
                 amounts[field] = None
-                errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)}")
+                invalid_amount = True
+                errors.append(
+                    _("Monto bancario inválido en columna '%(field)s': %(value)s (%(detail)s).")
+                    % {"field": field, "value": row_data.get(field), "detail": exc}
+                )
             else:
                 amt = amounts[field]
                 if amt is not None and amt < 0:
-                    errors.append(f"El monto bancario en columna '{field}' no puede ser negativo.")
-        if (
-            amounts["deposit"] is None
-            and amounts["withdrawal"] is None
-            and not any(f"columna '{field}'" in error for error in errors for field in ("deposit", "withdrawal"))
-        ):
-            errors.append("La fila bancaria debe contener un depósito o un retiro mayor que cero.")
+                    errors.append(_("El monto bancario en columna '%(field)s' no puede ser negativo.") % {"field": field})
+        if amounts["deposit"] is None and amounts["withdrawal"] is None and not invalid_amount:
+            errors.append(_("La fila bancaria debe contener un depósito o un retiro mayor que cero."))
         if amounts["deposit"] is not None and amounts["withdrawal"] is not None:
-            errors.append("Una fila bancaria no puede contener depósito y retiro simultáneamente.")
+            errors.append(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return errors
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
@@ -95,43 +166,68 @@ class BankStatementAdapter(BaseImportAdapter):
         company_id = (context or {}).get("company_id") or ""
         errors: list[str] = []
         for row in document_data:
-            bank_account = database.session.get(BankAccount, str(row.get("bank_account_id", "")))
+            bank_account = database.session.get(BankAccount, _text(row.get("bank_account_id")))
             if bank_account and bank_account.company != company_id:
                 errors.append(
-                    f"La cuenta bancaria {bank_account.id} pertenece a la compañía "
-                    f"{bank_account.company}, no a {company_id}."
+                    _("La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, no a %(company_id)s.")
+                    % {
+                        "bank_account_id": bank_account.id,
+                        "bank_company": bank_account.company,
+                        "company_id": company_id,
+                    }
                 )
             try:
-                posting_date = row.get("posting_date")
-                posting_date = posting_date if isinstance(posting_date, date) else date.fromisoformat(str(posting_date))
+                posting_date = parse_import_date(row.get("posting_date"), field="fecha bancaria")
             except (TypeError, ValueError):
                 continue
             if not is_period_open(company_id, posting_date):
-                errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
+                errors.append(
+                    _("El periodo contable para la fecha %(date)s está cerrado o no existe.") % {"date": posting_date}
+                )
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
-        """Build bank transactions from the imported data."""
+        """Build bank transactions from the imported data.
+
+        Sin referencia bancaria la fecha y el importe no identifican un
+        movimiento: se exige la huella del archivo para distinguir filas
+        legítimas y conservar la idempotencia (#1510/#2350).
+        """
         transactions = []
-        for row in document_data:
+        fingerprint = str(context.get("import_fingerprint") or "").strip()
+        for position, row in enumerate(document_data, start=1):
             posting_date = row.get("posting_date")
-            if isinstance(posting_date, str):
-                try:
-                    posting_date = date.fromisoformat(posting_date)
-                except ValueError as exc:
-                    raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            try:
+                posting_date = parse_import_date(posting_date, field="fecha bancaria")
+            except ValueError as exc:
+                raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            deposit = self._optional_amount(row.get("deposit"))
+            withdrawal = self._optional_amount(row.get("withdrawal"))
+            for field, amount in (("deposit", deposit), ("withdrawal", withdrawal)):
+                if amount is not None and amount < 0:
+                    raise ValueError(_("El monto bancario en columna '%(field)s' no puede ser negativo.") % {"field": field})
+            reference_number = _text(row.get("reference_number") or row.get("reference"))
+            if not reference_number and not fingerprint:
+                raise ValueError(
+                    _(
+                        "La importación bancaria sin referencia requiere la huella del archivo "
+                        "para distinguir movimientos con la misma fecha e importe."
+                    )
+                )
+            row_number = getattr(row, "row_number", position)
             transactions.append(
                 {
-                    "bank_account_id": str(row.get("bank_account_id", "")),
+                    "bank_account_id": _text(row.get("bank_account_id")),
                     "company_id": context.get("company_id"),
                     "posting_date": posting_date,
-                    "reference_number": str(row.get("reference_number", "")),
-                    "description": str(row.get("description", "")),
-                    "deposit": self._optional_amount(row.get("deposit")),
-                    "withdrawal": self._optional_amount(row.get("withdrawal")),
+                    "reference_number": reference_number,
+                    "description": _text(row.get("description")),
+                    "deposit": deposit,
+                    "withdrawal": withdrawal,
+                    "import_discriminator": f"{fingerprint}:{row_number}" if fingerprint else "",
                 }
             )
-            if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
+            if deposit is not None and withdrawal is not None:
                 raise ValueError(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return transactions
 
@@ -139,53 +235,133 @@ class BankStatementAdapter(BaseImportAdapter):
         """Persist bank transactions to the database."""
         persisted_ids: list[str] = []
         seen_in_batch: set[str] = set()
+        seen_reference_identities: set[tuple[str, str, str, str, str]] = set()
+        # La comprobación de duplicados y la inserción deben ejecutarse bajo el
+        # mismo lock por cuenta. Dos importaciones concurrentes del mismo
+        # extracto esperan su turno; la segunda ya ve la fila confirmada por la
+        # primera en lugar de insertar un duplicado (#2172). El orden estable
+        # evita interbloqueos cuando el lote toca varias cuentas.
+        for bank_account_id in sorted(
+            {str(tx_data.get("bank_account_id") or "") for tx_data in document if tx_data.get("bank_account_id")}
+        ):
+            database.session.execute(
+                database.select(BankAccount)
+                .where(BankAccount.id == bank_account_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalar_one_or_none()
         for tx_data in document:
-            bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
-            if bank_account is None:
-                raise ValueError(_("Cuenta bancaria no encontrada: %(account)s") % {"account": tx_data["bank_account_id"]})
-            company_id = tx_data.get("company_id")
-            if company_id and bank_account.company != company_id:
-                raise ValueError(
-                    _(
-                        "La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, "
-                        "no a %(company_id)s."
-                    )
-                    % {
-                        "bank_account_id": bank_account.id,
-                        "bank_company": bank_account.company,
-                        "company_id": company_id,
-                    }
-                )
-            existing = (
-                database.session.execute(
-                    database.select(BankTransaction)
-                    .filter_by(
-                        bank_account_id=tx_data["bank_account_id"],
-                        posting_date=tx_data["posting_date"],
-                        reference_number=tx_data.get("reference_number", ""),
-                        deposit=tx_data.get("deposit"),
-                        withdrawal=tx_data.get("withdrawal"),
-                    )
-                    .filter(~BankTransaction.id.in_(list(seen_in_batch)))
-                )
-                .scalars()
-                .first()
-            )
-            if existing:
+            self._validate_row_account(tx_data)
+            reference_number = str(tx_data.get("reference_number") or "")
+            reference_identity = self._reference_identity(tx_data, reference_number)
+            if reference_number and (
+                reference_identity in seen_reference_identities
+                or self._has_existing_reference(tx_data, reference_number, seen_in_batch)
+            ):
                 raise ValueError(_("La transacción bancaria ya existe en la base de datos."))
-            tx = BankTransaction(
-                bank_account_id=tx_data["bank_account_id"],
-                posting_date=tx_data["posting_date"],
-                reference_number=tx_data.get("reference_number", ""),
-                description=tx_data.get("description", ""),
-                deposit=tx_data.get("deposit"),
-                withdrawal=tx_data.get("withdrawal"),
-            )
-            database.session.add(tx)
-            database.session.flush()
-            seen_in_batch.add(str(tx.id))
+            tx = self._build_transaction(tx_data, reference_number)
+            if not self._insert_transaction(tx, reference_number):
+                continue
+            # Solo deduplicar por identidad economica cuando hay referencia bancaria estable.
+            # Sin referencia, fecha+importe no son identidad segura (#1510).
+            if reference_number:
+                seen_in_batch.add(str(tx.id))
+                seen_reference_identities.add(reference_identity)
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)
+
+    @staticmethod
+    def _validate_row_account(tx_data: dict[str, Any]) -> None:
+        """Valida que la cuenta bancaria exista y pertenezca a la compañía."""
+        bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
+        if bank_account is None:
+            raise ValueError(_("Cuenta bancaria no encontrada: %(account)s") % {"account": tx_data["bank_account_id"]})
+        company_id = tx_data.get("company_id")
+        if company_id and bank_account.company != company_id:
+            raise ValueError(
+                _("La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, no a %(company_id)s.")
+                % {
+                    "bank_account_id": bank_account.id,
+                    "bank_company": bank_account.company,
+                    "company_id": company_id,
+                }
+            )
+
+    @staticmethod
+    def _amount_identity(value: Any) -> str:
+        """Normaliza montos a identidad canónica para comparar equivalencia decimal."""
+        if value is None or value == "":
+            return ""
+        try:
+            amount = coerce_decimal(value, _("monto"), max_fractional_digits=4)
+        except (TypeError, ValueError, ArithmeticError, InvalidOperation):
+            return str(value)
+        normalized = amount.normalize()
+        return format(normalized, "f")
+
+    @staticmethod
+    def _reference_identity(tx_data: dict[str, Any], reference_number: str) -> tuple[str, str, str, str, str]:
+        """Identidad económica para deduplicación dentro del lote con referencia."""
+        return (
+            str(tx_data.get("bank_account_id") or ""),
+            str(tx_data.get("posting_date") or ""),
+            reference_number,
+            BankStatementAdapter._amount_identity(tx_data.get("deposit")),
+            BankStatementAdapter._amount_identity(tx_data.get("withdrawal")),
+        )
+
+    @staticmethod
+    def _has_existing_reference(tx_data: dict[str, Any], reference_number: str, seen_in_batch: set[str]) -> bool:
+        """Indica si ya existe un movimiento con la misma identidad económica.
+
+        Solo aplica con referencia bancaria (#1262): sin referencia, fecha e
+        importe no identifican de forma segura un movimiento.
+        """
+        return (
+            database.session.execute(
+                database.select(BankTransaction)
+                .filter_by(
+                    bank_account_id=tx_data["bank_account_id"],
+                    posting_date=tx_data["posting_date"],
+                    reference_number=reference_number,
+                    deposit=tx_data.get("deposit"),
+                    withdrawal=tx_data.get("withdrawal"),
+                )
+                .filter(~BankTransaction.id.in_(list(seen_in_batch)))
+            )
+            .scalars()
+            .first()
+        ) is not None
+
+    @staticmethod
+    def _build_transaction(tx_data: dict[str, Any], reference_number: str) -> Any:
+        """Construye la transacción; sin referencia conserva su procedencia."""
+        return BankTransaction(
+            bank_account_id=tx_data["bank_account_id"],
+            posting_date=tx_data["posting_date"],
+            reference_number=reference_number,
+            description=tx_data.get("description", ""),
+            deposit=tx_data.get("deposit"),
+            withdrawal=tx_data.get("withdrawal"),
+            import_reference=(None if reference_number else (tx_data.get("import_discriminator") or None)),
+        )
+
+    @staticmethod
+    def _insert_transaction(tx: Any, reference_number: str) -> bool:
+        """Inserta la transacción; devuelve ``False`` si fue un reimport idempotente."""
+        try:
+            with database.session.begin_nested():
+                database.session.add(tx)
+                database.session.flush()
+        except IntegrityError as exc:
+            if not _is_bank_identity_conflict(exc):
+                raise
+            if not reference_number:
+                # Reimportar exactamente el mismo archivo (misma huella y fila)
+                # es idempotente: la fila ya existe, no es un duplicado (#1262).
+                return False
+            raise ValueError(_("La transacción bancaria ya existe en la base de datos.")) from exc
+        return True
 
     def _auto_reconcile(self, persisted_ids: list[str]) -> None:
         """Intenta la conciliación automática opcional de las filas importadas.

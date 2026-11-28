@@ -23,6 +23,14 @@ TELEFONO = _l("Teléfono")
 NUEVA_CONTRASENA = _l("Nueva contraseña")
 CONFIRMAR_CONTRASENA = _l("Confirmar contraseña")
 CONTRASENAS_NO_COINCIDEN = _l("Las contraseñas deben coincidir")
+NOMBRE_MAX_LENGTH = 80
+CORREO_MAX_LENGTH = 150
+TELEFONO_MAX_LENGTH = 50
+NOMBRE_LENGTH_MESSAGE = _l("El nombre o apellido no puede superar los 80 caracteres.")
+CORREO_LENGTH_MESSAGE = _l("El correo electrónico no puede superar los 150 caracteres.")
+TELEFONO_LENGTH_MESSAGE = _l("El teléfono no puede superar los 50 caracteres.")
+USUARIO_LENGTH_MESSAGE = _l("El usuario debe tener entre 3 y 15 caracteres.")
+PASSWORD_LENGTH_MESSAGE = _l("La contraseña debe tener al menos 8 caracteres.")
 
 
 class LoginForm(FlaskForm):
@@ -36,12 +44,18 @@ class LoginForm(FlaskForm):
 class ProfileForm(FlaskForm):
     """Formulario para actualizar información personal."""
 
-    name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
-    last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
-    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
-    phone = StringField(TELEFONO, validators=[Optional()])
+    name = StringField(_l("Nombre"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)])
+    last_name = StringField(
+        _l("Apellido"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)]
+    )
+    last_name2 = StringField(
+        SEGUNDO_APELLIDO, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)]
+    )
+    e_mail = StringField(
+        CORREO_ELECTRONICO, validators=[Optional(), Email(), Length(max=CORREO_MAX_LENGTH, message=CORREO_LENGTH_MESSAGE)]
+    )
+    phone = StringField(TELEFONO, validators=[Optional(), Length(max=TELEFONO_MAX_LENGTH, message=TELEFONO_LENGTH_MESSAGE)])
     language = SelectField(
         _l("Idioma"),
         choices=[
@@ -69,13 +83,19 @@ class PasswordChangeForm(FlaskForm):
 class UserCreateForm(FlaskForm):
     """Formulario para crear usuarios."""
 
-    usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
-    name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
-    last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
-    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
-    phone = StringField(TELEFONO, validators=[Optional()])
+    usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15, message=USUARIO_LENGTH_MESSAGE)])
+    name = StringField(_l("Nombre"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)])
+    last_name = StringField(
+        _l("Apellido"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)]
+    )
+    last_name2 = StringField(
+        SEGUNDO_APELLIDO, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)]
+    )
+    e_mail = StringField(
+        CORREO_ELECTRONICO, validators=[Optional(), Email(), Length(max=CORREO_MAX_LENGTH, message=CORREO_LENGTH_MESSAGE)]
+    )
+    phone = StringField(TELEFONO, validators=[Optional(), Length(max=TELEFONO_MAX_LENGTH, message=TELEFONO_LENGTH_MESSAGE)])
     classification = SelectField(
         _l("Clasificación"),
         choices=[
@@ -89,7 +109,7 @@ class UserCreateForm(FlaskForm):
     party_id = SelectField(_l("Tercero del portal"), choices=[], validators=[Optional()])
     company = SelectField(_l("Compañía del portal"), choices=[], validators=[Optional()])
     active = BooleanField(_l("Habilitado"), default=True)
-    password = PasswordField(_l("Contraseña"), validators=[DataRequired(), Length(min=8)])
+    password = PasswordField(_l("Contraseña"), validators=[DataRequired(), Length(min=8, message=PASSWORD_LENGTH_MESSAGE)])
     confirm_password = PasswordField(
         CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_NO_COINCIDEN)],
@@ -100,13 +120,19 @@ class UserCreateForm(FlaskForm):
 class UserEditForm(FlaskForm):
     """Formulario para editar usuarios."""
 
-    usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
-    name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
-    last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
-    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
-    phone = StringField(TELEFONO, validators=[Optional()])
+    usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15, message=USUARIO_LENGTH_MESSAGE)])
+    name = StringField(_l("Nombre"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)])
+    last_name = StringField(
+        _l("Apellido"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)]
+    )
+    last_name2 = StringField(
+        SEGUNDO_APELLIDO, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH, message=NOMBRE_LENGTH_MESSAGE)]
+    )
+    e_mail = StringField(
+        CORREO_ELECTRONICO, validators=[Optional(), Email(), Length(max=CORREO_MAX_LENGTH, message=CORREO_LENGTH_MESSAGE)]
+    )
+    phone = StringField(TELEFONO, validators=[Optional(), Length(max=TELEFONO_MAX_LENGTH, message=TELEFONO_LENGTH_MESSAGE)])
     classification = SelectField(
         _l("Clasificación"),
         choices=[
@@ -127,7 +153,7 @@ class UserEditForm(FlaskForm):
 class UserPasswordForm(FlaskForm):
     """Formulario para cambiar contraseña de usuario desde administración."""
 
-    password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
+    password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8, message=PASSWORD_LENGTH_MESSAGE)])
     confirm_password = PasswordField(
         CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_NO_COINCIDEN)],
@@ -181,7 +207,7 @@ class ForgotPasswordForm(FlaskForm):
 class ResetPasswordForm(FlaskForm):
     """Formulario para restablecer contraseña con token de recuperación."""
 
-    new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
+    new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8, message=PASSWORD_LENGTH_MESSAGE)])
     confirm_password = PasswordField(
         CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("new_password", message=CONTRASENAS_NO_COINCIDEN)],

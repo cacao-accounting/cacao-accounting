@@ -1,9 +1,3 @@
-{% macro transaction_form_js(config) %}
-<script>
-  globalThis.transactionFormConfig = {{ config | tojson }};
-</script>
-{% endmacro %}
-
 {% macro logistics_section(include_landed_costs=false, terms_field="purchase_terms") %}
 <section class="ca-card p-3 mb-3" x-data="{ open: false }">
   <button class="btn btn-link text-decoration-none px-0 fw-semibold" type="button"
@@ -46,7 +40,7 @@
 </section>
 {% endmacro %}
 
-{% macro smart_select(doctype, name, label, initial_value='', initial_label='', filters={}, filter_sources=[], required=False, min_chars=1, preload=False, required_filters=[], auto_select_default=False, load_on_filter_change=False, x_model=None, on_select=None, initial_value_expr=None, initial_label_expr=None, locked_expr='false', default_after_ms=1500) %}
+{% macro smart_select(doctype, name, label, initial_value='', initial_label='', filters={}, filter_sources=[], required=False, min_chars=1, preload=False, required_filters=[], auto_select_default=False, load_on_filter_change=False, x_model=None, on_select=None, on_clear=None, initial_value_expr=None, initial_label_expr=None, locked_expr='false', default_after_ms=1500) %}
 <div class="ca-smart-select" x-data='smartSelect({
     doctype: {{ doctype | tojson }},
     name: {{ name | tojson }},
@@ -62,6 +56,7 @@
     initialValue: {{ initial_value_expr if initial_value_expr else initial_value | tojson }},
     initialLabel: {{ initial_label_expr if initial_label_expr else initial_label | tojson }},
     onSelect: {{ on_select if on_select else "null" }},
+    onClear: {{ on_clear if on_clear else "null" }},
     messages: {
       placeholder: "{{ _('Buscar') }} {{ label }}",
       loading: "{{ _('Buscando...') }}",
@@ -76,16 +71,16 @@
 >
   <input type="hidden" id="{{ name }}" name="{{ name }}" x-model="selectedValue">
   <div class="ca-smart-select-input-wrap">
-    <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+    <input class="form-control ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
       @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar') }} {{ label }}" {% if required %}required{% endif %} :readonly="locked">
     <button class="ca-smart-select-clear" type="button" x-show="selectedValue && !locked" @click="clearSelection"
       title="{{ _('Limpiar') }}">×</button>
   </div>
-  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+  <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-    <template x-for="option in options" :key="option.value">
-      <button class="ca-smart-select-option" type="button"
-        @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+    <template x-for="(option, index) in options" :key="option.value">
+      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
+        @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
         <span x-text="option.display_name"></span>
       </button>
     </template>
@@ -250,7 +245,7 @@
 </div>
 {% endmacro %}
 
-{% macro transaction_grid(items_disponibles, uoms_disponibles, source_api_url=None, source_label='', warehouses_disponibles=None, title=None) %}
+{% macro transaction_grid(source_api_url=None, title=None, include_line_account=true, include_line_unit=true, include_taxes=true) %}
 {% set title = title if title is not none else _('Líneas de detalle') %}
 <section class="border rounded-2 p-3 mt-3"
          {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then((loaded) => { if (loaded) applySource(); })'{% endif %}>
@@ -261,7 +256,7 @@
       <button class="btn btn-sm btn-outline-secondary" type="button"
               x-show="availableSourceTypes.length > 0"
               data-bs-toggle="modal" data-bs-target="#modalAutofill"
-              @click="fetchSource('{{ source_api_url or '' }}')">
+              @click='fetchSource({{ (source_api_url or "") | tojson }})'>
         <i class="bi bi-arrow-repeat"></i> {{ _('Actualizar Elementos') }}
       </button>
       <button class="btn btn-sm btn-outline-secondary" type="button" @click="addMultipleRows(5)">
@@ -313,8 +308,17 @@
                         line.has_batch = opt.has_batch || false;
                         line.has_serial_no = opt.has_serial_no || false;
                         line.has_expiry_date = opt.has_expiry_date || false;
+                        if (opt.weight !== undefined && opt.weight !== null) {
+                          line.weight = opt.weight;
+                          line.weight_uom = opt.weight_uom || line.weight_uom;
+                        }
+                        if (opt.volume !== undefined && opt.volume !== null) {
+                          line.volume = opt.volume;
+                          line.volume_uom = opt.volume_uom || line.volume_uom;
+                        }
                         onItemChange(line);
                       },
+                      onClear: function() { onItemClear(line); },
                       messages: {
                         placeholder: "{{ _('Buscar item') }}",
                         loading: "{{ _('Buscando...') }}",
@@ -327,16 +331,16 @@
                     })'>
                     <input type="hidden" :name="'item_code_' + index" x-model="selectedValue">
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
                         @focus="onFocus" @blur="closeSoon" :placeholder="column.label">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
                         title="{{ _('Limpiar') }}">×</button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-                      <template x-for="option in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button"
-                          @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                      <template x-for="(option, index) in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
+                          @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                           <span x-text="option.display_name"></span>
                         </button>
                       </template>
@@ -348,6 +352,30 @@
                 </template>
                 <template x-if="column.field === 'item_name'">
                   <input class="form-control form-control-sm" type="text" :name="'item_name_' + index" x-model="line.item_name">
+                </template>
+                <template x-if="column.field === 'warehouse'">
+                  <select class="form-select form-select-sm" :name="'warehouse_' + index" x-model="line.warehouse">
+                    <option value=""></option>
+                    <template x-for="warehouse in availableWarehouses" :key="warehouse.code">
+                      <option :value="warehouse.code" x-text="warehouse.name"></option>
+                    </template>
+                  </select>
+                </template>
+                <template x-if="column.field === 'source_warehouse'">
+                  <select class="form-select form-select-sm" :name="'source_warehouse_' + index" x-model="line.source_warehouse">
+                    <option value=""></option>
+                    <template x-for="warehouse in availableWarehouses" :key="warehouse.code">
+                      <option :value="warehouse.code" x-text="warehouse.name"></option>
+                    </template>
+                  </select>
+                </template>
+                <template x-if="column.field === 'target_warehouse'">
+                  <select class="form-select form-select-sm" :name="'target_warehouse_' + index" x-model="line.target_warehouse">
+                    <option value=""></option>
+                    <template x-for="warehouse in availableWarehouses" :key="warehouse.code">
+                      <option :value="warehouse.code" x-text="warehouse.name"></option>
+                    </template>
+                  </select>
                 </template>
                 <template x-if="column.field === 'uom'">
                   <div class="ca-smart-select" x-data='smartSelect({
@@ -380,21 +408,45 @@
                     <div x-effect="if (line.uom && selectedValue !== line.uom) { selectedValue = line.uom; selectedLabel = line.uom; search = line.uom; options = []; }"></div>
                     <input type="hidden" :name="'uom_' + index" x-model="selectedValue">
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
                         @focus="onFocus" @blur="closeSoon" :placeholder="column.label">
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                      <template x-for="option in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button"
-                          @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
+                      <template x-for="(option, index) in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
+                          @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                           <span x-text="option.display_name"></span>
                         </button>
                       </template>
                     </div>
                   </div>
                 </template>
+                <template x-if="column.field === 'weight'">
+                  <input class="form-control form-control-sm text-end" type="number" step="0.000000001" min="0"
+                    :name="'weight_' + index" x-model.number="line.weight">
+                </template>
+                <template x-if="column.field === 'weight_uom'">
+                  <select class="form-select form-select-sm" :name="'weight_uom_' + index" x-model="line.weight_uom">
+                    <option value=""></option>
+                    <template x-for="uom in availableUoms" :key="'w-' + uom.code">
+                      <option :value="uom.code" x-text="uom.code"></option>
+                    </template>
+                  </select>
+                </template>
+                <template x-if="column.field === 'volume'">
+                  <input class="form-control form-control-sm text-end" type="number" step="0.000000001" min="0"
+                    :name="'volume_' + index" x-model.number="line.volume">
+                </template>
+                <template x-if="column.field === 'volume_uom'">
+                  <select class="form-select form-select-sm" :name="'volume_uom_' + index" x-model="line.volume_uom">
+                    <option value=""></option>
+                    <template x-for="uom in availableUoms" :key="'v-' + uom.code">
+                      <option :value="uom.code" x-text="uom.code"></option>
+                    </template>
+                  </select>
+                </template>
                 <template x-if="column.field === 'qty'">
-                  <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0"
+                  <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0.0001"
                     :name="'qty_' + index" x-model.number="line.qty" @input="calcAmount(line); refreshCatalogPrice(line)">
                 </template>
                 <template x-if="column.field === 'rate'">
@@ -442,10 +494,11 @@
                 </div>
               </div>
               <input type="hidden" :name="'batch_id_' + index" :value="line.batch_id || ''">
+              <input type="hidden" :name="'description_' + index" :value="line.description || ''">
               <input type="hidden" :name="'serial_no_' + index" :value="line.serial_no || ''">
-              <input type="hidden" :name="'account_' + index" :value="line.account || ''">
+              {% if include_line_account %}<input type="hidden" :name="'account_' + index" :value="line.account || ''">{% endif %}
               <input type="hidden" :name="'cost_center_' + index" :value="line.cost_center || ''">
-              <input type="hidden" :name="'unit_' + index" :value="line.unit || ''">
+              {% if include_line_unit %}<input type="hidden" :name="'unit_' + index" :value="line.unit || ''">{% endif %}
               <input type="hidden" :name="'project_' + index" :value="line.project || ''">
               <input type="hidden" :name="'remarks_' + index" :value="line.remarks || ''">
               <input type="hidden" :name="'source_type_' + index" :value="line.source_type || ''">
@@ -459,6 +512,7 @@
   </div>
 </section>
 
+{% if include_taxes %}
 <section class="border rounded-2 p-3 mt-3" x-show="showPricing">
   <div class="ca-transaction-summary">
     <strong>{{ _('Subtotal') }}:</strong>
@@ -528,6 +582,7 @@
     </table>
   </div>
 </section>
+{% endif %}
 
 <div class="modal fade" id="modalAutofill" tabindex="-1" aria-hidden="true" x-show="availableSourceTypes.length > 0">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -667,6 +722,7 @@
         <template x-if="activeIndex !== null && modalLine !== null">
           <div>
             <div class="ca-transaction-detail-grid">
+          {% if include_line_account %}
           <div>
             <label class="form-label">{{ _('Cuenta') }}</label>
             {{ smart_select(
@@ -681,6 +737,7 @@
                 initial_label_expr="modalLine.account_label || modalLine.account"
             ) }}
           </div>
+          {% endif %}
           <div>
             <label class="form-label">{{ _('Centro de costos') }}</label>
             {{ smart_select(
@@ -695,6 +752,7 @@
                 initial_label_expr="modalLine.cost_center_label || modalLine.cost_center"
             ) }}
           </div>
+          {% if include_line_unit %}
           <div>
             <label class="form-label">{{ _('Unidad de negocio') }}</label>
             {{ smart_select(
@@ -709,6 +767,7 @@
                 initial_label_expr="modalLine.unit"
             ) }}
           </div>
+          {% endif %}
           <div>
             <label class="form-label">{{ _('Proyecto') }}</label>
             {{ smart_select(
@@ -758,16 +817,16 @@
                   })'>
                   <input type="hidden" name="modal_batch_id" x-model="selectedValue" x-effect="modalLine.batch_id = selectedValue" :required="modalLine.has_batch">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
-                      @focus="onFocus" @blur="closeSoon" :placeholder="'{{ _('Buscar lote') }}'" :required="modalLine.has_batch">
+                    <input class="form-control ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
+                      @focus="onFocus" @blur="closeSoon" :placeholder='{{ _("Buscar lote")|tojson }}' :required="modalLine.has_batch">
                     <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
                       title="{{ _('Limpiar') }}">×</button>
                   </div>
-                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-                    <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button"
-                        @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                    <template x-for="(option, index) in options" :key="option.value">
+                      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index" @blur="closeSoon"
+                        @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>
@@ -781,7 +840,7 @@
                   {{ _('Serie') }}
                   <span class="text-danger" x-show="modalLine.has_serial_no" x-cloak>*</span>
                 </label>
-                <input class="form-control" type="text" x-model="modalLine.serial_no" :placeholder="'{{ _('Número de serie') }}'" :required="modalLine.has_serial_no">
+                <input class="form-control" type="text" x-model="modalLine.serial_no" :placeholder='{{ _("Número de serie")|tojson }}' :required="modalLine.has_serial_no">
               </div>
             </div>
             <div class="mt-3">
@@ -939,7 +998,7 @@
           <h6>{{ _('Columnas aceptadas:') }}</h6>
           <div class="d-flex flex-wrap gap-2 mb-2">
             <template x-for="col in (importModal.schema && importModal.schema.columns ? importModal.schema.columns : [])" :key="col.key">
-              <span class="badge" :class="col.required ? 'bg-primary' : 'bg-secondary'" :title="col.required ? '{{ _('Requerido') }}' : '{{ _('Opcional') }}'">
+              <span class="badge" :class="col.required ? 'bg-primary' : 'bg-secondary'" :title='col.required ? {{ _("Requerido")|tojson }} : {{ _("Opcional")|tojson }}'>
                 <span x-text="col.label"></span>
                 <template x-if="col.required"><span class="ms-1">*</span></template>
               </span>
@@ -1018,7 +1077,7 @@
               <template x-for="(err, idx) in importModal.errors" :key="idx">
                 <li>
                   <template x-if="err.row !== undefined">
-                    <span class="fw-bold" x-text="'{{ _('Fila') }} ' + err.row + ': '"></span>
+                    <span class="fw-bold" x-text='{{ _("Fila")|tojson }} + err.row + ": "'></span>
                   </template>
                   <span x-text="err.message"></span>
                 </li>

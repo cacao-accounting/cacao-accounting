@@ -9,17 +9,20 @@ import json
 
 from dataclasses import dataclass
 
+from datetime import date, datetime
+
 from decimal import Decimal, InvalidOperation
 
 from typing import Any, Iterable, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+
+from cacao_accounting.numbers import money_quantum
 
 from cacao_accounting.database import (
     Accounts,
-    AccountingPeriod,
     BankTransaction,
     BankAccount,
     Book,
@@ -49,8 +52,10 @@ from cacao_accounting.database import (
     StockBin,
     StockEntry,
     StockEntryItem,
+    StockLedgerBookEntry,
     StockLedgerEntry,
     StockValuationLayer,
+    UOM,
     Unit,
     Project,
     Entity,
@@ -64,6 +69,7 @@ from cacao_accounting.warehouse_accounting import (
 )
 
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 
 from cacao_accounting.contabilidad.cancellation_service import (
     CancellationContext,
@@ -72,7 +78,7 @@ from cacao_accounting.contabilidad.cancellation_service import (
     resolve_cancellation,
 )
 
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
+from cacao_accounting.document_identifiers import resolve_accounting_period, validate_accounting_period
 
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 
@@ -229,43 +235,27 @@ def _get_voucher_id(document: Any) -> str:
 
 
 def _find_period_ids(company: str, posting_date: Any) -> tuple[str | None, str | None]:
-    period = (
-        database.session.execute(
-            select(AccountingPeriod)
-            .filter_by(entity=company, enabled=True)
-            .where(AccountingPeriod.start <= posting_date)
-            .where(AccountingPeriod.end >= posting_date)
-        )
-        .scalars()
-        .first()
-    )
-    if not period:
-        return None, None
+    period = resolve_accounting_period(company, posting_date)
     return period.id, period.fiscal_year_id
 
 
-def _normalize_ledger_codes(ledger_code: str | Sequence[str] | None) -> list[str] | None:
-    if ledger_code is None:
-        return None
-    if isinstance(ledger_code, str):
-        normalized = ledger_code.strip()
-        return [normalized] if normalized else None
-
-    codes: list[str] = []
-    for item in ledger_code:
-        normalized = str(item).strip()
-        if normalized and normalized not in codes:
-            codes.append(normalized)
-    return codes or None
-
-
 def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) -> list[Book]:
-    """Return every active book for a company, ignoring legacy selectors."""
+    """Return active books for a company, honoring an optional book selector."""
     query = select(Book).where(
         Book.entity == company,
         Book.status == "activo",
     )
+    requested = [ledger_code] if isinstance(ledger_code, str) else list(ledger_code or [])
+    if requested:
+        query = query.where(or_(Book.id.in_(requested), Book.code.in_(requested)))
     books = database.session.execute(query.order_by(Book.is_primary.desc(), Book.code)).scalars().all()
+    if requested:
+        found = {identifier for book in books for identifier in (book.id, book.code)}
+        invalid = set(requested) - found
+        if invalid:
+            raise PostingError(
+                _("Libro contable no válido para la compañía: %(ledger_code)s.") % {"ledger_code": sorted(invalid)[0]}
+            )
     if not books:
         raise PostingError(_("La compañía no tiene libro contable activo."))
     return list(books)
@@ -282,10 +272,20 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     """
     if type(document).__name__ != "ComprobanteContable":
         ledger_code = None
+    elif ledger_code is None:
+        from cacao_accounting.contabilidad.journal_service import _selected_books_for_journal
+
+        ledger_code = _selected_books_for_journal(document)
     company = _company_for(document)
     posting_date = _posting_date_for(document)
     allow_closing = bool(getattr(document, "is_closing", False))
-    validate_accounting_period(company, posting_date, allow_closing=allow_closing)
+    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
+    validate_accounting_period(
+        company,
+        posting_date,
+        allow_closing=allow_closing,
+        allow_fiscal_year_closing=is_fy_closing,
+    )
     accounting_period_id, fiscal_year_id = _find_period_ids(company, posting_date)
     entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
     default_company_currency = getattr(entity, "currency", None) if entity else None
@@ -310,7 +310,6 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
             }
         )
     contexts: list[LedgerContext] = []
-    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     missing_rates: list[str] = []
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
@@ -408,12 +407,27 @@ def _require_account(account_id: str | None, message: str) -> str:
     return account_id
 
 
-def _require_company_account(account_id: str | None, company: str, message: str) -> str:
-    """Require an account that belongs to the document's company."""
+def _require_company_account(
+    account_id: str | None,
+    company: str,
+    message: str,
+    *,
+    allow_inactive: bool = False,
+) -> str:
+    """Require an account that belongs to the document's company.
+
+    ``allow_inactive`` solo se usa al postear una reversión: la cuenta histórica
+    puede estar desactivada, pero debe seguir existiendo, pertenecer a la
+    compañía y ser hoja. La coincidencia con la línea GL de origen se valida
+    después en ``_manual_reversal_matches_source``.
+    """
     account_id = _require_account(account_id, message)
     account = database.session.get(Accounts, account_id)
     if account is None or account.entity != company:
         raise PostingError(_("La cuenta contable debe pertenecer a la compañía del documento."))
+    inactive = not account.active or not account.enabled
+    if account.group or (inactive and not allow_inactive):
+        raise PostingError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
     return account_id
 
 
@@ -478,12 +492,22 @@ def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> s
     return inventory_account_id_for_document_line(document, line, company)
 
 
-def _account_id_for_comprobante_line(line: Any, company: str) -> str:
+def _account_id_for_comprobante_line(line: Any, company: str, *, allow_inactive: bool = False) -> str:
+    """Resuelve la cuenta de una línea y revalida su vigencia al contabilizar.
+
+    El importador hace un prechequeo, pero entre la validación del lote y el
+    posteo la cuenta puede desactivarse. La operación final vuelve a exigir
+    existencia, compañía, estado activo/habilitado y que sea cuenta hoja. Las
+    reversiones históricas pueden conservar una cuenta desactivada; el llamador
+    debe pasar ``allow_inactive=True`` y validar la coincidencia con el origen.
+    """
     explicit_account_id = getattr(line, "account_id", None)
     if explicit_account_id:
-        return _require_account(
+        return _require_company_account(
             str(explicit_account_id),
+            company,
             "No existe cuenta contable configurada para la línea del comprobante contable.",
+            allow_inactive=allow_inactive,
         )
 
     account_code = getattr(line, "account", None)
@@ -495,7 +519,12 @@ def _account_id_for_comprobante_line(line: Any, company: str) -> str:
         raise PostingError(
             _("La cuenta contable '%(account_code)s' no existe para la compañía.") % {"account_code": account_code}
         )
-    return account.id
+    return _require_company_account(
+        account.id,
+        company,
+        "No existe cuenta contable configurada para la línea del comprobante contable.",
+        allow_inactive=allow_inactive,
+    )
 
 
 def _resolve_bank_gl_account_id(document: PaymentEntry, destination: bool) -> str | None:
@@ -519,21 +548,21 @@ def _has_active_gl_entries(document: Any) -> bool:
     # anchor for invoices, payments, journals, inventory, and bank entries.
     document_id = getattr(document, "id", None)
     if document_id:
-        database.session.get(type(document), document_id, with_for_update=True)
-    return (
         database.session.execute(
-            select(GLEntry.id)
-            .filter_by(
-                company=_company_for(document),
-                voucher_type=_get_voucher_type(document),
-                voucher_id=_get_voucher_id(document),
-                is_cancelled=False,
-                is_reversal=False,
-            )
-            .limit(1)
+            select(type(document))
+            .where(type(document).id == document_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
-        is not None
+    query = select(GLEntry.id).filter_by(
+        company=_company_for(document),
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+        is_cancelled=False,
     )
+    if not getattr(document, "reversal_of", None):
+        query = query.where(GLEntry.is_reversal.is_(False))
+    return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
 
 
 def _has_stock_ledger_entries(document: Any) -> bool:
@@ -740,11 +769,13 @@ def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
     La conversion por linea es simetrica: si linea A tiene +V y linea B
     tiene -V, ambas se redondean con la misma tasa, por lo que la suma
     de debitos siempre iguala la suma de creditos. No se requiere
-    tolerancia adicional en la validacion de balance.
+    tolerancia adicional en la validacion de balance. La escala crece
+    hasta 8 decimales cuando el importe lo requiere, sin redondeo
+    silencioso en monedas configuradas con mayor precisión.
     """
     if exchange_rate == 0:
         raise PostingError(_("El tipo de cambio no puede ser cero."))
-    return (amount * exchange_rate).quantize(Decimal("0.0001"))
+    return (amount * exchange_rate).quantize(money_quantum(amount))
 
 
 def _inventory_currency(document: Any) -> str | None:
@@ -795,13 +826,77 @@ def _inventory_ledger_context(context: LedgerContext, document: Any) -> LedgerCo
     )
 
 
-def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
-    """Resolve the latest valid historical rate on or before ``posting_date``."""
-    if origin == destination:
-        return Decimal("1")
+def _persist_stock_book_valuations(document: Any, movements: Sequence[StockLedgerEntry]) -> None:
+    """Persist each stock movement's rounded value in every active book."""
+    if not movements:
+        return
+    database.session.flush()
+    contexts = [_inventory_ledger_context(context, document) for context in _document_contexts(document)]
+    for context in contexts:
+        rate = _decimal_value(context.exchange_rate)
+        if rate <= 0:
+            raise _invalid_exchange_rate_error()
+        for movement in movements:
+            database.session.add(
+                StockLedgerBookEntry(
+                    stock_ledger_entry_id=movement.id,
+                    ledger_id=context.ledger_id,
+                    posting_date=movement.posting_date,
+                    book_currency=context.company_currency,
+                    book_amount=_to_company_currency(_decimal_value(movement.stock_value_difference), rate),
+                    exchange_rate=rate,
+                )
+            )
 
-    def latest_rate(source: str, target: str) -> Decimal | None:
-        rate = (
+
+def _persist_stock_book_reversals(
+    original_movements: Sequence[StockLedgerEntry], reversals: Sequence[StockLedgerEntry]
+) -> None:
+    """Append exact book-currency countervalues for stock cancellation rows."""
+    database.session.flush()
+    reversal_by_original = {str(reversal.reversal_of): reversal for reversal in reversals}
+    original_ids = [movement.id for movement in original_movements if movement.id]
+    original_values = database.session.execute(
+        select(StockLedgerBookEntry).where(StockLedgerBookEntry.stock_ledger_entry_id.in_(original_ids))
+    ).scalars()
+    values_by_original: dict[str, list[StockLedgerBookEntry]] = {}
+    for original_value in original_values:
+        original_id = str(original_value.stock_ledger_entry_id)
+        values_by_original.setdefault(original_id, []).append(original_value)
+        reversal = reversal_by_original.get(original_id)
+        if reversal is None:
+            continue
+        database.session.add(
+            StockLedgerBookEntry(
+                stock_ledger_entry_id=reversal.id,
+                ledger_id=original_value.ledger_id,
+                posting_date=reversal.posting_date,
+                book_currency=original_value.book_currency,
+                book_amount=-_decimal_value(original_value.book_amount),
+                exchange_rate=original_value.exchange_rate,
+            )
+        )
+    ledger_sets = {frozenset(row.ledger_id for row in rows) for rows in values_by_original.values()}
+    if len(values_by_original) != len(original_movements) or len(ledger_sets) != 1 or not ledger_sets:
+        raise PostingError(_("No se puede reversar el inventario sin su valoración original por libro."))
+
+
+def _lookup_exchange_rate_details(origin: str, destination: str, posting_date: Any) -> tuple[Decimal, date | None]:
+    """Resuelve la tasa histórica aplicable y la fecha real de su fila."""
+    # #1323: el formulario entrega la fecha como texto; el bind DATE de SQLite
+    # solo acepta objetos date. Se normaliza antes de consultar la tasa.
+    if isinstance(posting_date, datetime):
+        posting_date = posting_date.date()
+    elif not isinstance(posting_date, date):
+        try:
+            posting_date = date.fromisoformat(str(posting_date))
+        except (TypeError, ValueError) as exc:
+            raise PostingError(_("La fecha de contabilizacion es inválida.")) from exc
+    if origin == destination:
+        return Decimal("1"), None
+
+    def latest_rate(source: str, target: str) -> ExchangeRate | None:
+        return (
             database.session.execute(
                 select(ExchangeRate)
                 .where(ExchangeRate.origin == source, ExchangeRate.destination == target, ExchangeRate.date <= posting_date)
@@ -810,24 +905,29 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
             .scalars()
             .first()
         )
-        if rate is None:
-            return None
-        value = _decimal_value(rate.rate)
-        if value <= 0:
-            raise _invalid_exchange_rate_error()
-        return value
 
     direct = latest_rate(origin, destination)
     if direct is not None:
-        return direct
+        value = _decimal_value(direct.rate)
+        if value <= 0:
+            raise _invalid_exchange_rate_error()
+        return value, direct.date
     inverse = latest_rate(destination, origin)
     if inverse is not None:
-        return Decimal("1") / inverse
+        value = _decimal_value(inverse.rate)
+        if value <= 0:
+            raise _invalid_exchange_rate_error()
+        return Decimal("1") / value, inverse.date
 
     raise PostingError(
         _("No existe tipo de cambio registrado para %(origin)s -> %(destination)s en la fecha %(posting_date)s.")
         % {"origin": origin, "destination": destination, "posting_date": posting_date}
     )
+
+
+def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
+    """Resuelve la tasa histórica aplicable en o antes de ``posting_date``."""
+    return _lookup_exchange_rate_details(origin, destination, posting_date)[0]
 
 
 def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
@@ -846,8 +946,30 @@ def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
             validate_gl_account_usage(entry.account_id, entry.voucher_type)
         except DefaultAccountError as exc:
             raise PostingError(str(exc)) from exc
+    _lock_bank_candidate_scopes(entries)
     database.session.add_all(entries)
     return entries
+
+
+def _lock_bank_candidate_scopes(entries: list[GLEntry]) -> None:
+    """Serializa altas GL que pueden convertirse en candidatos bancarios."""
+    from cacao_accounting.database import BankAccount
+    from cacao_accounting.default_scope import lock_default_scopes
+
+    account_ids = {str(entry.account_id) for entry in entries if entry.account_id}
+    scopes: set[tuple[str, str]] = set()
+    for entry in entries:
+        if entry.company and getattr(entry, "bank_account_id", None):
+            scopes.add((str(entry.company), str(entry.bank_account_id)))
+    if account_ids:
+        bank_accounts = database.session.execute(
+            database.select(BankAccount).where(BankAccount.gl_account_id.in_(account_ids))
+        ).scalars()
+        for bank_account in bank_accounts:
+            if bank_account.company:
+                scopes.add((str(bank_account.company), str(bank_account.id)))
+    if scopes:
+        lock_default_scopes("bank_auto_reconcile", list(scopes))
 
 
 def _post_with_calculation_engine_payload(document: Any, ledger_code: str | None = None) -> EnginePostingResult | None:
@@ -865,7 +987,10 @@ def _post_with_calculation_engine_payload(document: Any, ledger_code: str | None
         raise PostingError(str(exc)) from exc
     if context is None:
         return None
-    results = BusinessEventOrchestrator().handle_event(context)
+    try:
+        results = BusinessEventOrchestrator().handle_event(context)
+    except ValueError as exc:
+        raise PostingError(str(exc)) from exc
     calculation_errors = [message for result in results.values() for message in getattr(result, "errors", [])]
     if calculation_errors:
         raise PostingError(" ".join(calculation_errors))
@@ -1071,31 +1196,108 @@ def _tax_result_for_document(document: Any, items: Sequence[Any]) -> TaxCalculat
 
 
 def _payment_has_references(payment_id: str) -> bool:
-    from cacao_accounting.database import PaymentReference
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    return database.session.execute(select(PaymentReference.id).filter_by(payment_id=payment_id)).scalars().first() is not None
+    payment = database.session.get(PaymentEntry, payment_id)
+    return bool(payment and list_active_payment_references(payment))
 
 
 def _payment_total_allocated(payment_id: str) -> Decimal:
-    """Retorna la suma de allocated_amount de las referencias de un pago."""
-    from cacao_accounting.database import PaymentReference
+    """Retorna la suma de allocated_amount de las referencias canónicas de un pago."""
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    result = database.session.execute(
-        select(func.coalesce(func.sum(PaymentReference.allocated_amount), Decimal("0"))).filter_by(payment_id=payment_id)
-    ).scalar()
-    return result or Decimal("0")
+    payment = database.session.get(PaymentEntry, payment_id)
+    if payment is None:
+        return Decimal("0")
+    return sum(
+        (_decimal_value(reference.allocated_amount) for reference in list_active_payment_references(payment)), Decimal("0")
+    )
+
+
+def _remaining_outstanding_from_ledger(target: Any, as_of_date: date) -> Decimal | None:
+    """Saldo vigente del documento destino desde el ledger canónico.
+
+    Devuelve ``None`` cuando el documento no tiene apertura canónica (flujo
+    legacy), para no alterar su cálculo previo.
+    """
+    from cacao_accounting.database import ARAPLedgerEntry
+    from cacao_accounting.document_flow.registry import normalize_doctype
+
+    document_type = normalize_doctype(str(getattr(target, "document_type", None) or getattr(target, "__tablename__", "")))
+    opening = database.session.execute(
+        select(ARAPLedgerEntry.id)
+        .where(
+            ARAPLedgerEntry.document_type == document_type,
+            ARAPLedgerEntry.document_id == str(target.id),
+            ARAPLedgerEntry.event_type == "opening",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if opening is None:
+        return None
+    balance = ARAPLedgerEntry.document_balance(
+        document_type,
+        str(target.id),
+        as_of_date=as_of_date,
+        currency=getattr(target, "transaction_currency", None) or getattr(target, "currency", None),
+    )
+    is_return = bool(getattr(target, "is_return", False)) or "credit_note" in document_type or "return" in document_type
+    return abs(balance) if is_return else max(balance, Decimal("0"))
+
+
+def _cap_payment_references_to_outstanding(document: PaymentEntry) -> None:
+    """Limita cada referencia al saldo vigente del documento destino (#1140).
+
+    El saldo se calcula dentro de la transacción de posting. La parte que
+    excede el saldo abierto no se aplica a la factura: permanece como importe
+    no aplicado del pago y se contabiliza como anticipo del mismo tercero,
+    conforme a la decisión registrada en el issue. Los documentos sin apertura
+    canónica conservan su cálculo previo.
+    """
+    from cacao_accounting.document_flow.payment import list_active_payment_references
+
+    references = list_active_payment_references(document)
+    if not references:
+        return
+    posting_date = getattr(document, "posting_date", None) or date.today()
+    for reference in references:
+        if not reference.reference_id:
+            continue
+        target_model = SalesInvoice if str(reference.reference_type).startswith("sales_") else PurchaseInvoice
+        target = (
+            database.session.execute(select(target_model).where(target_model.id == reference.reference_id).with_for_update())
+            .scalars()
+            .first()
+        )
+        if target is None:
+            continue
+        remaining = _remaining_outstanding_from_ledger(target, posting_date)
+        if remaining is None:
+            continue
+        requested = abs(_decimal_value(reference.allocated_amount))
+        effective = min(requested, remaining)
+        if effective == requested:
+            continue
+        reference.allocated_amount = effective
+        payment_amount = _decimal_value(reference.payment_amount)
+        if requested and payment_amount:
+            reference.payment_amount = (payment_amount * effective / requested).quantize(Decimal("0.0001"))
+    database.session.flush()
 
 
 def _payment_has_realized_fx_difference(payment_id: str | None) -> bool:
     """Indica si una referencia de pago conserva una diferencia cambiaria realizada."""
     if not payment_id:
         return False
-    from cacao_accounting.database import PaymentReference
+    from cacao_accounting.document_flow.payment import list_active_payment_references
 
-    fx_amounts = database.session.execute(
-        select(PaymentReference.fx_difference_amount).filter_by(payment_id=payment_id)
-    ).scalars()
-    return any(amount is not None and _decimal_value(amount) != 0 for amount in fx_amounts)
+    payment = database.session.get(PaymentEntry, payment_id)
+    if payment is None:
+        return False
+    return any(
+        reference.fx_difference_amount is not None and _decimal_value(reference.fx_difference_amount) != 0
+        for reference in list_active_payment_references(payment)
+    )
 
 
 def _signed_tax_delta(document: Any, tax_result: TaxCalculationResult | None) -> Decimal:
@@ -1131,8 +1333,9 @@ def _append_tax_entries(
         if tax_line.is_inclusive or tax_line.amount == 0:
             continue
         default_account_id = getattr(defaults, default_account_attr, None) if defaults else None
-        account_id = _require_account(
+        account_id = _require_company_account(
             tax_line.account_id or default_account_id,
+            company,
             error_message,
         )
         amount = _signed_amount(document, tax_line.amount)
@@ -1183,8 +1386,10 @@ def _append_purchase_tax_entries(
 def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una factura o nota de venta aprobada."""
     from cacao_accounting.approval_engine import assert_execution_authorized
+    from cacao_accounting.document_flow.validation import validate_sales_invoice_document_type
 
     assert_execution_authorized(document)
+    validate_sales_invoice_document_type(document.document_type)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
@@ -1463,6 +1668,17 @@ def _emit_purchase_invoice_event(document: PurchaseInvoice, company: str) -> Non
     )
 
 
+def _lock_payment_reconciliation_scope(document: PaymentEntry, company: str) -> None:
+    """Serializa el pago con la conciliación automática de sus cuentas bancarias."""
+    from cacao_accounting.default_scope import lock_default_scopes
+
+    bank_scopes = [(company, None)]
+    for account_id in (document.bank_account_id, document.target_bank_account_id):
+        if account_id:
+            bank_scopes.append((company, str(account_id)))
+    lock_default_scopes("bank_auto_reconcile", bank_scopes)
+
+
 def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para cobros, pagos y transferencias internas."""
     from cacao_accounting.approval_engine import assert_execution_authorized
@@ -1474,12 +1690,15 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         raise PostingError(_("Solo se puede contabilizar un pago aprobado."))
 
     company = _company_for(document)
+    _validate_payment_bank_account_ownership(company, document)
+    _lock_payment_reconciliation_scope(document, company)
     amount = _decimal_value(document.paid_amount or document.received_amount)
     payment_type = getattr(document, "payment_type", "").lower()
     if amount <= 0:
         raise PostingError(_("El monto del pago debe ser mayor que cero."))
 
     if payment_type in {"pay", "receive"}:
+        _cap_payment_references_to_outstanding(document)
         engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
         if engine_payload is not None:
             settlement = engine_payload.results.get("settlement")
@@ -1508,6 +1727,16 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
     return _add_entries(entries)
 
 
+def _validate_payment_bank_account_ownership(company: str, document: PaymentEntry) -> None:
+    """Reject payment bank dimensions owned by another company before any GL path."""
+    for bank_account_id in (document.bank_account_id, document.target_bank_account_id):
+        if not bank_account_id:
+            continue
+        bank_account = database.session.get(BankAccount, bank_account_id)
+        if not bank_account or bank_account.company != company:
+            raise PostingError(_("La cuenta bancaria debe pertenecer a la compañía del pago."))
+
+
 def _create_payment_pay_entries(
     context: LedgerContext,
     document: PaymentEntry,
@@ -1527,21 +1756,22 @@ def _create_payment_pay_entries(
 
     allocated = _payment_total_allocated(document.id) if party_account_id else Decimal("0")
 
-    if party_account_id and allocated > Decimal("0") and amount > allocated:
+    if party_account_id and amount > allocated:
         entries: list[GLEntry] = []
-        entries.extend(
-            _normal_entries_for_amount(
-                context=context,
-                debit_account_id=party_account_id,
-                credit_account_id=bank_account_id,
-                amount=allocated,
-                party_type=party_type,
-                party_id=document.party_id,
-                credit_bank_account_id=document.bank_account_id,
-                debit_remarks="Pago a proveedor",
-                credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
+        if allocated > Decimal("0"):
+            entries.extend(
+                _normal_entries_for_amount(
+                    context=context,
+                    debit_account_id=party_account_id,
+                    credit_account_id=bank_account_id,
+                    amount=allocated,
+                    party_type=party_type,
+                    party_id=document.party_id,
+                    credit_bank_account_id=document.bank_account_id,
+                    debit_remarks="Pago a proveedor",
+                    credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
+                )
             )
-        )
         excess = amount - allocated
         supplier_advance_account = _require_account(
             advance_account_id,
@@ -1600,7 +1830,7 @@ def _create_payment_receive_entries(
 
     allocated = _payment_total_allocated(document.id) if party_account_id else Decimal("0")
 
-    if party_account_id and allocated > Decimal("0") and amount > allocated:
+    if party_account_id and amount > allocated:
         entries: list[GLEntry] = [
             _create_gl_entry(
                 context=context,
@@ -1612,18 +1842,21 @@ def _create_payment_receive_entries(
                     entry_remarks="Cuenta bancaria receptora",
                 ),
             ),
-            _create_gl_entry(
-                context=context,
-                params=GLEntryParams(
-                    account_id=party_account_id,
-                    debit=Decimal("0"),
-                    credit=allocated,
-                    party_type=party_type,
-                    party_id=document.party_id,
-                    entry_remarks=_payment_entry_remarks(receivable, True),
-                ),
-            ),
         ]
+        if allocated > Decimal("0"):
+            entries.append(
+                _create_gl_entry(
+                    context=context,
+                    params=GLEntryParams(
+                        account_id=party_account_id,
+                        debit=Decimal("0"),
+                        credit=allocated,
+                        party_type=party_type,
+                        party_id=document.party_id,
+                        entry_remarks=_payment_entry_remarks(receivable, True),
+                    ),
+                )
+            )
         excess = amount - allocated
         if excess > 0:
             customer_advance_account = _require_account(
@@ -1861,6 +2094,16 @@ def _stock_item_for(line: Any) -> Item:
         raise PostingError(_("La linea de inventario referencia un item inexistente."))
     if item.item_type == "service" or not item.is_stock_item:
         raise PostingError(_("Solo los bienes inventariables pueden generar Stock Ledger."))
+    uom_code = getattr(line, "uom", None)
+    if uom_code:
+        uom = database.session.execute(select(UOM).filter_by(code=uom_code)).scalars().first()
+        if uom is None:
+            raise PostingError(_("La unidad de medida %(uom)s no existe.") % {"uom": uom_code})
+        if not uom.is_active:
+            raise PostingError(
+                _("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.")
+                % {"uom": uom_code}
+            )
     return item
 
 
@@ -1965,24 +2208,42 @@ def _line_rate_generic(line: Any) -> Decimal:
 
 
 def _valuation_method_for_company(company_code: str) -> str:
-    entity = database.session.get(Entity, company_code)
-    if entity is None:
-        entity = database.session.execute(select(Entity).filter_by(code=company_code)).scalars().first()
+    entity = database.session.execute(select(Entity).filter_by(code=company_code).with_for_update()).scalars().first()
     if not entity:
         raise PostingError(_("La compañía no existe."))
     return (entity.valuation_method or "moving_average").lower()
 
 
 def _consume_valuation_layer(queue: list, remaining: Decimal) -> Decimal:
-    """Consume cantidad desde el frente FIFO; entradas son ``[layer_id, qty, rate]``."""
+    """Consume cantidad desde el frente FIFO; entradas son ``[layer_id, qty, rate, attr]``."""
     while remaining > 0 and queue:
         available_qty = queue[0][1]
         consumed_qty = min(available_qty, remaining)
         remaining -= consumed_qty
+        _consume_entry_attribution(queue[0], consumed_qty, available_qty)
         queue[0][1] = available_qty - consumed_qty
         if queue[0][1] <= 0:
             queue.pop(0)
     return remaining
+
+
+def _consume_entry_attribution(entry: list, consumed_qty: Decimal, qty_before: Decimal) -> dict[str, Decimal]:
+    """Reparte la atribución de costo capitalizado consumida y deja el remanente."""
+    attribution = entry[3] if len(entry) > 3 else {}
+    if not attribution or qty_before <= 0:
+        return {}
+    if consumed_qty >= qty_before:
+        entry[3] = {}
+        return dict(attribution)
+    ratio = consumed_qty / qty_before
+    consumed: dict[str, Decimal] = {}
+    remaining: dict[str, Decimal] = {}
+    for layer_id, amount in attribution.items():
+        part = amount * ratio
+        consumed[layer_id] = part
+        remaining[layer_id] = amount - part
+    entry[3] = remaining
+    return consumed
 
 
 def _consume_pinned_layer(queue: list, source_layer_id: str | None, remaining: Decimal) -> Decimal:
@@ -1997,6 +2258,7 @@ def _consume_pinned_layer(queue: list, source_layer_id: str | None, remaining: D
             if entry[0] == source_layer_id and entry[1] > 0:
                 consumed_qty = min(entry[1], remaining)
                 remaining -= consumed_qty
+                _consume_entry_attribution(entry, consumed_qty, entry[1])
                 entry[1] -= consumed_qty
                 if entry[1] <= 0:
                     queue.pop(index)
@@ -2004,6 +2266,21 @@ def _consume_pinned_layer(queue: list, source_layer_id: str | None, remaining: D
     if remaining > 0:
         remaining = _consume_valuation_layer(queue, remaining)
     return remaining
+
+
+def _apply_value_only_layer(queue: list, layer_value: Decimal, layer_id: str | None) -> None:
+    """Distribuye una capa de solo valor y registra el share de costo capitalizado."""
+    total_qty = sum((entry[1] for entry in queue), Decimal("0"))
+    if total_qty <= 0:
+        return
+    adjustment_rate = layer_value / total_qty
+    for entry in queue:
+        entry[2] += adjustment_rate
+        if len(entry) <= 3:
+            entry.append({})
+        if layer_id:
+            share = layer_value * entry[1] / total_qty
+            entry[3][layer_id] = entry[3].get(layer_id, Decimal("0")) + share
 
 
 def _process_valuation_layer(
@@ -2017,11 +2294,7 @@ def _process_valuation_layer(
 ) -> tuple[list, Decimal, bool]:
     """Apply one valuation layer and report whether the caller should continue."""
     if qty == 0 and layer_value != 0 and queue:
-        total_qty = sum((available_qty for _, available_qty, _ in queue), Decimal("0"))
-        if total_qty > 0:
-            adjustment_rate = layer_value / total_qty
-            for entry in queue:
-                entry[2] += adjustment_rate
+        _apply_value_only_layer(queue, layer_value, layer_id)
         return queue, negative_balance, True
     if qty > 0:
         if negative_balance > 0:
@@ -2029,7 +2302,7 @@ def _process_valuation_layer(
             negative_balance -= offset
             qty -= offset
         if qty > 0:
-            queue.append([layer_id, qty, rate])
+            queue.append([layer_id, qty, rate, {}])
         return queue, negative_balance, True
     if qty < 0:
         negative_balance += _consume_pinned_layer(queue, source_layer_id, abs(qty))
@@ -2165,35 +2438,57 @@ def _layer_batch_id(
     return str(sle_batch) if sle_batch is not None else None
 
 
-def _moving_average_valuation(available: list, total_available: Decimal, quantity: Decimal) -> tuple[Decimal, Decimal]:
+def _moving_average_valuation(
+    available: list, total_available: Decimal, quantity: Decimal
+) -> tuple[Decimal, Decimal, list[dict[str, Any]]]:
     total_value = sum((entry[1] * entry[2] for entry in available), Decimal("0"))
     average_rate = total_value / total_available
-    return quantity * average_rate, average_rate
+    landed_totals: dict[str, Decimal] = {}
+    for entry in available:
+        attribution = entry[3] if len(entry) > 3 else {}
+        for layer_id, amount in attribution.items():
+            landed_totals[layer_id] = landed_totals.get(layer_id, Decimal("0")) + amount
+    consumed_layers: list[dict[str, Any]] = []
+    if landed_totals and total_available > 0:
+        share = quantity / total_available
+        consumed_layers.append(
+            {
+                "layer_id": "",
+                "qty": str(quantity),
+                "rate": str(average_rate),
+                "landed_attributed": True,
+                "landed_costs": {layer_id: str(amount * share) for layer_id, amount in landed_totals.items()},
+            }
+        )
+    return quantity * average_rate, average_rate, consumed_layers
 
 
-def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Consume FIFO y reporta la capa origen predominante del consumo y la composición por capa."""
     total_cost = Decimal("0")
     remaining = quantity
     queue = [list(entry) for entry in available]
     consumed_by_layer: dict[str, Decimal] = {}
-    consumed_layers: list[dict[str, str]] = []
+    consumed_layers: list[dict[str, Any]] = []
     while remaining > 0 and queue:
         entry = queue[0]
         consume_qty = min(entry[1], remaining)
         total_cost += consume_qty * entry[2]
         remaining -= consume_qty
+        landed_costs = _consume_entry_attribution(entry, consume_qty, entry[1])
         entry[1] -= consume_qty
         if entry[0]:
             layer_id = str(entry[0])
             consumed_by_layer[layer_id] = consumed_by_layer.get(layer_id, Decimal("0")) + consume_qty
-            consumed_layers.append(
-                {
-                    "layer_id": layer_id,
-                    "qty": str(consume_qty),
-                    "rate": str(entry[2]),
-                }
-            )
+            composition = {
+                "layer_id": layer_id,
+                "qty": str(consume_qty),
+                "rate": str(entry[2]),
+                "landed_attributed": True,
+            }
+            if landed_costs:
+                composition["landed_costs"] = {key: str(value) for key, value in landed_costs.items()}
+            consumed_layers.append(composition)
         if entry[1] > 0:
             continue
         queue.pop(0)
@@ -2214,7 +2509,7 @@ def _consume_stock_valuation_layers(
     warehouse: str,
     quantity: Decimal,
     batch_id: str | None = None,
-) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Consume capas y retorna ``(costo, tasa, capa_origen_predominante, composicion_capas)``."""
     if quantity <= 0:
         raise PostingError(
@@ -2244,13 +2539,14 @@ def _consume_stock_valuation_layers(
             # Una salida que selecciona un lote concreto se valora con las capas
             # de entrada de ese lote (dimension de primer nivel del almacen), no
             # con el promedio global del articulo entre todos los lotes.
-            cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
-            return cost_amount, average_rate, None, []
+            cost_amount, average_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
+            return cost_amount, average_rate, None, consumed_layers
         if bin_qty >= quantity and bin_qty > 0:
             average_rate = bin_value / bin_qty
-            return quantity * average_rate, average_rate, None, []
-        cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
-        return cost_amount, average_rate, None, []
+            _ignored_cost, _ignored_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
+            return quantity * average_rate, average_rate, None, consumed_layers
+        cost_amount, average_rate, consumed_layers = _moving_average_valuation(available, total_available, quantity)
+        return cost_amount, average_rate, None, consumed_layers
 
     return _fifo_valuation(available, quantity)
 
@@ -2369,6 +2665,38 @@ def post_bank_transaction(document: BankTransaction, ledger_code: str | None = N
     return _add_entries(entries)
 
 
+def _insert_stock_bin_race_safe(company: str, item_code: str, warehouse: str) -> Any:
+    """Inserta el bin, reintentando si otra transacción lo insertó antes (#332).
+
+    En READ COMMITTED el insert perdedor del ``uq_stock_bin`` es bloqueado
+    hasta que el ganador confirma y luego lanza ``IntegrityError``; con la
+    savepoint del intento, la transacción externa queda usable y se lee el
+    bin confirmado para aplicar el cambio encima del registro existente.
+    """
+    try:
+        with database.session.begin_nested():
+            bin_row = StockBin(
+                company=company,
+                item_code=item_code,
+                warehouse=warehouse,
+                actual_qty=Decimal("0"),
+                stock_value=Decimal("0"),
+            )
+            database.session.add(bin_row)
+            database.session.flush()
+        return bin_row
+    except IntegrityError:
+        existing = (
+            database.session.query(StockBin)
+            .with_for_update()
+            .filter_by(company=company, item_code=item_code, warehouse=warehouse)
+            .first()
+        )
+        if existing is None:
+            raise
+        return existing
+
+
 def _upsert_stock_bin(
     *,
     company: str,
@@ -2379,6 +2707,7 @@ def _upsert_stock_bin(
     value_change: Decimal,
     preserve_reserved_qty: bool = False,
     reject_negative_stock_value: bool = False,
+    allow_value_adjustment_without_stock: bool = False,
 ) -> tuple[Decimal, Decimal]:
     """Actualiza StockBin con FOR UPDATE para evitar condiciones de carrera.
 
@@ -2393,19 +2722,22 @@ def _upsert_stock_bin(
     Retorna ``(qty_after, stock_value_after)``.
     """
     # INV-06: Usar SELECT FOR UPDATE para evitar condición de carrera en StockBin
+    # y refrescar la instancia ya cargada: sin populate_existing la actualización
+    # aplica valores obsoletos del identity map (#1868).
     bin_row = (
         database.session.query(StockBin)
         .with_for_update()
+        .populate_existing()
         .filter_by(company=company, item_code=item_code, warehouse=warehouse)
         .first()
     )
     if not bin_row:
-        bin_row = StockBin(
-            company=company, item_code=item_code, warehouse=warehouse, actual_qty=Decimal("0"), stock_value=Decimal("0")
-        )
-        database.session.add(bin_row)
+        bin_row = _insert_stock_bin_race_safe(company, item_code, warehouse)
 
     current_stock_value = _decimal_value(bin_row.stock_value)
+    current_qty = _decimal_value(bin_row.actual_qty)
+    if qty_change == 0 and value_change != 0 and current_qty <= 0 and not allow_value_adjustment_without_stock:
+        raise PostingError(_("No se puede ajustar el valor de un inventario sin existencias positivas."))
     stock_value_after = current_stock_value + value_change
     if reject_negative_stock_value and stock_value_after < 0:
         raise PostingError(_("El ajuste de valor no puede reducir el valor del inventario por debajo de cero."))
@@ -2425,6 +2757,57 @@ def _upsert_stock_bin(
         bin_row.valuation_rate = Decimal("0")
 
     return bin_row.actual_qty, bin_row.stock_value
+
+
+def _regularize_zero_stock_value(
+    document: Any,
+    line: Any,
+    warehouse: str,
+    qty_after: Decimal,
+    stock_value_after: Decimal,
+) -> StockLedgerEntry | None:
+    """Regulariza con evidencia append-only el valor residual sin existencias."""
+    if qty_after != 0 or stock_value_after == 0:
+        return None
+    residual = stock_value_after
+    _upsert_stock_bin(
+        company=document.company,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        qty_change=Decimal("0"),
+        valuation_rate=Decimal("0"),
+        value_change=-residual,
+        allow_value_adjustment_without_stock=True,
+    )
+    database.session.add(
+        StockValuationLayer(
+            item_code=line.item_code,
+            warehouse=warehouse,
+            company=document.company,
+            qty=Decimal("0"),
+            rate=Decimal("0"),
+            stock_value_difference=-residual,
+            remaining_qty=Decimal("0"),
+            remaining_stock_value=Decimal("0"),
+            voucher_type=_get_voucher_type(document),
+            voucher_id=_get_voucher_id(document),
+            posting_date=document.posting_date,
+        )
+    )
+    line._inventory_rounding_residual = _decimal_value(getattr(line, "_inventory_rounding_residual", None)) + residual
+    return StockLedgerEntry(
+        posting_date=document.posting_date,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        company=document.company,
+        qty_change=Decimal("0"),
+        qty_after_transaction=qty_after,
+        valuation_rate=Decimal("0"),
+        stock_value_difference=-residual,
+        stock_value=Decimal("0"),
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+    )
 
 
 def _has_landed_cost_allocations(document: Any) -> bool:
@@ -2457,7 +2840,8 @@ def _stock_bin_for(company: str, item_code: str, warehouse: str, *, lock: bool =
     """Fetch a stock bin, optionally locking it for a valuation transition."""
     statement = select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
     if lock:
-        statement = statement.with_for_update()
+        # #1868: refrescar fila ya cargada para no validar sobre identity map obsoleto.
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     return database.session.execute(statement).scalars().first()
 
 
@@ -2502,6 +2886,9 @@ def _persist_single_allocation(
     allocated_amount = _decimal_value(getattr(allocation, "allocated_total", None))
     if allocated_amount == 0:
         return
+    # La valuación de inventario vive en moneda funcional; la allocation del
+    # motor está en moneda transaccional (#1793).
+    functional_amount = _inventory_value_in_functional_currency(document, allocated_amount)
     item = items_by_line_id.get(str(allocation.item_line_id))
     if item is None:
         raise PostingError(_("El prorrateo de costo capitalizable no coincide con una linea de factura."))
@@ -2513,7 +2900,7 @@ def _persist_single_allocation(
         document=document,
         item=item,
         warehouse=warehouse,
-        allocated_amount=allocated_amount,
+        allocated_amount=functional_amount,
         create_valuation_adjustment=create_valuation_adjustment,
     )
     _persist_landed_cost_allocation_record(
@@ -2615,7 +3002,8 @@ def _create_stock_movement(
     _skip_layer_consumption: bool = False,
     source_layer_id: str | None = None,
     reject_negative_stock_value: bool = False,
-) -> StockLedgerEntry:
+) -> list[StockLedgerEntry]:
+    """Crea los movimientos de inventario y regulariza el residuo sin existencias."""
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
     if not warehouse:
@@ -2701,7 +3089,7 @@ def _create_stock_movement(
             batch_id=getattr(line, "batch_id", None),
         )
     )
-    return StockLedgerEntry(
+    movement = StockLedgerEntry(
         posting_date=document.posting_date,
         item_code=line.item_code,
         warehouse=warehouse,
@@ -2716,6 +3104,8 @@ def _create_stock_movement(
         batch_id=getattr(line, "batch_id", None),
         serial_no=getattr(line, "serial_no", None),
     )
+    residual = _regularize_zero_stock_value(document, line, warehouse, qty_after, stock_value_after)
+    return [movement, residual] if residual is not None else [movement]
 
 
 def _reconciliation_warehouse(document: StockEntry, line: StockEntryItem) -> str:
@@ -2953,7 +3343,14 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
 
 
 def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_value, counted_qty):
-    """Consume capas FIFO y resuelve el costo de una salida de conciliación."""
+    """Consume capas FIFO y resuelve el costo de una salida de conciliación.
+
+    Con evidencia consistente, cada movimiento de cantidad crea una capa, así
+    que el neto de capas iguala la cantidad del bin y una reducción no agota la
+    evidencia. El respaldo por stock negativo solo cubre datos históricos
+    incompletos; si no aporta valor funcional se rechaza para no descontar
+    unidades sin contrapartida en GL (#2290).
+    """
     item = _stock_item_for(line)
     try:
         cost_amount, rate, source_layer_id, consumed_layers = _consume_stock_valuation_layers(
@@ -2977,6 +3374,11 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
             batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = rate * abs(qty_change)
+        # Sin capas valoradas ni tasa objetivo, el respaldo cero descontaría
+        # unidades sin contrapartida en GL. Se rechaza de forma atómica igual
+        # que en las salidas (#2259, #2290).
+        if cost_amount <= 0:
+            raise PostingError(_("La conciliación no puede reducir inventario sin un valor funcional mayor que cero."))
         line._inventory_source_layer_id = None
         line._consumed_layers = []
     line._inventory_cost_amount = cost_amount
@@ -2991,12 +3393,20 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
     if not items:
         raise PostingError(_("La entrada de stock no contiene lineas para contabilizar."))
+    if purpose == "stock_reconciliation":
+        from cacao_accounting.inventario.service import validate_stock_reconciliation_line_keys
+
+        validate_stock_reconciliation_line_keys(
+            document.company,
+            [(item.item_code, _reconciliation_warehouse(document, item)) for item in items],
+        )
 
     movements = _create_stock_movements_for_items(document, items, purpose)
 
     if not movements:
         raise PostingError(_("La conciliación no contiene diferencias de cantidad o valuacion."))
     database.session.add_all(movements)
+    _persist_stock_book_valuations(document, movements)
     return movements
 
 
@@ -3052,7 +3462,7 @@ def _consume_outflow_stock_valuation(
     line: Any,
     source_warehouse: str,
     qty: Decimal,
-) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Calculate valuation cost and rate for stock outflows using valuation layers."""
     item = _stock_item_for(line)
     fallback_rate = _decimal_value(getattr(line, "valuation_rate", None) or getattr(line, "basic_rate", None))
@@ -3078,6 +3488,10 @@ def _consume_outflow_stock_valuation(
             batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = cost_rate * qty
+        # Sin capas ni tasa de respaldo, descontar unidades a costo cero dejaría
+        # Stock Ledger sin contrapartida en GL (#2259).
+        if cost_amount <= 0:
+            raise PostingError(_("La salida de inventario requiere un valor funcional mayor que cero."))
         source_layer_id = None
         consumed_layers = []
     line._inventory_cost_amount = cost_amount
@@ -3087,27 +3501,29 @@ def _consume_outflow_stock_valuation(
 
 def _movement_inflow_receipt(document: StockEntry, line: Any, purpose: str, qty: Decimal) -> list[StockLedgerEntry]:
     amount = _decimal_value(line.amount)
-    if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount <= 0:
+    if purpose == "adjustment_positive" and qty == 0 and amount <= 0:
         raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
-    if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
+    if purpose == "adjustment_positive" and qty == 0 and amount > 0:
         valuation_rate = _decimal_value(line.valuation_rate or line.basic_rate)
         value = amount
     else:
         valuation_rate = _line_rate(line)
         value = amount or (qty * valuation_rate)
     value = _inventory_value_in_functional_currency(document, value)
+    # Un aumento de existencias sin valor funcional deja stock y GL
+    # desalineados (#1873, #1891).
+    if qty > 0 and value <= 0:
+        raise PostingError(_("La entrada de inventario requiere un valor funcional mayor que cero."))
     valuation_rate = value / qty if qty else valuation_rate
     line._inventory_cost_amount = value
-    return [
-        _create_stock_movement(
-            document=document,
-            line=line,
-            warehouse=line.target_warehouse or document.to_warehouse,
-            qty_change=qty,
-            valuation_rate=valuation_rate,
-            value_change=value,
-        )
-    ]
+    return _create_stock_movement(
+        document=document,
+        line=line,
+        warehouse=line.target_warehouse or document.to_warehouse,
+        qty_change=qty,
+        valuation_rate=valuation_rate,
+        value_change=value,
+    )
 
 
 def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
@@ -3117,32 +3533,60 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
             raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
         value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
         fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
-        return [
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=source_warehouse,
-                qty_change=Decimal("0"),
-                valuation_rate=fallback_rate,
-                value_change=-value,
-                reject_negative_stock_value=True,
+        batch_id = str(getattr(line, "batch_id", "") or "").strip() or None
+        if batch_id:
+            from cacao_accounting.default_scope import lock_default_scope
+            from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
+
+            # #1878: serializa la capacidad del lote antes de leer el saldo,
+            # para que dos ajustes concurrentes no aprueben contra el mismo
+            # valor disponible.
+            lock_default_scope("stock_batch_value", document.company, line.item_code, source_warehouse, batch_id)
+            batch_value = _decimal_value(
+                database.session.execute(
+                    exclude_cancelled_stock_entries(
+                        select(func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0)).where(
+                            StockLedgerEntry.company == document.company,
+                            StockLedgerEntry.item_code == line.item_code,
+                            StockLedgerEntry.warehouse == source_warehouse,
+                            StockLedgerEntry.batch_id == batch_id,
+                        )
+                    )
+                ).scalar_one()
             )
-        ]
-    cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
-        document, line, source_warehouse, qty
-    )
-    return [
-        _create_stock_movement(
+            if value > batch_value:
+                raise PostingError(
+                    _(
+                        "El ajuste de valor no puede reducir el valor del lote %(batch)s por debajo de cero "
+                        "(valor disponible %(available)s, ajuste %(amount)s)."
+                    )
+                    % {"batch": batch_id, "available": batch_value, "amount": value}
+                )
+        # El GL consume el costo funcional ya convertido, no el importe
+        # transaccional de la l??nea (#1879).
+        line._inventory_cost_amount = value
+        return _create_stock_movement(
             document=document,
             line=line,
             warehouse=source_warehouse,
-            qty_change=-qty,
-            valuation_rate=cost_rate,
-            value_change=-cost_amount,
-            _skip_layer_consumption=True,
-            source_layer_id=source_layer_id,
+            qty_change=Decimal("0"),
+            valuation_rate=fallback_rate,
+            value_change=-value,
+            reject_negative_stock_value=True,
         )
-    ]
+    cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
+        document, line, source_warehouse, qty
+    )
+    return _create_stock_movement(
+        document=document,
+        line=line,
+        warehouse=source_warehouse,
+        qty_change=-qty,
+        valuation_rate=cost_rate,
+        value_change=-cost_amount,
+        _skip_layer_consumption=True,
+        source_layer_id=source_layer_id,
+    )
 
 
 def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
@@ -3154,7 +3598,7 @@ def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[St
         document, line, source_warehouse, qty
     )
     return [
-        _create_stock_movement(
+        *_create_stock_movement(
             document=document,
             line=line,
             warehouse=source_warehouse,
@@ -3164,7 +3608,7 @@ def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[St
             _skip_layer_consumption=True,
             source_layer_id=source_layer_id,
         ),
-        _create_stock_movement(
+        *_create_stock_movement(
             document=document,
             line=line,
             warehouse=target_warehouse,
@@ -3179,7 +3623,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     """Crea movimientos de inventario para una linea segun el proposito."""
     qty = _line_qty(line)
     match purpose:
-        case "material_receipt" | "adjustment_positive" | "stock_adjustment":
+        case "material_receipt" | "adjustment_positive":
             return _movement_inflow_receipt(document, line, purpose, qty)
         case "material_issue" | "adjustment_negative":
             return _movement_outflow_issue(document, line, qty)
@@ -3212,26 +3656,6 @@ def _delivery_return_source(document: DeliveryNote) -> DeliveryNote:
     if not source or source.company != document.company or source.docstatus != 1 or source.is_return:
         raise PostingError(_("La nota de entrega origen de la devolución no es válida."))
     return source
-
-
-def _delivery_outgoing_totals(
-    document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, source: DeliveryNote
-) -> tuple[Any, Any]:
-    """Return quantity and value originally issued for a return line."""
-    totals = database.session.execute(
-        select(
-            func.coalesce(func.sum(-StockLedgerEntry.qty_change), 0),
-            func.coalesce(func.sum(-StockLedgerEntry.stock_value_difference), 0),
-        ).where(
-            StockLedgerEntry.company == document.company,
-            StockLedgerEntry.voucher_type == "delivery_note",
-            StockLedgerEntry.voucher_id == source.id,
-            StockLedgerEntry.item_code == line.item_code,
-            StockLedgerEntry.warehouse == warehouse,
-            StockLedgerEntry.qty_change < 0,
-        )
-    ).one()
-    return totals[0], totals[1]
 
 
 def _delivery_already_returned_qty(
@@ -3610,7 +4034,7 @@ def _required_stock_warehouse(document: Any, line: Any, warehouse: str | None) -
 
 def _outgoing_stock_values(
     document: Any, line: Any, warehouse: str, qty_change: Decimal, item: Any
-) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, Any]]]:
     """Valida una salida y obtiene su costo desde las capas de valoración."""
     from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
 
@@ -3685,10 +4109,18 @@ def _create_stock_ledger_for_document(
     warehouse: str | None,
     line: Any,
 ) -> StockLedgerEntry:
-    from cacao_accounting.inventario.service import update_serial_state
+    from cacao_accounting.inventario.service import (
+        InventoryServiceError,
+        update_serial_state,
+        validate_batch_item_ownership,
+    )
 
     warehouse = _required_stock_warehouse(document, line, warehouse)
     item = _stock_item_for(line)
+    try:
+        validate_batch_item_ownership(line, item)
+    except InventoryServiceError as exc:
+        raise PostingError(str(exc)) from exc
     source_layer_id = None
     consumed_layers = None
     is_purchase_return = getattr(document, "is_return", False) and _is_purchase_receipt(document)
@@ -3775,7 +4207,7 @@ def _create_delivery_return_movements(
         entry_qty = entry["qty"]
         entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
         entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
-        movements.append(
+        movements.extend(
             _create_stock_movement(
                 document=document,
                 line=line,
@@ -3843,21 +4275,8 @@ def _create_stock_ledger_for_document_type(
         line_movements = _process_line_stock_ledger(document, line, sign, allocations_by_line_id, is_delivery_return)
         movements.extend(line_movements)
     database.session.add_all(movements)
+    _persist_stock_book_valuations(document, movements)
     return movements
-
-
-def _receipt_total(document: PurchaseReceipt) -> Decimal:
-    items = _document_items(document)
-    total = sum(
-        (
-            _decimal_value(getattr(item, "amount", None)) or (_line_qty_generic(item) * _line_rate_generic(item))
-            for item in items
-        ),
-        Decimal("0"),
-    )
-    if total <= 0:
-        raise PostingError(_("La recepción de compra no tiene monto conciliable."))
-    return total
 
 
 def _should_reconcile_purchase_receipt(document: PurchaseInvoice) -> bool:
@@ -3974,7 +4393,14 @@ def _reversed_stock_layer_id(movement: StockLedgerEntry) -> str | None:
     return str(original_layer) if original_layer is not None else None
 
 
-def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellation_date: Any) -> StockLedgerEntry:
+def _create_stock_reversal(
+    document: Any,
+    movement: StockLedgerEntry,
+    cancellation_date: Any,
+    *,
+    capacity_validated: bool = False,
+) -> StockLedgerEntry:
+    """Crea una contrapartida y valida su prefijo salvo que el lote ya esté validado."""
     qty_change = -_decimal_value(movement.qty_change)
     value_change = -_decimal_value(movement.stock_value_difference)
     valuation_rate = _decimal_value(movement.valuation_rate)
@@ -3985,6 +4411,20 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
     if qty_change > 0 and value_change > 0:
         valuation_rate = value_change / qty_change
     posting_date = cancellation_date
+    # La ruta de cancelación valida el conjunto completo bajo lock. Un caller
+    # directo conserva la guarda individual para no crear un prefijo negativo.
+    if qty_change < 0 and not capacity_validated:
+        bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
+        current_qty = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
+        item = database.session.get(Item, movement.item_code)
+        if item is None:
+            item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
+        allow_negative = bool(getattr(item, "allow_negative_stock", False)) if item else False
+        if not allow_negative and current_qty + qty_change < 0:
+            raise PostingError(
+                _("La reversa de stock dejaría el bin con cantidad negativa para %(item)s en %(wh)s.")
+                % {"item": movement.item_code, "wh": movement.warehouse}
+            )
     qty_after, stock_value_after = _upsert_stock_bin(
         company=movement.company,
         item_code=movement.item_code,
@@ -3992,6 +4432,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
         qty_change=qty_change,
         valuation_rate=valuation_rate,
         value_change=value_change,
+        allow_value_adjustment_without_stock=_decimal_value(movement.qty_change) == 0,
     )
     database.session.add(
         StockValuationLayer(
@@ -4007,6 +4448,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
             voucher_id=movement.voucher_id,
             posting_date=posting_date,
             source_layer_id=(_restored_source_layer_id(movement) if qty_change > 0 else _reversed_stock_layer_id(movement)),
+            batch_id=movement.batch_id,
         )
     )
     if movement.serial_no:
@@ -4016,6 +4458,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
             movement,
             outgoing=qty_change < 0,
             warehouse=movement.warehouse,
+            cancel_entry=_decimal_value(movement.qty_change) > 0,
         )
     return StockLedgerEntry(
         posting_date=posting_date,
@@ -4036,30 +4479,118 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
     )
 
 
-def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
-    """Reject reversals that would create forbidden negative stock."""
+def _stock_reversal_item(item_code: str) -> Item:
+    """Resuelve el artículo de un movimiento o falla con error de dominio."""
+    item = database.session.get(Item, item_code)
+    if item is None:
+        item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        raise PostingError(_("El art?culo %(item_code)s no existe.") % {"item_code": item_code})
+    return item
+
+
+def _project_stock_reversal_bins(
+    movements: Sequence[StockLedgerEntry],
+) -> tuple[dict[tuple[str, str, str], Decimal], dict[tuple[str, str, str], Decimal], dict[tuple[str, str, str], Item]]:
+    """Proyecta cantidad y valor finales por artículo/bodega y conserva el artículo."""
     projected: dict[tuple[str, str, str], Decimal] = {}
-    items: dict[tuple[str, str, str], Any] = {}
+    projected_value: dict[tuple[str, str, str], Decimal] = {}
+    items: dict[tuple[str, str, str], Item] = {}
     for movement in movements:
         key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
         if key not in projected:
-            bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse)
+            bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
             projected[key] = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
-            item = database.session.get(Item, movement.item_code)
-            if item is None:
-                item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
-            if item is None:
-                raise PostingError(_("El artículo %(item_code)s no existe.") % {"item_code": movement.item_code})
-            items[key] = item
+            projected_value[key] = _decimal_value(bin_row.stock_value) if bin_row else Decimal("0")
+            items[key] = _stock_reversal_item(movement.item_code)
         projected[key] -= _decimal_value(movement.qty_change)
-        if projected[key] < 0 and not items[key].allow_negative_stock:
+        projected_value[key] -= _decimal_value(movement.stock_value_difference)
+    return projected, projected_value, items
+
+
+def _project_stock_reversal_batches(
+    movements: Sequence[StockLedgerEntry],
+) -> dict[tuple[str, str, str, str], Decimal]:
+    """Proyecta la cantidad final por lote cuando el movimiento lo referencia."""
+    from cacao_accounting.inventario.service import get_batch_qty
+
+    batch_projected: dict[tuple[str, str, str, str], Decimal] = {}
+    for movement in movements:
+        batch_id = getattr(movement, "batch_id", None)
+        if not batch_id:
+            continue
+        key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
+        bkey = (*key, str(batch_id))
+        if bkey not in batch_projected:
+            batch_projected[bkey] = _decimal_value(get_batch_qty(str(batch_id), key[2], company=key[0]))
+        batch_projected[bkey] -= _decimal_value(movement.qty_change)
+    return batch_projected
+
+
+def _reject_negative_stock(projected: dict[tuple[str, str, str], Decimal], items: dict[tuple[str, str, str], Item]) -> None:
+    """Bloquea una reversa que dejaría stock negativo en una bodega."""
+    for key, value in projected.items():
+        item = items[key]
+        if value < 0 and not item.allow_negative_stock:
             raise PostingError(
                 _(
                     "No se puede cancelar el movimiento de %(item_name)s: "
                     "la bodega %(warehouse)s quedaría con stock negativo."
                 )
-                % {"item_name": items[key].name, "warehouse": movement.warehouse}
+                % {"item_name": item.name, "warehouse": key[2]}
             )
+
+
+def _reject_negative_batch_stock(
+    batch_projected: dict[tuple[str, str, str, str], Decimal],
+    items: dict[tuple[str, str, str], Item],
+) -> None:
+    """Bloquea una reversa que dejaría stock negativo en un lote."""
+    for bkey, value in batch_projected.items():
+        company, item_code, warehouse, batch_id = bkey
+        item = items[(company, item_code, warehouse)]
+        if value < 0 and not item.allow_negative_stock:
+            raise PostingError(
+                _(
+                    "No se puede cancelar el movimiento de %(item_name)s: "
+                    "el lote %(batch)s en la bodega %(warehouse)s quedar?a con stock negativo."
+                )
+                % {"item_name": item.name, "batch": batch_id, "warehouse": warehouse}
+            )
+
+
+def _reject_negative_stock_value(
+    projected: dict[tuple[str, str, str], Decimal],
+    projected_value: dict[tuple[str, str, str], Decimal],
+    items: dict[tuple[str, str, str], Item],
+) -> None:
+    """Bloquea una reversa que dejaría valor negativo con cantidad no negativa.
+
+    Una bodega con unidades disponibles no puede quedar valuada por debajo de
+    cero: la evidencia de costo dejaría de ser interpretable (#2343).
+    """
+    for key, value in projected_value.items():
+        if value < 0 and projected[key] >= 0:
+            raise PostingError(
+                _(
+                    "No se puede cancelar el movimiento de %(item_name)s: "
+                    "la bodega %(warehouse)s quedaría con un valor de inventario negativo."
+                )
+                % {"item_name": items[key].name, "warehouse": key[2]}
+            )
+
+
+def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
+    """Reject reversals that leave a bin or batch with forbidden negative stock.
+
+    Valida el resultado final por art?culo/bodega y por lote cuando aplica.
+    Bloquea el bin para serializar con otras reversas concurrentes (#1868).
+    """
+    projected, projected_value, items = _project_stock_reversal_bins(movements)
+    batch_projected = _project_stock_reversal_batches(movements)
+    _reject_negative_stock(projected, items)
+    _reject_negative_stock_value(projected, projected_value, items)
+    _reject_negative_batch_stock(batch_projected, items)
 
 
 def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code):
@@ -4252,6 +4783,42 @@ def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -
     return _add_entries(entries)
 
 
+def _journal_line_book_rate(
+    *,
+    line_currency: str,
+    book_currency: str,
+    header_currency: str,
+    base_currency: str,
+    line_exchange_rate: Decimal | None,
+    header_exchange_rate: Decimal | None,
+    document_exchange_rate: Decimal | None,
+    posting_date: date,
+) -> Decimal:
+    """Resuelve la tasa efectiva de una línea a la moneda de un libro."""
+    if line_currency == book_currency:
+        return Decimal("1")
+    if line_currency == header_currency:
+        line_to_header_rate = Decimal("1")
+    elif line_currency == base_currency:
+        line_to_header_rate = _lookup_exchange_rate(line_currency, header_currency, posting_date)
+    else:
+        line_to_header_rate = line_exchange_rate or _lookup_exchange_rate(line_currency, header_currency, posting_date)
+
+    if book_currency == header_currency:
+        header_to_book_rate = Decimal("1")
+    elif header_exchange_rate is not None:
+        header_to_book_rate = header_exchange_rate
+    elif document_exchange_rate is not None and base_currency != book_currency:
+        header_to_book_rate = document_exchange_rate * _lookup_exchange_rate(base_currency, book_currency, posting_date)
+    else:
+        header_to_book_rate = _lookup_exchange_rate(header_currency, book_currency, posting_date)
+
+    effective_rate = line_to_header_rate * header_to_book_rate
+    if effective_rate <= 0:
+        raise _invalid_exchange_rate_error()
+    return effective_rate
+
+
 def _comprobante_line_value(
     context: LedgerContext,
     original_value: Decimal,
@@ -4272,37 +4839,20 @@ def _comprobante_line_value(
     base_currency = base_context.document_base_currency
     if not base_currency:
         raise PostingError(_("El comprobante requiere moneda base para convertir sus líneas."))
-    if line_currency == book_currency:
-        line_context = context.__class__(**{**context.__dict__, "exchange_rate": Decimal("1")})
-        return line_context, original_value
-
     header_currency = base_context.transaction_currency
     if not header_currency:
         raise PostingError(_("El comprobante requiere moneda transaccional para convertir sus líneas."))
 
-    if line_currency == header_currency:
-        line_to_header_rate = Decimal("1")
-    elif line_currency == base_currency:
-        line_to_header_rate = _lookup_exchange_rate(line_currency, header_currency, context.posting_date)
-    else:
-        line_to_header_rate = context.exchange_rate or _lookup_exchange_rate(
-            line_currency, header_currency, context.posting_date
-        )
-
-    if book_currency == header_currency:
-        header_to_book_rate = Decimal("1")
-    elif base_context.exchange_rate is not None:
-        header_to_book_rate = base_context.exchange_rate
-    elif base_context.document_exchange_rate is not None and base_currency != book_currency:
-        header_to_book_rate = base_context.document_exchange_rate * _lookup_exchange_rate(
-            base_currency, book_currency, context.posting_date
-        )
-    else:
-        header_to_book_rate = _lookup_exchange_rate(header_currency, book_currency, context.posting_date)
-
-    effective_rate = line_to_header_rate * header_to_book_rate
-    if effective_rate <= 0:
-        raise _invalid_exchange_rate_error()
+    effective_rate = _journal_line_book_rate(
+        line_currency=line_currency,
+        book_currency=book_currency,
+        header_currency=header_currency,
+        base_currency=base_currency,
+        line_exchange_rate=context.exchange_rate,
+        header_exchange_rate=base_context.exchange_rate,
+        document_exchange_rate=base_context.document_exchange_rate,
+        posting_date=context.posting_date,
+    )
     converted_value = _to_company_currency(original_value, effective_rate)
     line_context = context.__class__(**{**context.__dict__, "exchange_rate": effective_rate})
     return line_context, converted_value
@@ -4315,6 +4865,9 @@ def _comprobante_entry_params(
     company_value: Decimal,
     original_value: Decimal,
     is_fy_closing: bool,
+    *,
+    is_reversal: bool = False,
+    reversal_of: str | None = None,
 ) -> GLEntryParams:
     is_debit = company_value > 0
     return GLEntryParams(
@@ -4338,8 +4891,179 @@ def _comprobante_entry_params(
         unit_code=getattr(line, "unit", None),
         project_code=getattr(line, "project", None),
         entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
+        is_reversal=is_reversal,
+        reversal_of=reversal_of,
         is_fiscal_year_closing=is_fy_closing,
     )
+
+
+def _manual_reversal_source_entry(
+    document: ComprobanteContable,
+    line: Any,
+    context: LedgerContext,
+) -> GLEntry | None:
+    """Find the GL row corresponding to one line of a manual journal reversal."""
+    if not document.reversal_of:
+        return None
+    economic_line_id = getattr(line, "economic_line_id", None)
+    if not economic_line_id:
+        raise PostingError(_("La línea de reversión no conserva su identidad contable de origen."))
+    source_entries = (
+        database.session.execute(
+            select(GLEntry).where(
+                GLEntry.voucher_type == JOURNAL_TRANSACTION_TYPE,
+                GLEntry.voucher_id == document.reversal_of,
+                GLEntry.company == document.entity,
+                GLEntry.ledger_id == context.ledger_id,
+                GLEntry.economic_line_id == economic_line_id,
+                GLEntry.is_cancelled.is_(False),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(source_entries) != 1:
+        raise PostingError(_("No se encontró una línea GL de origen única para la reversión."))
+    return source_entries[0]
+
+
+def _manual_reversal_matches_source(
+    source_entry: GLEntry,
+    line: Any,
+    context: LedgerContext,
+    account_id: str,
+    original_value: Decimal,
+) -> bool:
+    """Confirm the reversal preserves the source line's accounting effect."""
+    expected_reference_type = getattr(line, "reference_type", None) or getattr(line, "internal_reference", None)
+    expected_reference_name = (
+        getattr(line, "reference_name", None)
+        or getattr(line, "reference_open_item_id", None)
+        or getattr(line, "internal_reference_id", None)
+        or getattr(line, "reference", None)
+    )
+    source_original_value = (source_entry.credit_in_account_currency or Decimal("0")) - (
+        source_entry.debit_in_account_currency or Decimal("0")
+    )
+    return all(
+        (
+            source_entry.account_id == account_id,
+            source_original_value == original_value,
+            source_entry.account_currency == context.transaction_currency,
+            source_entry.company_currency == context.company_currency,
+            source_entry.party_type == getattr(line, "third_type", None),
+            source_entry.party_id == getattr(line, "third_code", None),
+            source_entry.reference_type == expected_reference_type,
+            source_entry.reference_name == expected_reference_name,
+            source_entry.reference_open_item_id == getattr(line, "reference_open_item_id", None),
+            source_entry.bank_account_id == getattr(line, "bank_account_id", None),
+            source_entry.is_advance == bool(getattr(line, "is_advance", False)),
+            source_entry.cost_center_code == getattr(line, "cost_center", None),
+            source_entry.unit_code == getattr(line, "unit", None),
+            source_entry.project_code == getattr(line, "project", None),
+        )
+    )
+
+
+def _validate_manual_reversal_ledgers(
+    document: ComprobanteContable,
+    lines: list[Any],
+    contexts: list[LedgerContext],
+) -> None:
+    """Ensure every source ledger line is represented in the reversal."""
+    if not document.reversal_of:
+        return
+    for line in lines:
+        economic_line_id = getattr(line, "economic_line_id", None)
+        if not economic_line_id:
+            raise PostingError(_("La línea de reversión no conserva su identidad contable de origen."))
+        source_ledgers = set(
+            database.session.execute(
+                select(GLEntry.ledger_id).where(
+                    GLEntry.voucher_type == JOURNAL_TRANSACTION_TYPE,
+                    GLEntry.voucher_id == document.reversal_of,
+                    GLEntry.company == document.entity,
+                    GLEntry.economic_line_id == economic_line_id,
+                    GLEntry.is_cancelled.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        line_book = str(getattr(line, "book", None) or "")
+        reversal_ledgers = {
+            context.ledger_id
+            for context in contexts
+            if not line_book
+            or not (book := database.session.get(Book, context.ledger_id))
+            or line_book in {book.id, book.code}
+        }
+        if source_ledgers and source_ledgers != reversal_ledgers:
+            raise PostingError(_("La reversión debe incluir cada libro contable de la línea de origen."))
+
+        for context in contexts:
+            if context.ledger_id not in reversal_ledgers:
+                continue
+            _manual_reversal_source_entry(document, line, context)
+
+    transition_types = database.session.execute(
+        select(DocumentTransition.transition_type).where(
+            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.source_id == document.reversal_of,
+            DocumentTransition.target_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.target_id == document.id,
+        )
+    ).scalars()
+    has_reversal_transition = any(
+        transition_type == "reversal"
+        or (
+            transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX)
+            and transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX).isdigit()
+            and len(transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)) == 5
+        )
+        for transition_type in transition_types
+    )
+    if not has_reversal_transition:
+        raise PostingError(_("La reversión manual no tiene una transición válida."))
+
+
+def _post_comprobante_line(
+    document: ComprobanteContable,
+    line: ComprobanteContableDetalle,
+    context: LedgerContext,
+    company: str,
+    is_fy_closing: bool,
+) -> tuple[GLEntry, Decimal]:
+    """Build one GL row, retaining exact source amounts for a manual reversal."""
+    original_value = _decimal_value(getattr(line, "value", None))
+    if original_value == 0:
+        raise PostingError(_("Las lineas del comprobante contable deben tener un valor distinto de cero."))
+    account_id = _account_id_for_comprobante_line(line, company, allow_inactive=bool(document.reversal_of))
+    line_currency = getattr(line, "currency_id", None) or context.transaction_currency
+    line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
+    line_context, company_value = _comprobante_line_value(line_context, original_value, document_context=context)
+    source_entry = _manual_reversal_source_entry(document, line, line_context)
+    reversal_entry_id = None
+    if source_entry:
+        if not _manual_reversal_matches_source(source_entry, line, line_context, account_id, original_value):
+            raise PostingError(_("La línea de reversión no coincide con su línea GL de origen."))
+        original_value = (source_entry.credit_in_account_currency or Decimal("0")) - (
+            source_entry.debit_in_account_currency or Decimal("0")
+        )
+        company_value = source_entry.credit - source_entry.debit
+        line_context = line_context.__class__(**{**line_context.__dict__, "exchange_rate": source_entry.exchange_rate})
+        reversal_entry_id = str(source_entry.id)
+    params = _comprobante_entry_params(
+        line_context,
+        line,
+        account_id,
+        company_value,
+        original_value,
+        is_fy_closing,
+        is_reversal=bool(document.reversal_of),
+        reversal_of=reversal_entry_id,
+    )
+    return _create_gl_entry(context=line_context, params=params), company_value
 
 
 def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | Sequence[str] | None = None) -> list[GLEntry]:
@@ -4354,31 +5078,65 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
     lines = _comprobante_lines(document)
     if not lines:
         raise PostingError(_("El comprobante contable no contiene lineas."))
+    _validate_manual_journal_dimensions(company, lines)
 
     entries: list[GLEntry] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
-    for context in _document_contexts(document, ledger_code=ledger_code):
+    contexts = _document_contexts(document, ledger_code=ledger_code)
+    _validate_manual_reversal_ledgers(document, lines, contexts)
+    for context in contexts:
         context_book = database.session.get(Book, context.ledger_id) if context.ledger_id else None
         total_value = Decimal("0")
         for line in lines:
             line_book = str(getattr(line, "book", None) or "")
             if line_book and context_book and line_book not in {context_book.id, context_book.code}:
                 continue
-            original_value = _decimal_value(getattr(line, "value", None))
-            if original_value == 0:
-                raise PostingError(_("Las lineas del comprobante contable deben tener un valor distinto de cero."))
-
-            account_id = _account_id_for_comprobante_line(line, company)
-            line_currency = getattr(line, "currency_id", None) or context.transaction_currency
-            line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
-            line_context, company_value = _comprobante_line_value(line_context, original_value, document_context=context)
+            entry, company_value = _post_comprobante_line(document, line, context, company, is_fy_closing)
             total_value += company_value
-            params = _comprobante_entry_params(line_context, line, account_id, company_value, original_value, is_fy_closing)
-            entries.append(_create_gl_entry(context=line_context, params=params))
+            entries.append(entry)
         if total_value != 0:
             raise PostingError(_("El comprobante contable no está balanceado en la moneda del libro."))
 
+    if not entries:
+        raise PostingError(_("El comprobante contable no generó ninguna entrada en los libros activos."))
     return _add_entries(entries)
+
+
+def _validate_manual_journal_dimensions(company: str, lines: Sequence[Any]) -> None:
+    """Prevent posting journal lines with dimensions owned by another company."""
+    for line in lines:
+        bank_account_id = getattr(line, "bank_account_id", None)
+        _validate_manual_journal_bank_account(company, bank_account_id)
+        _validate_journal_dimension(
+            company,
+            getattr(line, "unit_code", None) or getattr(line, "unit", None),
+            Unit,
+            _("La unidad no existe o no pertenece a la compañía del comprobante."),
+        )
+        _validate_journal_dimension(
+            company,
+            getattr(line, "project_code", None) or getattr(line, "project", None),
+            Project,
+            _("El proyecto no existe o no pertenece a la compañía del comprobante."),
+        )
+
+
+def _validate_manual_journal_bank_account(company: str, bank_account_id: str | None) -> None:
+    """Reject a bank account that is missing or belongs to another company."""
+    if not bank_account_id:
+        return
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account or bank_account.company != company:
+        raise PostingError(_("La cuenta bancaria no existe o no pertenece a la compañía del comprobante."))
+
+
+def _validate_journal_dimension(company: str, code: str | None, model: Any, error_message: str) -> None:
+    """Validate a journal's unit or project against the owning company."""
+    if not code:
+        return
+    dimension = database.session.query(model).filter_by(code=code).first()
+    if not dimension or dimension.entity != company:
+        raise PostingError(error_message)
 
 
 def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> list[GLEntry]:
@@ -4392,14 +5150,18 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
 
     company = _company_for(document)
+    # Todas las rutas de actividad comparten el lock de Entity con el cambio
+    # de método de valuación; no solo los consumos FIFO (#1881).
+    _valuation_method_for_company(company)
     purpose = getattr(document, "purpose", "").lower()
+    for line in database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars():
+        _validate_stock_entry_warehouses(document, line)
     if purpose == "material_transfer":
         _validate_material_transfer_accounts(document, company)
 
-    movements = _create_stock_ledger(document)
+    _validate_stock_reconciliation_dimensions(document, company)
 
-    if purpose == "stock_reconciliation":
-        _validate_stock_reconciliation_dimensions(document, company)
+    movements = _create_stock_ledger(document)
 
     # In Material Transfer, we only generate GL if source and target warehouses
     # use different GL accounts. Otherwise, it's just a stock movement.
@@ -4468,6 +5230,17 @@ def _create_stock_entry_gl_entries(
     return entries
 
 
+def _inventory_rounding_account_id(document: Any, line: StockEntryItem, company: str, purpose: str) -> str:
+    """Resuelve la cuenta de regularización o el offset del documento."""
+    from cacao_accounting.database import CompanyDefaultAccount
+
+    defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalar_one_or_none()
+    rounding_account_id = getattr(defaults, "default_rounding_account_id", None)
+    if rounding_account_id:
+        return str(rounding_account_id)
+    return _get_offset_account_for_line(document, line, company, purpose)
+
+
 def _add_stock_entry_line_gl_entries(
     entries: list[GLEntry],
     context: LedgerContext,
@@ -4476,12 +5249,14 @@ def _add_stock_entry_line_gl_entries(
     line: StockEntryItem,
     purpose: str,
 ) -> None:
-    """Add GL entries for a single stock entry line."""
+    """Add GL entries for a single stock entry line y su residuo de redondeo."""
     amount = _get_stock_entry_line_amount(document, line, purpose)
-    if amount <= 0:
+    residual = _decimal_value(getattr(line, "_inventory_rounding_residual", None))
+    if amount <= 0 and residual == 0:
         return
 
-    dimension_kwargs = _get_dimension_kwargs(document)
+    _validate_stock_line_dimensions(line, company)
+    dimension_kwargs = _get_dimension_kwargs(document, line)
 
     if purpose == "material_transfer":
         source_acc = warehouse_inventory_account_id(line.source_warehouse or document.from_warehouse, company)
@@ -4505,7 +5280,7 @@ def _add_stock_entry_line_gl_entries(
 
     if purpose == "stock_reconciliation":
         _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
-    elif purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
+    elif purpose in ("material_receipt", "adjustment_positive"):
         entries.extend(
             _normal_entries_for_amount(
                 context=context,
@@ -4530,6 +5305,24 @@ def _add_stock_entry_line_gl_entries(
             )
         )
 
+    if residual != 0:
+        rounding_account_id = _inventory_rounding_account_id(document, line, company, purpose)
+        if residual > 0:
+            debit_account_id, credit_account_id = rounding_account_id, inventory_account_id
+        else:
+            debit_account_id, credit_account_id = inventory_account_id, rounding_account_id
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=debit_account_id,
+                credit_account_id=credit_account_id,
+                amount=abs(residual),
+                **dimension_kwargs,
+                debit_remarks=_("Regularización de residuo de inventario"),
+                credit_remarks=_("Regularización de residuo de inventario"),
+            )
+        )
+
 
 def _get_stock_entry_line_amount(document: StockEntry, line: StockEntryItem, purpose: str) -> Decimal:
     """Get the amount for a stock entry line based on its purpose."""
@@ -4538,9 +5331,12 @@ def _get_stock_entry_line_amount(document: StockEntry, line: StockEntryItem, pur
 
     cost_amount = getattr(line, "_inventory_cost_amount", None)
     if cost_amount is None:
-        # AUDIT-004: resolver desde el mayor persistido cuando la sesion de
-        # posting no sembro el atributo transitorio de costo de salida.
-        cost_amount = _persisted_outbound_cost(document, line)
+        if purpose == "adjustment_negative" and _line_qty(line) == 0:
+            cost_amount = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
+        else:
+            # AUDIT-004: resolver desde el mayor persistido cuando la sesion de
+            # posting no sembro el atributo transitorio de costo de salida.
+            cost_amount = _persisted_outbound_cost(document, line)
     if cost_amount is not None:
         return _decimal_value(cost_amount)
 
@@ -4554,9 +5350,25 @@ def _get_stock_entry_line_amount(document: StockEntry, line: StockEntryItem, pur
     return Decimal("0")
 
 
+def _inventory_warehouse_for_purpose(document: StockEntry, line: StockEntryItem, purpose: str) -> str | None:
+    """Resuelve la bodega efectiva del movimiento para la cuenta de inventario."""
+    if purpose in {"material_issue", "adjustment_negative"}:
+        return line.source_warehouse or document.from_warehouse
+    if purpose in {"material_receipt", "adjustment_positive"}:
+        return line.target_warehouse or document.to_warehouse
+    return (
+        getattr(line, "warehouse", None)
+        or line.target_warehouse
+        or line.source_warehouse
+        or document.to_warehouse
+        or document.from_warehouse
+    )
+
+
 def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
     """Get the inventory account for a stock entry line."""
-    account = _warehouse_inventory_account_id(document, line, company)
+    warehouse = _inventory_warehouse_for_purpose(document, line, purpose)
+    account = warehouse_inventory_account_id(warehouse, company)
     return _require_account(account, "Falta la cuenta de inventario para la linea de stock.")
 
 
@@ -4590,7 +5402,7 @@ def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, com
 
 
 def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str) -> None:
-    """Valida que las dimensiones de una conciliación pertenezcan a la compañía."""
+    """Valida que las dimensiones del documento pertenezcan a la compañía."""
     dimensions = (
         (CostCenter, getattr(document, "cost_center_code", None), "centro de costo"),
         (Unit, getattr(document, "unit_code", None), "unidad"),
@@ -4603,17 +5415,33 @@ def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str
             select(model.id).where(model.entity == company, model.code == code)
         ).scalar_one_or_none()
         if exists is None:
-            raise PostingError(
-                _("El %(label)s de la conciliación no pertenece a la compañía del documento.") % {"label": label}
-            )
+            raise PostingError(_("El %(label)s del documento no pertenece a la compañía.") % {"label": label})
 
 
-def _get_dimension_kwargs(document: StockEntry) -> dict[str, Any]:
-    """Get dimension kwargs from document."""
+def _validate_stock_line_dimensions(line: StockEntryItem, company: str) -> None:
+    """Exige que las dimensiones del detalle pertenezcan a la compañía (#1888)."""
+    checks = (
+        (CostCenter, getattr(line, "cost_center_code", None), _("centro de costo")),
+        (Project, getattr(line, "project_code", None), _("proyecto")),
+    )
+    for model, code, label in checks:
+        if not code:
+            continue
+        exists = database.session.execute(
+            select(model.id).where(model.entity == company, model.code == code)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise PostingError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
+
+
+def _get_dimension_kwargs(document: StockEntry, line: StockEntryItem | None = None) -> dict[str, Any]:
+    """Get dimension kwargs, donde el detalle de línea precede a la cabecera."""
+    line_cost_center = getattr(line, "cost_center_code", None)
+    line_project = getattr(line, "project_code", None)
     return {
-        "cost_center_code": getattr(document, "cost_center_code", None),
+        "cost_center_code": line_cost_center or getattr(document, "cost_center_code", None),
         "unit_code": getattr(document, "unit_code", None),
-        "project_code": getattr(document, "project_code", None),
+        "project_code": line_project or getattr(document, "project_code", None),
     }
 
 
@@ -4728,7 +5556,11 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
         raise PostingError(_("Solo se puede aprobar un documento en borrador."))
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
-    with database.session.begin_nested():
+    from cacao_accounting.internal_control_service import authorized_posting
+
+    # #1877: el allowance para escribir líneas internas solo existe dentro
+    # del alcance del servicio de posting, no por una transición ORM cualquiera.
+    with authorized_posting(), database.session.begin_nested():
         document.docstatus = 1
         entries = post_document_to_gl(document, ledger_code=ledger_code)
         _validate_arap_gl_transition(document)
@@ -4753,12 +5585,47 @@ def cancel_document(
     original. ``reason`` y ``actor_user_id`` permiten registrar la transición
     de negocio sin alterar el documento ni el ledger histórico.
     """
+    return _cancel_document(
+        document,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        cancellation_date=cancellation_date,
+        requested_at=requested_at,
+    )
+
+
+def _cancel_document(
+    document: Any,
+    *,
+    reason: str | None = None,
+    actor_user_id: str | None = None,
+    cancellation_date: Any = None,
+    requested_at: Any = None,
+) -> list[GLEntry]:
+    """Execute cancellation while the public service owns ledger authorization."""
     from cacao_accounting.approval_engine import assert_execution_authorized
 
     assert_execution_authorized(document, actor_id=actor_user_id, action="set_null")
+    from cacao_accounting.contabilidad.arap_ledger_service import _reserve_sqlite_open_item_writer
+
+    _reserve_sqlite_open_item_writer()
     document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede cancelar un documento aprobado."))
+
+    if type(document).__name__ == "PurchaseReceipt":
+        from cacao_accounting.database import PurchaseReceiptItem, PurchaseReceiptReturnAllocation
+
+        active_return = database.session.execute(
+            database.select(PurchaseReceiptReturnAllocation.id).where(
+                PurchaseReceiptReturnAllocation.original_receipt_item_id.in_(
+                    database.select(PurchaseReceiptItem.id).where(PurchaseReceiptItem.purchase_receipt_id == document.id)
+                ),
+                PurchaseReceiptReturnAllocation.status == "active",
+            )
+        ).first()
+        if active_return is not None:
+            raise PostingError(_("No se puede cancelar la recepción porque tiene devoluciones activas."))
 
     if getattr(document, "is_fiscal_year_closing", False):
         return _cancel_fiscal_year_closing_document(
@@ -4796,35 +5663,45 @@ def cancel_document(
     company = cancellation_context.company
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
 
-    with database.session.begin_nested():
-        _record_cancellation_transition(document, cancellation_context)
-        document.docstatus = 2
-        document.cancelled_at = database.func.now()
-        document.cancelled_by = cancellation_context.actor_user_id
-        document.cancel_reason = cancellation_context.reason
-        if isinstance(document, PaymentEntry):
-            from cacao_accounting.withholding_service import cancel_withholding_certificate
+    from cacao_accounting.internal_control_service import _LEDGER_CANCELLATION_ACTIVE
 
-            cancel_withholding_certificate(document.id)
-        _update_validation_service(document)
+    token = _LEDGER_CANCELLATION_ACTIVE.set((voucher_type, voucher_id))
+    try:
+        with database.session.begin_nested():
+            _record_cancellation_transition(document, cancellation_context)
+            document.docstatus = 2
+            document.cancelled_at = database.func.now()
+            document.cancelled_by = cancellation_context.actor_user_id
+            document.cancel_reason = cancellation_context.reason
+            if isinstance(document, PaymentEntry):
+                from cacao_accounting.withholding_service import cancel_withholding_certificate
 
-        reversals = _create_gl_reversals(
-            document, original_entries, voucher_type, voucher_id, cancellation_context.effective_date
-        )
+                cancel_withholding_certificate(document.id)
+            _update_validation_service(document)
 
-        _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id, cancellation_context.effective_date)
-        _emit_cancel_events(document, voucher_id, company)
-        if isinstance(document, PaymentEntry):
-            from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
+            reversals = _create_gl_reversals(
+                document, original_entries, voucher_type, voucher_id, cancellation_context.effective_date
+            )
 
-            _apply_payment_cancellation_hooks(document)
+            stock_adjustments = _cancel_stock_movements_if_needed(
+                document, company, voucher_type, voucher_id, cancellation_context.effective_date
+            )
+            _emit_cancel_events(document, voucher_id, company)
+            if isinstance(document, PaymentEntry):
+                from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
 
-        result = _add_entries(reversals)
-        from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+                _apply_payment_cancellation_hooks(document)
 
-        cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
-        _validate_arap_gl_transition(document, as_of_date=cancellation_context.effective_date)
-        return result
+            result = _add_entries(reversals)
+            if stock_adjustments:
+                result = [*result, *_add_entries(stock_adjustments)]
+            from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+
+            cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
+            _validate_arap_gl_transition(document, as_of_date=cancellation_context.effective_date)
+            return result
+    finally:
+        _LEDGER_CANCELLATION_ACTIVE.reset(token)
 
 
 def _validate_arap_gl_transition(document: Any, *, as_of_date: Any = None) -> None:
@@ -4894,29 +5771,42 @@ def _cancel_fiscal_year_closing_document(
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
     posting_date = _posting_date_for(document)
 
-    with database.session.begin_nested():
-        document.docstatus = 2
-        document.cancelled_at = database.func.now()
-        document.cancelled_by = normalized_actor
-        document.cancel_reason = normalized_reason
-        _update_validation_service(document)
-        reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id, posting_date)
-        _emit_cancel_events(document, voucher_id, company)
-        result = _add_entries(reversals)
-        from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+    from cacao_accounting.internal_control_service import _LEDGER_CANCELLATION_ACTIVE
 
-        cancel_document_ar_ap(document, cancellation_date=posting_date)
-        _validate_arap_gl_transition(document, as_of_date=posting_date)
-        return result
+    token = _LEDGER_CANCELLATION_ACTIVE.set((voucher_type, voucher_id))
+    try:
+        with database.session.begin_nested():
+            document.docstatus = 2
+            document.cancelled_at = database.func.now()
+            document.cancelled_by = normalized_actor
+            document.cancel_reason = normalized_reason
+            _update_validation_service(document)
+            reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id, posting_date)
+            _emit_cancel_events(document, voucher_id, company)
+            result = _add_entries(reversals)
+            from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+
+            cancel_document_ar_ap(document, cancellation_date=posting_date)
+            _validate_arap_gl_transition(document, as_of_date=posting_date)
+            return result
+    finally:
+        _LEDGER_CANCELLATION_ACTIVE.reset(token)
 
 
 def _lock_document_for_transition(document: Any) -> Any:
-    """Lock and refresh a persistent document before a state transition."""
+    """Lock and refresh a persistent document before a state transition.
+
+    En PostgreSQL y MySQL serializa escritores concurrentes; SQLite ignora
+    ``FOR UPDATE``. ``populate_existing`` evita validar sobre una instancia
+    obsoleta del identity map: la guardia ve la fila comprometida viva.
+    """
     document_id = getattr(document, "id", None)
     if not document_id:
         raise PostingError(_("El documento debe estar persistido antes de cambiar su estado."))
     model = type(document)
-    locked = database.session.execute(select(model).where(model.id == document_id).with_for_update()).scalar_one_or_none()
+    locked = database.session.execute(
+        select(model).where(model.id == document_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if locked is None:
         raise PostingError(_("El documento no existe."))
     return locked
@@ -4939,15 +5829,6 @@ def _record_cancellation_transition(document: Any, context: CancellationContext)
             requested_at=context.requested_at,
         )
     )
-
-
-def _validate_cancel_accounting_period(document: Any, company: str) -> None:
-    """Valida el periodo contable para cancelacion."""
-    try:
-        allow_closing = bool(getattr(document, "is_closing", False))
-        validate_accounting_period(company, _posting_date_for(document), allow_closing=allow_closing)
-    except IdentifierConfigurationError as exc:
-        raise PostingError(str(exc)) from exc
 
 
 def _get_original_gl_entries(company: str, voucher_type: str, voucher_id: str, document: Any) -> list[GLEntry]:
@@ -5029,15 +5910,25 @@ def _create_gl_reversals(
     return reversals
 
 
+def _reversal_order(movements: list[StockLedgerEntry]) -> list[StockLedgerEntry]:
+    """Ordena las reversas para fijar un estado de serial determinista (#1177).
+
+    Las entradas se reversan antes que las salidas: al cancelar una
+    transferencia, la entrada de destino deja el serial ``cancelled`` y la
+    salida de origen lo restaura en su bodega, sin depender del orden que
+    devuelva la base de datos.
+    """
+    return sorted(movements, key=lambda movement: (-_decimal_value(movement.qty_change), movement.id))
+
+
 def _cancel_stock_movements_if_needed(
     document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any
-) -> None:
+) -> list[GLEntry]:
     """Cancela movimientos de inventario si el documento tiene stock."""
     if isinstance(document, (PurchaseInvoice, ImportLandedCost)):
-        _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id, cancellation_date)
-        return
+        return _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id, cancellation_date)
     if not isinstance(document, (StockEntry, PurchaseReceipt, DeliveryNote)):
-        return
+        return []
 
     original_movements = (
         database.session.execute(
@@ -5054,17 +5945,22 @@ def _cancel_stock_movements_if_needed(
     if not original_movements:
         raise PostingError(_("El documento no tiene movimientos de inventario para reversar."))
 
+    # La validación por lote toma los locks de los bins y se mantiene sobre el
+    # neto del documento. Revalidar prefijos individuales reintroduciría el
+    # bloqueo dependiente del orden que corrige #1857.
     _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
-    for movement in original_movements:
-        stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date))
+    for movement in _reversal_order(original_movements):
+        stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date, capacity_validated=True))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
+    _persist_stock_book_reversals(original_movements, stock_reversals)
+    return []
 
 
 def _cancel_landed_cost_valuations(
     document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any = None
-) -> None:
+) -> list[GLEntry]:
     """Revierte ajustes de valoración capitalizados por una factura o landed cost."""
     cancellation_date = cancellation_date or _posting_date_for(document)
     allocations = (
@@ -5078,24 +5974,18 @@ def _cancel_landed_cost_valuations(
         .scalars()
         .all()
     )
-    for allocation in allocations:
-        amount = _decimal_value(allocation.allocated_amount)
-        if amount <= 0 or not allocation.warehouse:
+    prepared = _prepare_landed_cost_valuation_reversals(allocations, voucher_type, voucher_id)
+    for allocation, _layer, bin_row, remaining, _consumed, _consumers in prepared:
+        if remaining <= 0:
             continue
-        layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
-        if layer is None:
-            raise PostingError(_("El costo capitalizable no tiene capa de valoración para reversar."))
-
-        bin_row = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
-        if bin_row is None:
-            raise PostingError(_("El costo capitalizable no tiene saldo de inventario para reversar."))
         _upsert_stock_bin(
             company=company,
             item_code=allocation.item_code,
             warehouse=allocation.warehouse,
             qty_change=Decimal("0"),
             valuation_rate=_decimal_value(bin_row.valuation_rate),
-            value_change=-amount,
+            value_change=-remaining,
+            reject_negative_stock_value=True,
         )
         database.session.flush()
         updated_bin = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
@@ -5106,7 +5996,7 @@ def _cancel_landed_cost_valuations(
                 company=company,
                 qty=Decimal("0"),
                 rate=_decimal_value(updated_bin.valuation_rate) if updated_bin else Decimal("0"),
-                stock_value_difference=-amount,
+                stock_value_difference=-remaining,
                 remaining_qty=max(_decimal_value(updated_bin.actual_qty) if updated_bin else Decimal("0"), Decimal("0")),
                 remaining_stock_value=max(
                     _decimal_value(updated_bin.stock_value) if updated_bin else Decimal("0"), Decimal("0")
@@ -5116,6 +6006,313 @@ def _cancel_landed_cost_valuations(
                 posting_date=cancellation_date,
             )
         )
+    return _post_landed_cost_consumed_adjustments(
+        prepared,
+        company=company,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_date=cancellation_date,
+    )
+
+
+def _prepare_landed_cost_valuation_reversals(
+    allocations: Sequence[LandedCostAllocation], voucher_type: str, voucher_id: str
+) -> list[tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]]:
+    """Validate consumed attribution and remaining stock before changing values."""
+    prepared: list[tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]] = (
+        []
+    )
+    value_by_bin: dict[tuple[str, str, str], Decimal] = {}
+    ordered_allocations = sorted(
+        allocations,
+        key=lambda row: (str(row.item_code), str(row.warehouse or ""), str(row.id)),
+    )
+    for allocation in ordered_allocations:
+        if _decimal_value(allocation.allocated_amount) <= 0 or not allocation.warehouse:
+            continue
+        layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
+        if layer is None:
+            raise PostingError(_("El costo capitalizable no tiene capa de valoración para reversar."))
+        if not _landed_cost_layer_matches_allocation(allocation, layer, voucher_type, voucher_id):
+            raise _landed_cost_reversal_not_reconstructible()
+        original = _decimal_value(layer.stock_value_difference)
+        if original <= 0:
+            raise _landed_cost_reversal_not_reconstructible()
+        consumed, consumers = _landed_cost_consumption(layer)
+        remaining = original - consumed
+        bin_row = _stock_bin_for(allocation.company, allocation.item_code, allocation.warehouse, lock=True)
+        if remaining > 0 and bin_row is None:
+            raise _landed_cost_reversal_not_reconstructible()
+        key = (str(allocation.company), str(allocation.item_code), str(allocation.warehouse))
+        value_by_bin[key] = value_by_bin.get(key, Decimal("0")) + remaining
+        prepared.append((allocation, layer, bin_row, remaining, consumed, consumers))
+    _validate_landed_cost_reversal_capacity(prepared, value_by_bin)
+    return prepared
+
+
+def _landed_cost_consumption(layer: StockValuationLayer) -> tuple[Decimal, list[tuple[Any, Decimal]]]:
+    """Suma la atribución consumida y exige evidencia forward-only en cada salida."""
+    consumed = Decimal("0")
+    consumers: list[tuple[Any, Decimal]] = []
+    later = (
+        database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.company == layer.company,
+                StockValuationLayer.item_code == layer.item_code,
+                StockValuationLayer.warehouse == layer.warehouse,
+                StockValuationLayer.qty < 0,
+                or_(
+                    StockValuationLayer.posting_date > layer.posting_date,
+                    and_(
+                        StockValuationLayer.posting_date == layer.posting_date,
+                        StockValuationLayer.id > layer.id,
+                    ),
+                ),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for movement in later:
+        entries = _parse_consumed_layers(movement)
+        if not entries or not all(entry.get("landed_attributed") for entry in entries):
+            raise _landed_cost_reversal_not_reconstructible()
+        share = Decimal("0")
+        for entry in entries:
+            raw = (entry.get("landed_costs") or {}).get(str(layer.id))
+            if raw is not None:
+                share += Decimal(str(raw))
+        if share > 0:
+            consumed += share
+            consumers.append((movement, share))
+    if consumed > _decimal_value(layer.stock_value_difference):
+        raise _landed_cost_reversal_not_reconstructible()
+    return consumed, consumers
+
+
+def _parse_consumed_layers(movement: StockValuationLayer) -> list[dict[str, Any]] | None:
+    """Devuelve la composición JSON de una salida o ``None`` si no es legible."""
+    raw = getattr(movement, "consumed_layers", None)
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, list) or not all(isinstance(entry, dict) for entry in payload):
+        return None
+    return payload
+
+
+def _landed_cost_layer_matches_allocation(
+    allocation: LandedCostAllocation, layer: StockValuationLayer, voucher_type: str, voucher_id: str
+) -> bool:
+    """Ensure a persisted allocation points to its own item and voucher layer."""
+    return (
+        layer.company == allocation.company
+        and layer.item_code == allocation.item_code
+        and layer.warehouse == allocation.warehouse
+        and layer.voucher_type == voucher_type
+        and layer.voucher_id == voucher_id
+    )
+
+
+def _validate_landed_cost_reversal_capacity(
+    prepared: Sequence[
+        tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]
+    ],
+    value_by_bin: dict[tuple[str, str, str], Decimal],
+) -> None:
+    """Reject a reversal when available stock value cannot cover the remaining amount."""
+    for allocation, _layer, bin_row, remaining, _consumed, _consumers in prepared:
+        if remaining <= 0:
+            continue
+        key = (str(allocation.company), str(allocation.item_code), str(allocation.warehouse))
+        if bin_row is None or _decimal_value(bin_row.stock_value) < value_by_bin[key]:
+            raise _landed_cost_reversal_not_reconstructible()
+
+
+def _post_landed_cost_consumed_adjustments(
+    prepared: Sequence[
+        tuple[LandedCostAllocation, StockValuationLayer, StockBin, Decimal, Decimal, list[tuple[Any, Decimal]]]
+    ],
+    *,
+    company: str,
+    voucher_type: str,
+    voucher_id: str,
+    posting_date: Any,
+) -> list[GLEntry]:
+    """Contrapartida por libro: devuelve inventario consumido y descarga COGS/gasto.
+
+    El reverso genérico ya acreditó inventario por el importe completo del costo
+    capitalizado. Aquí se devuelve la parte consumida al inventario y se descarga
+    la cuenta de costo que la recibió en cada salida, por libro y moneda histórica.
+    """
+    functional_by_account: dict[str, Decimal] = {}
+    for allocation, layer, _bin_row, _remaining, _consumed, _consumers in prepared:
+        account = warehouse_inventory_account_id(allocation.warehouse, company)
+        if not account:
+            raise _landed_cost_reversal_not_reconstructible()
+        functional_by_account[account] = functional_by_account.get(account, Decimal("0")) + _decimal_value(
+            layer.stock_value_difference
+        )
+
+    adjustments: dict[tuple[str, str, str], Decimal] = {}
+    ledger_templates: dict[tuple[str, str], Any] = {}
+    destination_templates: dict[tuple[str, str, str], Any] = {}
+    for allocation, layer, _bin_row, _remaining, consumed, consumers in prepared:
+        if consumed <= 0:
+            continue
+        account = warehouse_inventory_account_id(allocation.warehouse, company)
+        original = _decimal_value(layer.stock_value_difference)
+        original_rows = (
+            database.session.execute(
+                select(GLEntry).where(
+                    GLEntry.voucher_type == voucher_type,
+                    GLEntry.voucher_id == voucher_id,
+                    GLEntry.account_id == account,
+                    GLEntry.debit > 0,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_ledger: dict[str, Decimal] = {}
+        for row in original_rows:
+            by_ledger[str(row.ledger_id)] = by_ledger.get(str(row.ledger_id), Decimal("0")) + Decimal(row.debit)
+            ledger_templates.setdefault((str(row.ledger_id), account), row)
+        if not by_ledger:
+            raise _landed_cost_reversal_not_reconstructible()
+        for ledger_id, book_total in by_ledger.items():
+            allocation_book = book_total * original / functional_by_account[account]
+            for consumer, share in consumers:
+                consumer_book = allocation_book * share / original
+                for destination, amount in _consumer_destination_amounts(consumer, ledger_id, account, consumer_book):
+                    key = (ledger_id, account, str(destination.account_id))
+                    adjustments[key] = adjustments.get(key, Decimal("0")) + amount
+                    destination_templates.setdefault(key, destination)
+    return _landed_adjustment_entries(
+        adjustments,
+        ledger_templates,
+        destination_templates,
+        company=company,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_date=posting_date,
+    )
+
+
+def _consumer_destination_amounts(
+    consumer: Any, ledger_id: str, inventory_account: str, consumer_book: Decimal
+) -> list[tuple[Any, Decimal]]:
+    """Reparte el importe consumido entre las cuentas de costo de la salida."""
+    destinations = (
+        database.session.execute(
+            select(GLEntry).where(
+                GLEntry.voucher_type == consumer.voucher_type,
+                GLEntry.voucher_id == consumer.voucher_id,
+                GLEntry.ledger_id == ledger_id,
+                GLEntry.debit > 0,
+                GLEntry.account_id != inventory_account,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    total_debit = sum((Decimal(row.debit) for row in destinations), Decimal("0"))
+    if not destinations or total_debit <= 0:
+        raise _landed_cost_reversal_not_reconstructible()
+    return [(row, consumer_book * Decimal(row.debit) / total_debit) for row in destinations]
+
+
+def _landed_adjustment_entries(
+    adjustments: dict[tuple[str, str, str], Decimal],
+    ledger_templates: dict[tuple[str, str], Any],
+    destination_templates: dict[tuple[str, str, str], Any],
+    *,
+    company: str,
+    voucher_type: str,
+    voucher_id: str,
+    posting_date: Any,
+) -> list[GLEntry]:
+    """Construye las contrapartidas balanceadas por libro y cuenta."""
+    entries: list[GLEntry] = []
+    for (ledger_id, inventory_account, _destination_account), amount in adjustments.items():
+        if amount == 0:
+            continue
+        inventory_template = ledger_templates[(ledger_id, inventory_account)]
+        destination = destination_templates[(ledger_id, inventory_account, _destination_account)]
+        entries.append(
+            GLEntry(
+                posting_date=posting_date,
+                company=company,
+                ledger_id=ledger_id,
+                account_id=inventory_account,
+                account_code=inventory_template.account_code,
+                debit=amount,
+                credit=Decimal("0"),
+                debit_in_account_currency=amount,
+                credit_in_account_currency=Decimal("0"),
+                account_currency=inventory_template.account_currency,
+                company_currency=inventory_template.company_currency,
+                exchange_rate=inventory_template.exchange_rate,
+                voucher_type=voucher_type,
+                voucher_id=voucher_id,
+                is_cancelled=False,
+            )
+        )
+        entries.append(
+            GLEntry(
+                posting_date=posting_date,
+                company=company,
+                ledger_id=ledger_id,
+                account_id=destination.account_id,
+                account_code=destination.account_code,
+                debit=Decimal("0"),
+                credit=amount,
+                debit_in_account_currency=Decimal("0"),
+                credit_in_account_currency=amount,
+                account_currency=destination.account_currency,
+                company_currency=destination.company_currency,
+                exchange_rate=destination.exchange_rate,
+                voucher_type=voucher_type,
+                voucher_id=voucher_id,
+                is_cancelled=False,
+            )
+        )
+    return entries
+
+
+def _landed_cost_reversal_not_reconstructible() -> PostingError:
+    """Return the controlled error used when a book-level reversal is ambiguous."""
+    return PostingError(
+        _(
+            "No se puede anular el costo capitalizado: la evidencia disponible no permite reconstruir "
+            "su distribución por libro."
+        )
+    )
+
+
+def _has_later_stock_valuation_layer(layer: StockValuationLayer, *, voucher_type: str, voucher_id: str) -> bool:
+    """Find later valuation evidence without per-book attribution, excluding sibling allocations."""
+    later_layer_id = database.session.execute(
+        select(StockValuationLayer.id)
+        .where(
+            StockValuationLayer.company == layer.company,
+            StockValuationLayer.item_code == layer.item_code,
+            StockValuationLayer.warehouse == layer.warehouse,
+            or_(
+                StockValuationLayer.voucher_type != voucher_type,
+                StockValuationLayer.voucher_id != voucher_id,
+            ),
+            or_(
+                StockValuationLayer.posting_date > layer.posting_date,
+                and_(StockValuationLayer.posting_date == layer.posting_date, StockValuationLayer.id > layer.id),
+            ),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return later_layer_id is not None
 
 
 def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
@@ -5131,13 +6328,15 @@ def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
         refresh_source_caches_for_target("purchase_receipt", document.id)
         emit_goods_received_cancelled(voucher_id, company)
 
-    if isinstance(document, PurchaseInvoice) and (
-        getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None)
-    ):
+    if isinstance(document, PurchaseInvoice):
         from cacao_accounting.compras.purchase_reconciliation_service import (
+            cancel_purchase_credit_note_allocations,
             cancel_purchase_reconciliation,
             cancel_purchase_settlement_allocations,
         )
 
-        cancel_purchase_settlement_allocations(invoice_id=document.id)
-        cancel_purchase_reconciliation(document.id)
+        if getattr(document, "document_type", None) == "purchase_credit_note":
+            cancel_purchase_credit_note_allocations(document.id)
+        elif getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None):
+            cancel_purchase_settlement_allocations(invoice_id=document.id)
+            cancel_purchase_reconciliation(document.id)

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div
@@ -9,7 +9,7 @@
 </div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -23,6 +23,7 @@
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
+  {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
   {% if from_request_id %}<input type="hidden" name="from_request" value="{{ from_request_id }}">{% endif %}
   {% set title = _("Solicitud de Cotización") ~ ((_(" desde ") ~ (solicitud_origen.document_no or solicitud_origen.id)) if solicitud_origen else "") %}
   {{ tf_macros.transaction_form_header(_('Editar Solicitud de Cotización') if edit else title, cancel_url=url_for('compras.compras_solicitud_cotizacion_lista')) }}
@@ -46,7 +47,7 @@
   {{ tf_macros.logistics_section() }}
 
   {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company if from_request_id and solicitud_origen else None %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label="Solicitud de Compra") }}
+  {{ tf_macros.transaction_grid(source_api_url=source_api_url) }}
 </form>
 
 {% endblock %}

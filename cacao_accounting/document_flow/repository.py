@@ -15,13 +15,57 @@ def decimal_or_zero(value: Any) -> Decimal:
     """Convierte valores numericos de SQLAlchemy/formularios a Decimal."""
     if value is None or value == "":
         return Decimal("0")
-    return Decimal(str(value))
+    from cacao_accounting.numbers import coerce_decimal
+
+    return coerce_decimal(value, "amount")
 
 
 def get_document(doctype: str, document_id: str) -> Any | None:
     """Obtiene un documento por tipo e id."""
     spec = get_document_type(doctype)
     return database.session.get(spec.header_model, document_id)
+
+
+def get_document_fresh(doctype: str, document_id: str) -> Any | None:
+    """Obtiene un documento forzando una lectura a la base de datos.
+
+    ``Session.get`` devuelve la instancia del identity map sin consultar la
+    base cuando ya está cargada. Tras adquirir un lock documental es necesario
+    releer el estado confirmado por otras transacciones; de lo contrario la
+    validación trabaja con una foto tomada antes del bloqueo.
+    """
+    spec = get_document_type(doctype)
+    return database.session.get(spec.header_model, document_id, populate_existing=True)
+
+
+def document_matches_type(doctype: str, document: Any) -> bool:
+    """Comprueba que el documento cargado pertenezca al tipo lógico solicitado.
+
+    Varios tipos lógicos comparten modelo (notas de crédito/débito y
+    devoluciones usan el modelo de factura); la columna ``document_type``
+    desambigua el subtipo. Los modelos sin esa columna son inequívocos.
+    Una fila sin subtipo se considera solo el tipo base del modelo.
+    """
+    spec = get_document_type(doctype)
+    actual = getattr(document, "document_type", None)
+    if actual is None:
+        # Una fila heredada sin subtipo solo es inequívoca para el tipo base
+        # del modelo (por ejemplo ``sales_invoice``); no debe autorizarse como
+        # nota de crédito, débito o devolución (#998, N14).
+        if not hasattr(spec.header_model, "document_type"):
+            return True
+        default_type = getattr(spec.header_model, "document_type", None)
+        default_value = getattr(default_type, "default", None)
+        default_arg = getattr(default_value, "arg", None)
+        if default_arg is None:
+            return True
+        # Solo un default escalar identifica el tipo base. Un default callable
+        # no permite inferirlo: se falla cerrado en lugar de comparar el
+        # objeto con el nombre del doctype (N24b).
+        if not isinstance(default_arg, str):
+            return False
+        return normalize_doctype(doctype) == normalize_doctype(default_arg)
+    return normalize_doctype(str(actual)) == normalize_doctype(doctype)
 
 
 def get_document_company(doctype: str, document_id: str) -> str | None:
@@ -65,6 +109,7 @@ def iter_active_relations_for_source(
     *,
     exclude_draft_targets: bool = False,
     include_target_id: str | None = None,
+    for_update: bool = False,
 ) -> list[DocumentRelation]:
     """Devuelve relaciones cuyo target no esta cancelado.
 
@@ -72,7 +117,10 @@ def iter_active_relations_for_source(
     validaciones de submit y la trazabilidad. Con ``exclude_draft_targets``
     se omiten los destinos en borrador (docstatus=0) salvo el documento
     identificado por ``include_target_id``, evitando que borradores
-    abandonados consuman la disponibilidad del origen.
+    abandonados consuman la disponibilidad del origen. Con ``for_update``
+    las filas se releen bajo lock y en orden determinista: en motores con
+    aislamiento repetible esto impide validar contra una instantánea anterior
+    al commit de otra transacción (#2098).
     """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type) if target_type else None
@@ -85,6 +133,9 @@ def iter_active_relations_for_source(
     )
     if target_key:
         query = query.filter_by(target_type=target_key)
+    query = query.order_by(DocumentRelation.id)
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
 
     active: list[DocumentRelation] = []
     relations = database.session.execute(query).scalars().all()
@@ -99,11 +150,12 @@ def iter_active_relations_for_source(
 
     for tt, target_ids in ids_by_type.items():
         spec = get_document_type(tt)
-        docs = (
-            database.session.execute(database.select(spec.header_model).where(spec.header_model.id.in_(target_ids)))
-            .scalars()
-            .all()
+        target_query = (
+            database.select(spec.header_model).where(spec.header_model.id.in_(target_ids)).order_by(spec.header_model.id)
         )
+        if for_update:
+            target_query = target_query.with_for_update().execution_options(populate_existing=True)
+        docs = database.session.execute(target_query).scalars().all()
         for doc in docs:
             targets_by_type_id[(tt, doc.id)] = doc
 
@@ -125,6 +177,7 @@ def consumed_qty_for_source(
     *,
     exclude_draft_targets: bool = False,
     include_target_id: str | None = None,
+    for_update: bool = False,
 ) -> Decimal:
     """Suma la cantidad consumida por relaciones activas.
 
@@ -132,6 +185,7 @@ def consumed_qty_for_source(
     una unidad común y no mutar evidencia durante consultas. Con
     ``exclude_draft_targets`` no se
     consumen destinos en borrador salvo el indicado por ``include_target_id``.
+    ``for_update`` relee bajo lock las relaciones y sus destinos (#2098).
     """
 
     def relation_qty_in_base(relation: DocumentRelation) -> Decimal:
@@ -152,6 +206,7 @@ def consumed_qty_for_source(
         target_type,
         exclude_draft_targets=exclude_draft_targets,
         include_target_id=include_target_id,
+        for_update=for_update,
     )
     consumed = sum((relation_qty_in_base(relation) for relation in relations), Decimal("0"))
 
@@ -299,35 +354,12 @@ def has_active_source_relations(source_type: str, source_id: str) -> bool:
         .all()
     )
     for relation in relations:
-        target = get_document(relation.target_type, relation.target_id)
+        spec = get_document_type(relation.target_type)
+        target = database.session.execute(
+            database.select(spec.header_model)
+            .where(spec.header_model.id == relation.target_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         if target and getattr(target, "docstatus", 0) == 1:
             return True
     return False
-
-
-def recompute_states_for_source(
-    source_type: str,
-    source_id: str,
-    target_type: str | None = None,
-) -> list[DocumentLineFlowState]:
-    """Recalcula estados de todas las lineas de un documento fuente."""
-    source_key = normalize_doctype(source_type)
-    target_keys = [normalize_doctype(target_type)] if target_type else []
-    if not target_keys:
-        target_keys = sorted(
-            {
-                row[0]
-                for row in database.session.execute(
-                    database.select(DocumentRelation.target_type).filter_by(
-                        source_type=source_key,
-                        source_id=source_id,
-                    )
-                )
-            }
-        )
-    states: list[DocumentLineFlowState] = []
-    company = get_document_company(source_key, source_id)
-    for item in get_document_items(source_key, source_id):
-        for target_key in target_keys:
-            states.append(recompute_line_flow_state(source_key, source_id, item.id, target_key, company))
-    return states

@@ -12,6 +12,8 @@ from typing import Any, Callable
 
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.errors import QueryToolError
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.permissions import validate_permission
 from cacao_accounting.reportes.services import (
     BankingFilters,
@@ -101,7 +103,7 @@ def _report_result(report: Any, company_id: str | None = None, filters: Any = No
 
 
 def _date(value: str | None) -> date | None:
-    return date.fromisoformat(value) if value else None
+    return parse_iso_date(value)
 
 
 def _aging_result(report: Any) -> dict[str, Any]:
@@ -773,6 +775,21 @@ def get_banking_balance_summary(
     return _report_result(report, company_id, filters)
 
 
+def _can_read_purchase_reconciliation(context: QueryContext, company_id: str) -> bool:
+    """Indica si la llamada puede recibir los pendientes de compras (#1254).
+
+    La herramienta de banca no debe exponer recepciones ni obligaciones de
+    Compras sin el permiso de reportes de proveedores y acceso a la compañía.
+    """
+    if _PERM_PAYABLES_REPORTS_READ not in context.permissions:
+        return False
+    try:
+        validate_permission(context, _PERM_PAYABLES_REPORTS_READ, "purchases", company_id)
+    except QueryToolError:
+        return False
+    return True
+
+
 @query_tool(
     "banking.get_reconciliation_status",
     _l("Obtiene el estado de conciliaciones bancarias y pendientes de compras."),
@@ -798,7 +815,8 @@ def get_banking_reconciliation_status(
     page_size: int = 100,
 ) -> dict[str, Any]:
     validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
-    report = get_reconciliation_report(company_id, _date(as_of_date))
+    include_purchase_pending = _can_read_purchase_reconciliation(context, company_id)
+    report = get_reconciliation_report(company_id, _date(as_of_date), include_purchase_pending=include_purchase_pending)
     filters = SimpleNamespace(as_of_date=as_of_date, page=page, page_size=page_size)
     return _report_result(report, company_id, filters)
 

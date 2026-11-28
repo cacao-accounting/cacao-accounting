@@ -6,9 +6,11 @@ set -e
 
 # Inicializa o repara la base de datos hasta que exista la tabla user y un
 # usuario inicial. Los fallos deben detener el contenedor.
-python -c "from cacao_accounting import command; command()" db init
+# En la imagen UBI9 solo existe el binario ``python3.12``; usar ``python``
+# termina con exit 127 y el contenedor no arranca.
+/usr/bin/python3.12 -c "from cacao_accounting import command; command()" db init
 
 # Aplica migraciones pendientes (idempotente).
-python -c "from cacao_accounting import command; command()" db migrate
+/usr/bin/python3.12 -c "from cacao_accounting import command; command()" db migrate
 
 exec /usr/bin/python3.12 /app/run.py

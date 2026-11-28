@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import func
@@ -13,6 +13,8 @@ from sqlalchemy import func
 from cacao_accounting.audit_trail_service import get_document_timeline_page
 from cacao_accounting.database import AuditTrail, database
 from cacao_accounting.query_tools.context import QueryContext
+from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
@@ -117,7 +119,7 @@ def get_user_activity_summary(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "audit.reports.read", "audit", company_id)
+    validate_permission(context, "audit.reports.read", None, company_id)
     current_page, size = paginate(page, page_size)
     query = database.select(
         AuditTrail.actor_user_id,
@@ -126,10 +128,17 @@ def get_user_activity_summary(
         AuditTrail.document_type,
         func.count(AuditTrail.id).label("event_count"),
     ).where(AuditTrail.company == company_id)
-    if date_from:
-        query = query.where(AuditTrail.timestamp >= date.fromisoformat(date_from))
-    if date_to:
-        query = query.where(AuditTrail.timestamp < date.fromisoformat(date_to) + timedelta(days=1))
+    inicio = parse_iso_date(date_from)
+    fin = parse_iso_date(date_to)
+    if inicio and fin and inicio > fin:
+        raise QueryToolError(
+            code=ErrorCode.INVALID_PARAMETER,
+            message=_l("La fecha inicial no puede ser posterior a la fecha final."),
+        )
+    if inicio:
+        query = query.where(AuditTrail.timestamp >= inicio)
+    if fin:
+        query = query.where(AuditTrail.timestamp < fin + timedelta(days=1))
     if actor_user_id:
         query = query.where(AuditTrail.actor_user_id == actor_user_id)
     query = query.group_by(AuditTrail.actor_user_id, AuditTrail.actor_name, AuditTrail.action, AuditTrail.document_type)

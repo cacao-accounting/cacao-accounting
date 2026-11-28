@@ -105,11 +105,19 @@ def obtener_centros_costos(entidad_=None):
 
 
 def obtener_entidades():
-    """Utilidad para obtener listado de entidades."""
+    """Devuelve las compañías habilitadas asignadas al usuario actual.
+
+    La barra de herramientas del catálogo solo puede ofrecer compañías
+    autorizadas; una compañía ajena no debe aparecer como opción ni revelar su
+    nombre (#1546).
+    """
+    from cacao_accounting.company_context import authorized_company_codes
     from cacao_accounting.database import Entity
 
-    _entidades = database.session.execute(database.select(Entity)).all()
-    return _entidades
+    companias = authorized_company_codes("accounting")
+    if not companias:
+        return []
+    return database.session.execute(database.select(Entity).where(Entity.code.in_(companias)).order_by(Entity.code)).all()
 
 
 def obtener_entidad(ent=None):

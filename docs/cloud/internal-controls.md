@@ -113,7 +113,14 @@ GRANT SELECT, INSERT ON document_relation, purchase_reconciliation,
   purchase_reconciliation_item, purchase_invoice_receipt_allocation,
   purchase_receipt_return_allocation, purchase_credit_note_allocation
   TO cacao_runtime;
-GRANT SELECT, UPDATE ON document_relation, purchase_reconciliation,
+REVOKE UPDATE ON document_relation, purchase_reconciliation,
+  purchase_reconciliation_item, purchase_invoice_receipt_allocation,
+  purchase_receipt_return_allocation, purchase_credit_note_allocation
+  FROM cacao_runtime, PUBLIC;
+GRANT UPDATE (status, reversed_at, reversed_by, reversal_reason, cancelled_at,
+  cancelled_by, metadata_json, modified, modified_by)
+  ON document_relation TO cacao_runtime;
+GRANT UPDATE (status, modified, modified_by) ON purchase_reconciliation,
   purchase_reconciliation_item, purchase_invoice_receipt_allocation,
   purchase_receipt_return_allocation, purchase_credit_note_allocation
   TO cacao_runtime;
@@ -132,9 +139,11 @@ provisioning; a REVOKE does not override privileges granted through other roles.
 
 The migration account is unavailable to the running application. Keep deployment
 credentials separate from `SQLALCHEMY_DATABASE_URI` and restrict database network
-access. A PostgreSQL owner or infrastructure administrator can still alter data.
-Retained backups or evidence copies outside that administrator's modification
-rights and restoration exercises belong to the SaaS operational controls.
+access. A PostgreSQL owner or infrastructure administrator can still alter data;
+these restrictions apply to the application's runtime role and do not limit the
+DBA's operational authority. Retained backups or evidence copies outside that
+administrator's modification rights and restoration exercises belong to SaaS
+operational controls.
 
 ## Four-eyes review and administrator authority
 
@@ -158,13 +167,28 @@ max(preparer.rank)` with a different user, instead of a hidden exception such as
 
 ## Release verification
 
-Cacao creates its schema with `create_all` (`cacaoctl db init`); no incremental
-migration is applied. The columns `roles_access.approval_rank` and
+Cacao creates its schema with `create_all` (`cacaoctl db init`) and keeps it
+versioned with Alembic (`cacaoctl db migrate`). Serving only verifies: startup
+calls `verificar_esquema_base_datos(permitir_migrar=False)`
+(`cacao_accounting/database/helpers.py`), which applies no incremental migration
+and repairs nothing. The state machine is:
+
+| Schema state | Startup (`serve`) | Explicit `cacaoctl db migrate` |
+| --- | --- | --- |
+| `empty` | aborts, points to `cacaoctl db init` | aborts |
+| `partial`, `bootstrap_incomplete` | aborts: restore a backup or initialise a new database | aborts |
+| `unversioned` | aborts, requests migration | stamps `head` |
+| `outdated` | aborts, requests migration | upgrades to `head` |
+| `current` | serves without warning | no changes |
+
+The entrypoint bootstrap (`python -m cacao_accounting`) is the only path that
+creates the initial database, and only from `empty` / `bootstrap_incomplete`.
+The columns `roles_access.approval_rank` and
 `approval_request.policy_snapshot` / `review_payload` are created with the schema.
-Databases built with an older schema must be recreated, or the columns added and the
-standard module roles classified manually before enabling four eyes. Historical
-preparers are not inferred. Classify custom roles explicitly. Existing approval
-requests without provenance are historical evidence, not proof of independent review.
+Databases built with an older schema must be migrated with `cacaoctl db migrate`
+or recreated. Historical preparers are not inferred. Classify custom roles
+explicitly. Existing approval requests without provenance are historical
+evidence, not proof of independent review.
 
 Validate on PostgreSQL with actual runtime credentials as well as SQLite tests.
 Record version/commit, reviewer, schema result, and runtime privilege checks in

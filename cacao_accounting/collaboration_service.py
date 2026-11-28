@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Any, NoReturn
+from typing import Any, NoReturn, Sequence
 
 from flask import abort, url_for
+from flask_login import current_user
 from werkzeug.routing import BuildError
 
 from cacao_accounting.audit_trail_service import log_comment, log_task_event
@@ -17,7 +18,7 @@ from cacao_accounting.database import DocumentTask, User, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.document_flow.repository import document_matches_type, get_document, get_document_company
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.i18n import _
@@ -104,12 +105,22 @@ def create_document_task(
 
 
 def update_task_status(task_id: str, status: str, user_id: str) -> DocumentTask:
-    """Update a task status and audit the related document."""
+    """Update a task status and audit the related document.
+
+    #1328/#1467: la mutación exige ser el asignado o quien creó la tarea;
+    el acceso de lectura al documento solo concede consulta, no gestión.
+    #1329: el documento debe resolverse y validarse también al mutar. Una
+    tarea que apunta a un documento inexistente, de otro tipo o de otra
+    compañía no puede cambiar de estado.
+    """
     _ensure_cloud_mode()
     normalized_status = _validate_status(status)
     task = database.session.get(DocumentTask, task_id)
     if task is None:
-        raise CollaborationError(_("Tarea no encontrada."), 404)
+        raise CollaborationError(_("Tarea no encontrado."), 404)
+    if str(task.assigned_to or "") != str(user_id) and str(task.assigned_by or "") != str(user_id):
+        # Solo el asignado o el creador gestionan el ciclo de la tarea.
+        raise CollaborationError(_("Solo el asignado o quien asignó la tarea puede cambiar su estado."), 403)
     document = _document_for_collaboration(task.document_type, task.document_id, user_id)
 
     previous_status = task.status
@@ -135,6 +146,66 @@ def list_document_tasks(document_type: str, document_id: str) -> list[DocumentTa
     )
 
 
+def _task_company_scope() -> tuple[list[str], Any]:
+    """Return the authorized companies and the SQL scope for assigned tasks.
+
+    A task belongs to a company; when the user loses access to that company the
+    task must disappear from both the inbox and the navigation badge. Una tarea
+    sin compañía no es visible: su documento polimórfico no puede validarse y
+    podría exponer datos de otra compañía (#1329, #1572, #1595).
+    """
+    from cacao_accounting.company_context import authorized_company_codes
+
+    authorized = authorized_company_codes()
+    if not authorized:
+        return authorized, database.false()
+    return authorized, DocumentTask.company.in_(authorized)
+
+
+def _task_document_visible(
+    document_type: str | None,
+    document_id: str | None,
+    company: str | None,
+    authorized: Sequence[str],
+    module_cache: dict[str, bool],
+) -> bool:
+    """Indica si el usuario conserva acceso de consulta al documento de la tarea.
+
+    El alcance por compañía ya se aplicó en la consulta; aquí se revalida el
+    permiso del módulo dueño del documento, porque revocar el rol de Ventas o
+    Compras no elimina las concesiones de compañía (#1595). Las tareas sin
+    compañía mantienen la política previa y las de tipos no registrados se
+    conservan para no ocultar datos históricos.
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return True
+    if not authenticated:
+        return True
+    if company is None or document_id is None:
+        return False
+    if str(company) not in authorized:
+        return False
+    doctype = normalize_doctype(document_type or "")
+    spec = DOCUMENT_TYPES.get(doctype)
+    if spec is None:
+        return False
+    # El documento polimórfico debe existir y pertenecer a la compañía
+    # guardada en la tarea; si no, la fila es histórica/inconsistente y se
+    # oculta en lugar de exponer sus metadatos (#1329, #1572, #1595).
+    document_company = get_document_company(doctype, str(document_id))
+    if document_company is None or str(document_company) != str(company):
+        return False
+    module = spec.permission_module or spec.module
+    if not module or module == "general":
+        return True
+    if module not in module_cache:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        module_cache[module] = bool(permissions.consultar)
+    return module_cache[module]
+
+
 def list_user_tasks(
     user_id: str,
     status: str | None = None,
@@ -142,9 +213,22 @@ def list_user_tasks(
     due_date_from: date | None = None,
     due_date_to: date | None = None,
     company: str | None = None,
+    *,
+    restrict_by_access: bool = True,
 ) -> list[DocumentTask]:
-    """List tasks assigned to a user with optional filters."""
+    """List tasks assigned to a user with optional filters.
+
+    #1595/#1572: la bandeja solo muestra tareas cuya compañía sigue en el
+    alcance vigente del usuario (o tareas sin compañía asociada); un filtro
+    explícito de compañía también exige autorización.
+    """
     query = database.select(DocumentTask).where(DocumentTask.assigned_to == user_id)
+    authorized: list[str] = []
+    if restrict_by_access:
+        authorized, scope = _task_company_scope()
+        query = query.where(scope)
+        if company and company not in authorized:
+            return []
     if status:
         query = query.where(DocumentTask.status == _validate_status(status))
     if priority:
@@ -155,24 +239,128 @@ def list_user_tasks(
         query = query.where(DocumentTask.due_date <= due_date_to)
     if company:
         query = query.where(DocumentTask.company == company)
-    return list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
+    tasks = list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
+    if not restrict_by_access:
+        return tasks
+    module_cache: dict[str, bool] = {}
+    return [
+        task
+        for task in tasks
+        if _task_document_visible(task.document_type, task.document_id, task.company, authorized, module_cache)
+    ]
 
 
-def active_users() -> list[User]:
-    """Return active users available for task assignment."""
-    return list(database.session.execute(database.select(User).filter_by(active=True).order_by(User.user)).scalars().all())
+def active_users(companies: Sequence[str] | None = None, module: str | None = None) -> list[User]:
+    """Usuarios activos disponibles para asignaciones (#1598).
+
+    Con ``companies`` el directorio se limita a los usuarios con alcance
+    explícito en esas compañías: el selector de asignaciones no revela el
+    directorio global. Con ``module`` también se exige permiso de consulta en
+    el módulo dueño del documento, de modo que un usuario con acceso a la
+    compañía pero sin el módulo no aparece como destinatario elegible.
+
+    El filtro por módulo se resuelve con ``Permisos`` en memoria porque combina
+    roles, accesos y compañías vigentes. El conjunto ya está acotado por las
+    compañías solicitadas; si el directorio crece, debe trasladarse a una
+    consulta SQL equivalente (#N11).
+    """
+    query = database.select(User).filter_by(active=True).order_by(User.user)
+    if companies:
+        from sqlalchemy import select as _select
+        from cacao_accounting.database import UserCompanyAccess
+
+        authorized_users = _select(UserCompanyAccess.user_id).where(UserCompanyAccess.company_code.in_(list(companies)))
+        query = query.where(User.id.in_(authorized_users))
+    users = list(database.session.execute(query).scalars().all())
+    if module:
+        from cacao_accounting.auth.permisos import Permisos
+        from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+        module_id = obtener_id_modulo_por_nombre(module)
+        users = [user for user in users if Permisos(modulo=module_id, usuario=user.id).consultar]
+    return users
+
+
+def _task_module_visible(module: str | None, cache: dict[str, bool]) -> bool:
+    """Resuelve y memoriza el permiso de consulta del módulo documental."""
+    if not module or module == "general":
+        return True
+    if module not in cache:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        cache[module] = bool(permissions.consultar)
+    return cache[module]
+
+
+def _group_visible_tasks(
+    rows: Sequence[Any],
+    authorized: Sequence[str],
+) -> dict[tuple[str, Any], list[tuple[str, str]]]:
+    """Agrupa tareas autorizadas por tipo y modelo de cabecera."""
+    grouped: dict[tuple[str, Any], list[tuple[str, str]]] = {}
+    module_cache: dict[str, bool] = {}
+    for document_type, document_id, company in rows:
+        if company is None or document_id is None or str(company) not in authorized:
+            continue
+        doctype = normalize_doctype(document_type or "")
+        spec = DOCUMENT_TYPES.get(doctype)
+        if spec is None:
+            continue
+        module = spec.permission_module or spec.module
+        if not _task_module_visible(module, module_cache):
+            continue
+        grouped.setdefault((doctype, spec.header_model), []).append((str(document_id), str(company)))
+    return grouped
+
+
+def _document_matches_task_scope(doctype: str, document: Any, company: str) -> bool:
+    """Confirma tipo y compañía del documento cargado para una tarea."""
+    if document is None or not document_matches_type(doctype, document):
+        return False
+    document_company = getattr(document, "company", None) or getattr(document, "entity", None)
+    return bool(document_company) and str(document_company) == company
+
+
+def _visible_task_count(rows: Sequence[Any], authorized: Sequence[str]) -> int:
+    """Cuenta tareas visibles cargando documentos por tipo en una sola consulta.
+
+    Sustituye el recorrido fila a fila de ``open_task_count``: agrupa los IDs
+    por modelo documental, resuelve la compañía real en lote y reutiliza el
+    permiso del módulo. Evita una consulta por tarea en el badge (#N2).
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        authenticated = False
+    if not authenticated:
+        return len(rows)
+
+    grouped = _group_visible_tasks(rows, authorized)
+    visible = 0
+    for (doctype, model), items in grouped.items():
+        ids = {document_id for document_id, _company in items}
+        documents = database.session.execute(database.select(model).where(model.id.in_(ids))).scalars().all()
+        by_id = {str(document.id): document for document in documents}
+        for document_id, company in items:
+            if _document_matches_task_scope(doctype, by_id.get(document_id), company):
+                visible += 1
+    return visible
 
 
 def open_task_count(user_id: str) -> int:
-    """Return the count of not-completed tasks assigned to a user."""
-    return int(
-        database.session.execute(
-            database.select(database.func.count(DocumentTask.id))
-            .where(DocumentTask.assigned_to == user_id)
-            .where(DocumentTask.status.in_(("open", "in_progress")))
-        ).scalar()
-        or 0
+    """Return the count of not-completed tasks visible in the user's scope.
+
+    Aplica el mismo filtro que la bandeja, incluido el permiso vigente del
+    módulo del documento (#1595), con carga de documentos por tipo (#N2).
+    """
+    authorized, scope = _task_company_scope()
+    query = (
+        database.select(DocumentTask.document_type, DocumentTask.document_id, DocumentTask.company)
+        .where(DocumentTask.assigned_to == user_id)
+        .where(DocumentTask.status.in_(("open", "in_progress")))
+        .where(scope)
     )
+    rows = database.session.execute(query).all()
+    return _visible_task_count(rows, authorized)
 
 
 def document_url(task: DocumentTask) -> str | None:
@@ -259,7 +447,7 @@ def _document_for_collaboration(document_type: str, document_id: str, user_id: s
     if doctype not in DOCUMENT_TYPES:
         raise CollaborationError(_("Tipo documental no encontrado."), 404)
     document = get_document(doctype, document_id)
-    if document is None:
+    if document is None or not document_matches_type(doctype, document):
         raise CollaborationError(_("Documento no encontrado."), 404)
     _require_document_permission(doctype, user_id)
     spec = DOCUMENT_TYPES[doctype]
@@ -305,4 +493,3 @@ def _audit_action_for_status(new_status: str, previous_status: str) -> str:
 def abort_for_collaboration_error(error: CollaborationError) -> NoReturn:
     """Abort a Flask request using the status carried by the collaboration error."""
     abort(error.status_code)
-    raise RuntimeError(_("Flask abort returned unexpectedly"))

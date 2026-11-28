@@ -24,9 +24,17 @@ from flask import (
 from flask_login import login_required, current_user
 from flask_babel import get_locale
 from werkzeug.utils import secure_filename
-from cacao_accounting.database import Book, database
+from cacao_accounting.database import Book, NamingSeries, database
 from sqlalchemy import or_
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.imports.csv_dialect import (
+    CSV_SAMPLE_BYTES,
+    contains_unquoted_tab,
+    contains_unquoted_tab_in_stream,
+    csv_sample_from_bytes,
+    parse_csv_rows,
+    sniff_csv_dialect,
+)
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.auth.permisos import Permisos
@@ -95,6 +103,18 @@ def _resolve_company_book(company_id: str, book_value: str | None) -> Book | Non
     ).scalar_one_or_none()
 
 
+def _import_sequence_error(sequence_id: str | None, record_type: str | None, company_id: str | None) -> str | None:
+    """Return a validation message when a selected series does not match the batch."""
+    if not sequence_id:
+        return None
+    series = database.session.get(NamingSeries, sequence_id)
+    if not series or series.entity_type != record_type:
+        return _("La serie seleccionada no coincide con el tipo de documento.")
+    if series.company != company_id:
+        return _("La serie seleccionada no pertenece a la compañía indicada.")
+    return None
+
+
 @imports.before_request
 def before_request():
     """Ejecutar verificaciones previas a cada solicitud."""
@@ -126,9 +146,15 @@ def new():
         company_id = request.form.get("company_id")
         record_type = request.form.get("record_type")
         accounting_book_id = request.form.get("accounting_book_id") or None
+        sequence_id = request.form.get("sequence_id") or None
+        sequence_error = _import_sequence_error(sequence_id, record_type, company_id)
 
-        if not company_id or not record_type:
-            flash(_("Debe seleccionar compañía y tipo de registro."), "danger")
+        if not company_id or not record_type or sequence_error:
+            flash(sequence_error or _("Debe seleccionar compañía y tipo de registro."), "danger")
+            return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
+
+        if record_type not in ImportService.ADAPTERS:
+            flash(_("Tipo de registro no soportado: %(record_type)s") % {"record_type": record_type}, "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
         exige_acceso_compania("imports", company_id, "crear")
@@ -147,7 +173,7 @@ def new():
         batch = ImportBatch(
             company_id=company_id,
             record_type=record_type,
-            sequence_id=request.form.get("sequence_id") or None,
+            sequence_id=sequence_id,
             accounting_book_id=accounting_book_id,
             import_status=0,
             created_by=current_user.id,
@@ -210,7 +236,7 @@ def detail(batch_id):
     batch = _batch_or_404(batch_id)
     service = ImportService()
     preview_data = {}
-    if batch.import_status >= 1:  # Archivo cargado
+    if batch.import_status >= 1 and batch.record_type in ImportService.ADAPTERS:  # Archivo cargado
         preview_data = service.preview(batch_id)
 
     return render_template("imports/detail.html", batch=batch, preview=preview_data)
@@ -249,14 +275,17 @@ def _extract_file_extension(filename: str) -> str:
 
 def _validate_mime_type(file: Any) -> bool:
     """Validate file MIME type using python-magic. Returns True if valid."""
+    extension = _extract_file_extension(getattr(file, "filename", ""))
     if is_desktop_mode():
-        return True
+        csv_valid = extension != "csv" or _valid_csv_tab_policy(file)
+        if not csv_valid:
+            flash(str(_INVALID_FILE_TYPE_MSG), "danger")
+        return csv_valid
     magic_modulo = _load_magic()
     if magic_modulo is None:
-        chunk = file.read(2048)
+        chunk = file.read(CSV_SAMPLE_BYTES)
         file.seek(0)
-        extension = _extract_file_extension(getattr(file, "filename", ""))
-        if extension == "csv" and _valid_csv_fallback(chunk):
+        if extension == "csv" and _valid_csv_fallback(chunk, file):
             return True
         if extension in {"xlsx", "ods"} and chunk.startswith(b"PK"):
             return True
@@ -274,24 +303,60 @@ def _validate_mime_type(file: Any) -> bool:
     if mime not in _ALLOWED_MIMES:
         flash(_("Tipo de archivo no válido"), "danger")
         return False
-    return True
+    csv_valid = extension != "csv" or _valid_csv_tab_policy(file)
+    if not csv_valid:
+        flash(str(_INVALID_FILE_TYPE_MSG), "danger")
+    return csv_valid
 
 
-def _valid_csv_fallback(chunk: bytes) -> bool:
+def _valid_csv_fallback(chunk: bytes, file: Any | None = None) -> bool:
     """Validate minimal CSV structure when python-magic is unavailable."""
     try:
-        text = chunk.decode("utf-8-sig")
+        text = csv_sample_from_bytes(chunk)
     except UnicodeDecodeError:
         return False
-    if not text.strip() or "\n" not in text and "," not in text and ";" not in text:
+    if not text.strip():
         return False
     try:
-        sample = text[:2048]
-        csv.Sniffer().sniff(sample, delimiters=",;\t")
-        rows = list(csv.reader(io.StringIO(text)))
+        dialect = sniff_csv_dialect(text)
+        # La tabulación solo es contenido válido dentro de un campo citado;
+        # fuera de comillas sería un delimitador que el lector no soporta.
+        if contains_unquoted_tab(text, dialect):
+            return False
+        rows = parse_csv_rows(text, dialect)
     except (csv.Error, ValueError):
         return False
+    if file is not None and _file_has_unquoted_tab(file, dialect):
+        return False
     return bool(rows and any(cell.strip() for row in rows for cell in row))
+
+
+def _valid_csv_tab_policy(file: Any) -> bool:
+    """Aplica el contrato de tabulaciones al CSV completo tras validar su MIME."""
+    try:
+        file.seek(0)
+        text = csv_sample_from_bytes(file.read(CSV_SAMPLE_BYTES))
+    except (OSError, UnicodeDecodeError):
+        return False
+    finally:
+        file.seek(0)
+    dialect = sniff_csv_dialect(text)
+    return not contains_unquoted_tab(text, dialect) and not _file_has_unquoted_tab(file, dialect)
+
+
+def _file_has_unquoted_tab(file: Any, dialect: Any) -> bool:
+    """Escanea el CSV completo con decodificación y saltos universales."""
+    text_stream = None
+    try:
+        file.seek(0)
+        text_stream = io.TextIOWrapper(file.stream, encoding="utf-8-sig", newline=None)
+        return contains_unquoted_tab_in_stream(text_stream, dialect)
+    except (OSError, UnicodeDecodeError):
+        return True
+    finally:
+        if text_stream is not None:
+            text_stream.detach()
+        file.seek(0)
 
 
 def _persist_uploaded_file(file: Any, batch_id: str, filename: str) -> str:
@@ -311,6 +376,9 @@ def upload(batch_id):
     """Subir un archivo a un lote de importación."""
     check_permission("actualizar")
     batch = _batch_or_404(batch_id, "editar")
+    if batch.record_type not in ImportService.ADAPTERS:
+        flash(_("Tipo de registro no soportado: %(record_type)s") % {"record_type": batch.record_type}, "danger")
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
     if batch.import_status in _PROCESSED_IMPORT_STATUSES or batch.success_rows or batch.processed_rows or batch.started_at:
         flash(_("El estado actual del lote no permite esta acción."), "warning")
         return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
@@ -375,9 +443,47 @@ def cancel(batch_id):
     check_permission("anular")
     _batch_or_404(batch_id, "anular")
     service = ImportService()
-    service.cancel(batch_id)
-    flash(_("Cancelación solicitada"), "warning")
+    if service.cancel(batch_id):
+        flash(_("Cancelación solicitada"), "warning")
+    else:
+        flash(_("El estado actual del lote no permite esta acción."), "warning")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
+
+
+def _plantilla_en_memoria(adapter, extension: str) -> tuple[io.BytesIO, str]:
+    """Construye la plantilla de importación sobre un buffer en memoria.
+
+    ``send_file`` mantiene el descriptor abierto hasta que el cuerpo se consume,
+    por lo que un archivo temporal bajo ``instance_path`` no podía borrarse al
+    terminar la petición y quedaba filtrado en el árbol de la aplicación
+    (#1678). Generar en memoria elimina el disco del camino de descarga.
+    """
+    columnas = adapter.localized_columns(str(get_locale()))
+    cuerpo = io.BytesIO()
+    match extension:
+        case "xlsx":
+            libro = openpyxl.Workbook()
+            libro.active.append(columnas)
+            libro.save(cuerpo)
+            mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "ods":
+            doc = opendocument.OpenDocumentSpreadsheet()
+            tabla = odf_table.Table(name="Template")
+            doc.spreadsheet.addElement(tabla)
+            fila = odf_table.TableRow()
+            tabla.addElement(fila)
+            for columna in columnas:
+                celda = odf_table.TableCell(valuetype="string")
+                celda.addElement(odf_paragraph(text=columna))
+                fila.addElement(celda)
+            doc.save(cuerpo)
+            mimetype = "application/vnd.oasis.opendocument.spreadsheet"
+        case _:
+            cuerpo.write(",".join(columnas).encode("utf-8"))
+            mimetype = "text/csv"
+    # Sin esto el buffer se entrega desde el final de la escritura y el cuerpo sale vacío.
+    cuerpo.seek(0)
+    return cuerpo, mimetype
 
 
 @imports.route("/template/<record_type>")
@@ -390,39 +496,10 @@ def download_template(record_type):
     service = ImportService()
     try:
         adapter = service._get_adapter(record_type)
-        template_dir = os.path.join(current_app.instance_path, "templates")
-        os.makedirs(template_dir, exist_ok=True)
-        output_name = secure_filename(f"template_{record_type}.{fmt if fmt in {'xlsx', 'ods'} else 'csv'}")
-
-        if fmt == "xlsx":
-            wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.append(adapter.localized_columns(str(get_locale())))
-            template_path = os.path.join(template_dir, output_name)
-            wb.save(template_path)
-            return send_file(template_path, as_attachment=True, download_name=output_name)
-
-        elif fmt == "ods":
-            doc = opendocument.OpenDocumentSpreadsheet()
-            spreadsheet = odf_table.Table(name="Template")
-            doc.spreadsheet.addElement(spreadsheet)
-            tr = odf_table.TableRow()
-            spreadsheet.addElement(tr)
-            for col in adapter.localized_columns(str(get_locale())):
-                tc = odf_table.TableCell(valuetype="string")
-                tc.addElement(odf_paragraph(text=col))
-                tr.addElement(tc)
-            template_path = os.path.join(template_dir, output_name)
-            doc.save(template_path)
-            return send_file(template_path, as_attachment=True, download_name=output_name)
-
-        else:
-            # Default to CSV
-            content = ",".join(adapter.localized_columns(str(get_locale())))
-            template_path = os.path.join(template_dir, output_name)
-            with open(template_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            return send_file(template_path, as_attachment=True, download_name=output_name)
+        extension = fmt if fmt in {"xlsx", "ods"} else "csv"
+        output_name = secure_filename(f"template_{record_type}.{extension}")
+        cuerpo, mimetype = _plantilla_en_memoria(adapter, extension)
+        return send_file(cuerpo, as_attachment=True, download_name=output_name, mimetype=mimetype)
 
     except (ValueError, OSError) as e:
         flash_error(e)

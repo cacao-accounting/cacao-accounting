@@ -45,7 +45,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="bank_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -73,7 +73,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -82,7 +82,8 @@
     </div>
     <div class="col-md-6">
       <label class="form-label" for="account_name">{{ _('Nombre de cuenta') }} <span class="text-danger">*</span></label>
-      {{ form.account_name(class="form-control form-control-sm", id="account_name", required=True) }}
+      {{ form.account_name(class="form-control form-control-sm", id="account_name", required=True, maxlength="150") }}
+      {% for error in form.account_name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-md-6">
       <label class="form-label" for="currency">{{ _('Moneda') }}</label>
@@ -105,7 +106,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="currency" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -114,11 +115,13 @@
     </div>
     <div class="col-md-6">
       <label class="form-label" for="account_no">{{ _('Número de cuenta') }}</label>
-      {{ form.account_no(class="form-control form-control-sm", id="account_no") }}
+      {{ form.account_no(class="form-control form-control-sm", id="account_no", maxlength="50") }}
+      {% for error in form.account_no.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-md-6">
       <label class="form-label" for="iban">{{ _('IBAN') }}</label>
-      {{ form.iban(class="form-control form-control-sm", id="iban") }}
+      {{ form.iban(class="form-control form-control-sm", id="iban", maxlength="50") }}
+      {% for error in form.iban.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-12">
       <label class="form-label" for="gl_account_id">{{ _('Cuenta contable bancaria') }}</label>
@@ -142,7 +145,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="gl_account_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -172,7 +175,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="default_naming_series_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -202,7 +205,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="default_external_counter_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>

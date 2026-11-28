@@ -60,11 +60,15 @@ def authorized(user: Any, company: str, module_name: str, action: str = "approve
     ).first()
     if not entity or not module_enabled:
         return False
-    if is_admin(user):
-        return True
     scoped = database.session.execute(
         select(UserCompanyAccess.id).where(UserCompanyAccess.user_id == user.id, UserCompanyAccess.company_code == company)
     ).first()
+    if is_admin(user):
+        # Desktop conserva el bypass administrativo; en Cloud el administrador
+        # también necesita la concesión explícita de la compañía (#2059).
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
+        return is_desktop_mode() or scoped is not None
     permissions = module_access(user, module_name)
     return bool(scoped and any(row.access for row in permissions) and any(getattr(row, action, False) for row in permissions))
 

@@ -26,7 +26,9 @@ from cacao_accounting.database import (
     ReconciliationItem,
     database,
 )
-from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
+from cacao_accounting.cancellation_scope import effective_gl_scope
+from cacao_accounting.ledger_queries import primary_ledger_id
+from cacao_accounting.numbers import coerce_decimal
 
 
 from cacao_accounting.i18n import _
@@ -138,6 +140,19 @@ def _payment_direction(payment: PaymentEntry, transaction: BankTransaction) -> s
 def _payment_belongs_to_bank(payment: PaymentEntry, bank_account_id: str) -> bool:
     """Return whether a payment touches the bank account being reconciled."""
     return bank_account_id in {payment.bank_account_id, payment.target_bank_account_id}
+
+
+def _payment_leg_currency(payment: PaymentEntry, bank_account_id: str | None) -> str | None:
+    """Moneda de la pierna bancaria que se concilia (#1317).
+
+    En una transferencia interna la pierna destino se expresa en la moneda de
+    la cuenta destino, no en la moneda origen del encabezado.
+    """
+    if payment.payment_type == "internal_transfer" and bank_account_id:
+        account = database.session.get(BankAccount, bank_account_id)
+        if account is not None and account.currency:
+            return str(account.currency)
+    return str(payment.currency) if payment.currency else None
 
 
 def _gl_direction(entry: GLEntry) -> str | None:
@@ -324,44 +339,6 @@ def _allocation_context(transaction: BankTransaction, company: str, reconciliati
     }
 
 
-def backfill_reconciliation_item_context() -> dict[str, int]:
-    """Migra partidas de conciliación bancaria legacy al contexto persistido.
-
-    Recorre las asignaciones bancarias activas sin moneda y completa compania,
-    cuenta bancaria, moneda, libro, dirección y tasa histórica a partir de su
-    transacción fuente.  Las partidas cuya fuente ya no existe (o cuya
-    conciliación no declara compañía) no tienen contexto inequívoco: se
-    cuentan como ``unresolved`` para revisión manual.
-
-    Returns:
-        Conteo de partidas migradas y partidas sin contexto resoluble.
-    """
-    stats = {"backfilled": 0, "unresolved": 0}
-    items = (
-        database.session.execute(
-            select(ReconciliationItem).where(
-                ReconciliationItem.source_type == "bank_transaction",
-                ReconciliationItem.status != "cancelled",
-                ReconciliationItem.currency.is_(None),
-            )
-        )
-        .scalars()
-        .all()
-    )
-    for item in items:
-        transaction = database.session.get(BankTransaction, item.source_id) if item.source_id else None
-        reconciliation = database.session.get(Reconciliation, item.reconciliation_id)
-        company = str(reconciliation.company) if reconciliation and reconciliation.company else None
-        if transaction is None or not company:
-            stats["unresolved"] += 1
-            continue
-        context = _allocation_context(transaction, company, item.reconciliation_date or transaction.posting_date)
-        for field, value in context.items():
-            setattr(item, field, value)
-        stats["backfilled"] += 1
-    return stats
-
-
 def _validate_target_allocation_currency(
     target_type: str,
     target_id: str,
@@ -444,7 +421,7 @@ def _target_payment_amount(
         raise BankReconciliationError(_("La entrada de pago a conciliar no existe."))
     if getattr(payment, "docstatus", 0) != 1:
         raise BankReconciliationError(_("La entrada de pago debe estar aprobada para conciliarse."))
-    payment_currency = str(payment.currency) if payment.currency else company_currency
+    payment_currency = _payment_leg_currency(payment, bank_account_id) or company_currency
     if not bank_currency or payment_currency == bank_currency:
         return _payment_amount(payment, bank_account_id)
     if bank_currency != company_currency:
@@ -475,7 +452,12 @@ def _target_gl_amount(target_id: str, bank_currency: str | None, company_currenc
 
 def _validate_gl_entry_eligibility(entry: GLEntry) -> None:
     """Require an active entry from the primary ledger for bank matching."""
-    if getattr(entry, "is_cancelled", False) or getattr(entry, "is_reversal", False):
+    if not getattr(entry, "is_reversal", False) and getattr(entry, "is_cancelled", False):
+        raise BankReconciliationError(_("La entrada GL está cancelada o es una reversa."))
+    effective_entry_id = database.session.execute(
+        select(GLEntry.id).where(GLEntry.id == entry.id, *effective_gl_scope())
+    ).scalar_one_or_none()
+    if effective_entry_id is None:
         raise BankReconciliationError(_("La entrada GL está cancelada o es una reversa."))
     if hasattr(entry, "ledger_id"):
         primary_id = primary_ledger_id(str(entry.company))
@@ -579,12 +561,26 @@ def _resolve_rule_tolerances(transaction: BankTransaction, company: str) -> tupl
     days = 7
     amount_tolerance = Decimal("0")
     for rule_days, rule_amount in rows:
-        if rule_days is not None and int(rule_days) > days:
-            days = int(rule_days)
-        tolerance = _decimal_value(rule_amount)
-        if tolerance > amount_tolerance:
-            amount_tolerance = tolerance
+        try:
+            rule_day_value = int(rule_days) if rule_days is not None else 7
+            if rule_day_value < 0:
+                raise ValueError("negative days tolerance")
+            tolerance = coerce_decimal(
+                rule_amount if rule_amount is not None else 0,
+                "tolerancia de monto",
+                non_negative=True,
+                max_fractional_digits=4,
+            )
+        except (TypeError, ValueError) as exc:
+            raise BankReconciliationError(_("La regla de matching contiene tolerancias inválidas.")) from exc
+        days = max(days, rule_day_value)
+        amount_tolerance = max(amount_tolerance, tolerance)
     return days, amount_tolerance
+
+
+# Límites de representación (#1688), alineados con Integer y Numeric(20, 4).
+_MAX_DAYS_TOLERANCE = 3660
+_MAX_AMOUNT_TOLERANCE = Decimal("9999999999999999.9999")
 
 
 def _candidate_tolerances(
@@ -595,14 +591,32 @@ def _candidate_tolerances(
         resolved_days, resolved_amount = _resolve_rule_tolerances(transaction, company)
         days_tolerance = resolved_days if days_tolerance is None else days_tolerance
         amount_tolerance = resolved_amount if amount_tolerance is None else amount_tolerance
-    return days_tolerance, amount_tolerance
+    try:
+        days = int(days_tolerance)
+        if days < 0:
+            raise ValueError("negative days tolerance")
+        # #1688: acotar a rangos representables para no desbordar Integer ni
+        # `timedelta`/`date` al construir la ventana de candidatos.
+        if days > _MAX_DAYS_TOLERANCE:
+            raise ValueError("days tolerance out of range")
+        amount = coerce_decimal(
+            amount_tolerance,
+            "tolerancia de monto",
+            non_negative=True,
+            max_fractional_digits=4,
+        )
+        if amount > _MAX_AMOUNT_TOLERANCE:
+            raise ValueError("amount tolerance out of range")
+    except (TypeError, ValueError) as exc:
+        raise BankReconciliationError(_("La regla de matching contiene tolerancias inválidas.")) from exc
+    return days, amount
 
 
 def _candidate_payment_amount(
     payment: PaymentEntry, transaction: BankTransaction, bank_currency: str | None, company_currency: str | None
 ) -> Decimal | None:
     """Convierte el importe del pago a la moneda del banco cuando es necesario."""
-    payment_currency = str(payment.currency) if payment.currency else company_currency
+    payment_currency = _payment_leg_currency(payment, transaction.bank_account_id) or company_currency
     if bank_currency and payment_currency != bank_currency and bank_currency != company_currency:
         return None
     if not bank_currency or payment_currency == bank_currency:
@@ -623,17 +637,16 @@ def _payment_reconciliation_candidates(
     amount_tolerance: Decimal,
 ) -> list[BankCandidate]:
     """Genera candidatos de entradas de pago compatibles con la transacción."""
-    payments = (
-        database.session.execute(
-            select(PaymentEntry)
-            .filter_by(company=company)
-            .where(PaymentEntry.posting_date >= date_from)
-            .where(PaymentEntry.posting_date <= date_to)
-            .where(PaymentEntry.docstatus == 1)
-        )
-        .scalars()
-        .all()
+    payments_query = (
+        select(PaymentEntry)
+        .filter_by(company=company)
+        .where(PaymentEntry.posting_date >= date_from)
+        .where(PaymentEntry.posting_date <= date_to)
+        .where(PaymentEntry.docstatus == 1)
     )
+    if database.session.get_bind().dialect.name != "sqlite":
+        payments_query = payments_query.with_for_update()
+    payments = database.session.execute(payments_query).scalars().all()
     candidates: list[BankCandidate] = []
     for payment in payments:
         if not _payment_belongs_to_bank(payment, transaction.bank_account_id):
@@ -667,17 +680,15 @@ def _bank_gl_entries(transaction: BankTransaction, company: str, date_from: date
     bank_gl_account_id = _bank_gl_account_id(transaction)
     if not bank_gl_account_id:
         return []
-    gl_entries_query = exclude_cancelled_gl_entries(select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id))
+    gl_entries_query = select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id)
+    gl_entries_query = gl_entries_query.where(*effective_gl_scope(date_to))
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         gl_entries_query = gl_entries_query.where(GLEntry.ledger_id == ledger_id)
-    return (
-        database.session.execute(
-            gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
-        )
-        .scalars()
-        .all()
-    )
+    gl_entries_query = gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
+    if database.session.get_bind().dialect.name != "sqlite":
+        gl_entries_query = gl_entries_query.with_for_update()
+    return database.session.execute(gl_entries_query).scalars().all()
 
 
 def _gl_reconciliation_candidates(

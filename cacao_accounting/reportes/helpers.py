@@ -11,8 +11,9 @@ from decimal import Decimal
 from decimal import DecimalException
 from io import BytesIO, StringIO
 from typing import Any
+from urllib.parse import urlencode
 
-from flask import Blueprint, abort, render_template, request, send_file, url_for
+from flask import Blueprint, abort, g, render_template, request, send_file, url_for
 from flask_login import current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
@@ -20,13 +21,14 @@ from openpyxl.utils import get_column_letter
 from werkzeug.routing import BuildError
 
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, database
+from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, SavedReportView, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import resolve_required_company
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     OperationalReportFilters,
     PaginatedReport,
+    _movement_group_expression,
 )
 from cacao_accounting.version import APPNAME
 
@@ -116,85 +118,93 @@ def _write_report_pdf(
 
 
 _COLUMN_LABELS = {
-    "posting_date": "Posting Date",
-    "accounting_period": "Period",
-    "document_no": "Voucher",
-    "voucher_type": "Type",
-    "account_code": "Account",
-    "account_name": "Account Name",
-    "account_type": "Account Type",
-    "classification": "Section",
-    "debit": "Debit",
-    "credit": "Credit",
-    "running_balance": "Final Balance",
-    "currency": "Currency",
-    "ledger": "Ledger",
-    "company": "Company",
-    "opening_balance": "Opening Balance",
-    "ending_balance": "Final Balance",
-    "cost_center": "Cost Center",
-    "unit": "Unit",
-    "project": "Project",
-    "party_type": "Party Type",
-    "party_id": "Party",
+    "posting_date": "Fecha de contabilización",
+    "accounting_period": "Período",
+    "document_no": "Comprobante",
+    "voucher_type": "Tipo",
+    "account_code": "Cuenta",
+    "account_name": "Nombre de la cuenta",
+    "account_type": "Tipo de cuenta",
+    "classification": "Sección",
+    "debit": "Debe",
+    "credit": "Haber",
+    "running_balance": "Saldo final",
+    "currency": "Moneda",
+    "ledger": "Libro",
+    "company": "Compañía",
+    "opening_balance": "Saldo inicial",
+    "ending_balance": "Saldo final",
+    "cost_center": "Centro de costo",
+    "unit": "Unidad",
+    "project": "Proyecto",
+    "party_type": "Tipo de tercero",
+    "party_id": "Tercero",
+    "customer_id": "Cliente",
+    "customer_name": "Nombre del cliente",
+    "qty": "Cantidad",
+    "gross_margin_percentage": "Margen bruto (%)",
     "created_by": "Creado por",
-    "created": "Creation Date",
+    "created": "Fecha de creación",
     "created_at": "Fecha de creación",
     "approved_by": "Aprobado por",
     "approved_at": "Fecha de aprobación",
     "modified_by": "Modificado por",
     "modified_at": "Fecha de modificación",
-    "movement_count": "Movements",
-    "first_movement": "First Movement",
-    "last_movement": "Last Movement",
-    "line_comment": "Reference",
-    "reference_type": "Reference Type",
-    "is_reversal": "Is Reversal",
-    "reversal_of": "Reversal Of",
-    "status": "Status",
-    "voucher_status": "Status",
-    "is_cancelled": "Cancelled",
-    "cancellation_date": "Cancellation Date",
-    "cancellation_requested_at": "Cancellation Requested At",
-    "cancellation_executed_at": "Cancellation Executed At",
-    "cancellation_actor": "Cancellation Actor",
-    "cancellation_reason": "Cancellation Reason",
-    "section": "Section",
-    "amount": "Amount",
-    "bank_account": "Bank Account",
-    "party_name": "Party",
-    "certificate_no": "Certificate",
-    "payment_no": "Payment",
-    "supplier_name": "Supplier",
-    "supplier_tax_id": "Supplier Tax ID",
-    "concept": "Withholding Concept",
-    "base_amount": "Tax Base",
-    "rate": "Rate",
-    "withheld_amount": "Withheld Amount",
-    "payment_type": "Payment Type",
-    "incoming_amount": "Incoming Amount",
-    "outgoing_amount": "Outgoing Amount",
-    "receipts_amount": "Receipts",
-    "payments_amount": "Payments",
-    "account_no": "Account Number",
-    "item_name": "Item Name",
-    "item_code": "Item",
-    "warehouse": "Warehouse",
-    "batch_no": "Batch",
-    "serial_no": "Serial",
-    "expiry_date": "Expiry Date",
-    "manufacturing_date": "Manufacturing Date",
-    "is_active": "Active",
-    "balance_qty": "Balance Qty",
-    "incoming_qty": "Incoming Qty",
-    "outgoing_qty": "Outgoing Qty",
-    "value_change": "Value Change",
-    "original_amount": "Original Amount",
-    "paid_amount": "Paid Amount",
-    "outstanding_amount": "Outstanding Amount",
-    "days": "Days",
-    "bucket": "Bucket",
-    "remarks": "Remarks",
+    "movement_count": "Movimientos",
+    "first_movement": "Primer movimiento",
+    "last_movement": "Último movimiento",
+    "line_comment": "Referencia",
+    "reference_type": "Tipo de referencia",
+    "is_reversal": "Es reversa",
+    "reversal_of": "Reversa de",
+    "status": "Estado",
+    "voucher_status": "Estado",
+    "is_cancelled": "Anulado",
+    "cancellation_date": "Fecha de anulación",
+    "cancellation_requested_at": "Solicitud de anulación",
+    "cancellation_executed_at": "Ejecución de anulación",
+    "cancellation_actor": "Responsable de anulación",
+    "cancellation_reason": "Motivo de anulación",
+    "section": "Sección",
+    "amount": "Importe",
+    "bank_account": "Cuenta bancaria",
+    "party_name": "Tercero",
+    "certificate_no": "Certificado",
+    "payment_no": "Pago",
+    "supplier_name": "Proveedor",
+    "supplier_id": "Proveedor",
+    "income": "Ingresos",
+    "cogs": "Costo de ventas",
+    "gross_margin": "Margen Bruto",
+    "supplier_tax_id": "Identificación fiscal del proveedor",
+    "concept": "Concepto de retención",
+    "base_amount": "Base imponible",
+    "rate": "Tasa",
+    "withheld_amount": "Importe retenido",
+    "payment_type": "Tipo de pago",
+    "incoming_amount": "Importe entrante",
+    "outgoing_amount": "Importe saliente",
+    "receipts_amount": "Cobros",
+    "payments_amount": "Pagos",
+    "account_no": "Número de cuenta",
+    "item_name": "Nombre del artículo",
+    "item_code": "Artículo",
+    "warehouse": "Bodega",
+    "batch_no": "Lote",
+    "serial_no": "Serie",
+    "expiry_date": "Fecha de vencimiento",
+    "manufacturing_date": "Fecha de fabricación",
+    "is_active": "Activo",
+    "balance_qty": "Cantidad de saldo",
+    "incoming_qty": "Cantidad entrante",
+    "outgoing_qty": "Cantidad saliente",
+    "value_change": "Variación de valor",
+    "original_amount": "Importe original",
+    "paid_amount": "Importe pagado",
+    "outstanding_amount": "Saldo pendiente",
+    "days": "Días",
+    "bucket": "Tramo",
+    "remarks": "Observaciones",
 }
 _MONEY_COLUMNS = {
     "debit",
@@ -325,6 +335,7 @@ def _format_cell(column: str, value: object, ledger_currency: str | None) -> str
             "gross_profit": _("UTILIDAD BRUTA"),
             "net_profit": _("UTILIDAD NETA"),
             "unclassified": _("SIN CLASIFICACIÓN"),
+            "operating": _("Operación"),
             "operating_adjustments": _("AJUSTES AL RESULTADO"),
             "total_operating": _("TOTAL ACTIVIDADES DE OPERACIÓN"),
             "investing": _("ACTIVIDADES DE INVERSIÓN"),
@@ -405,61 +416,79 @@ def _build_unclassified_warning(count: int) -> str | None:
         return message
 
 
-def _report_form_key(report_code: str) -> str:
-    return f"reports.financial.{report_code}"
+def _load_report_view_options(report_code: str, company: str, user_id: str | None) -> list[Any]:
+    """Carga las vistas guardadas visibles para el usuario y la compañía."""
+    if not company or not user_id:
+        return []
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, list_saved_views
 
-
-def _load_report_view_options(report_code: str) -> list[str]:
-    return ["default"]
-
-
-def _extract_filter_payload() -> dict[str, str]:
-    payload: dict[str, str] = {}
-    for key in _FINANCIAL_FILTER_FIELDS:
-        value = request.args.get(key)
-        if value:
-            payload[key] = value
-    visible_columns = request.args.getlist("visible_columns")
-    if visible_columns:
-        payload["visible_columns"] = ",".join(visible_columns)
-    return payload
-
-
-def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str, view_key: str) -> FinancialReportFilters:
-    return filters
-
-
-def _safe_page_size(raw: object, default: int) -> int:
     try:
-        if raw is None or isinstance(raw, str):
-            value = default
-        else:
-            value = int(raw)  # type: ignore[call-overload]
-        return max(value, 1)
-    except (TypeError, ValueError):
-        return max(default, 1)
-
-
-def _str_or_none(value: object) -> str | None:
-    return str(value or "") or None
+        return list(list_saved_views(report_code, company, user_id))
+    except SavedReportViewError:
+        return []
 
 
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
+    """Resuelve y aplica una vista guardada solicitada por la URL."""
+    from cacao_accounting.reportes.saved_views_service import (
+        SavedReportViewError,
+        get_saved_view,
+        restore_filters,
+        view_display,
+    )
+
     view_key = (request.args.get("saved_view") or "default").strip() or "default"
-    return filters, view_key
+    g.saved_report_view = None
+    g.view_show_users = False
+    g.view_advanced = False
+    if view_key == "default":
+        return filters, "default"
+    user_id = getattr(current_user, "id", None)
+    try:
+        view = get_saved_view(view_key, report_code, filters.company, user_id)
+        g.saved_report_view = view
+        display = view_display(view)
+        g.view_show_users = bool(display.get("show_users"))
+        g.view_advanced = bool(display.get("advanced"))
+        return restore_filters(filters, view), str(view.id)
+    except SavedReportViewError as exc:
+        abort(404, description=str(exc))
 
 
-def _resolve_view_context(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str, list[str]]:
+def _resolve_view_context(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str, list[Any]]:
     resolved_filters, selected_view = _handle_saved_view_action(report_code, filters)
-    return resolved_filters, selected_view, _load_report_view_options(report_code)
+    return (
+        resolved_filters,
+        selected_view,
+        _load_report_view_options(report_code, resolved_filters.company, getattr(current_user, "id", None)),
+    )
 
 
 def _preferred_columns_from_view(report_code: str, view_key: str) -> list[str]:
-    return []
+    """Devuelve las columnas persistidas por la vista seleccionada."""
+    view = getattr(g, "saved_report_view", None)
+    if view is None or str(view.id) != str(view_key) or view.report_code != report_code:
+        return []
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, view_display
+
+    try:
+        columns = view_display(view).get("visible_columns", [])
+    except SavedReportViewError:
+        return []
+    return [str(column) for column in columns] if isinstance(columns, list) else []
 
 
 def _preferred_group_by_from_view(report_code: str, view_key: str) -> str:
-    return ""
+    """Devuelve la agrupación persistida por la vista seleccionada."""
+    view = getattr(g, "saved_report_view", None)
+    if view is None or str(view.id) != str(view_key) or view.report_code != report_code:
+        return ""
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, view_display
+
+    try:
+        return str(view_display(view).get("group_by") or "")
+    except SavedReportViewError:
+        return ""
 
 
 def _resolve_company(company_code: str | None, modulo: str = "accounting") -> str:
@@ -504,6 +533,33 @@ def _default_ledger_for_company(company_code: str) -> str | None:
     )
 
 
+def _validate_requested_ledger(company_code: str, ledger: str) -> None:
+    """Rechaza un libro explícito que no sea fuente válida del reporte.
+
+    Un libro inexistente, inactivo o de otra compañía resolvía un reporte
+    vacío con HTTP 200, indistinguible de un período sin movimientos. El
+    contrato del reporte exige fallar de forma controlada para no presentar
+    un resultado ambiguo.
+    """
+    exists = database.session.execute(
+        database.select(Book.id)
+        .where(
+            Book.entity == company_code,
+            Book.status == "activo",
+        )
+        .where((Book.id == ledger) | (Book.code == ledger))
+    ).first()
+    if exists is None:
+        abort(400, description=_("El libro seleccionado no existe, está inactivo o no pertenece a la compañía."))
+
+
+def _validate_requested_export() -> None:
+    """Rechaza un formato de exportación fuera del contrato del reporte."""
+    requested_export = request.args.get("export")
+    if requested_export and requested_export not in _SUPPORTED_EXPORT_FORMATS:
+        abort(400, description=_("El formato de exportación solicitado no es válido."))
+
+
 def _default_period_for_company(company_code: str, target_date: date | None = None) -> str | None:
     effective_date = target_date or date.today()
     period_name = (
@@ -534,7 +590,12 @@ def _default_period_for_company(company_code: str, target_date: date | None = No
 
 
 def _build_drill_down_url(
-    values: dict[str, object], company: str, ledger: str | None, period: str | None = None
+    values: dict[str, object],
+    company: str,
+    ledger: str | None,
+    period: str | None = None,
+    period_from: str | None = None,
+    period_to: str | None = None,
 ) -> str | None:
     account_code = values.get("account_code")
     if account_code in (None, "", _EMPTY_CELL_VALUE):
@@ -544,6 +605,10 @@ def _build_drill_down_url(
         kwargs["ledger"] = ledger
     if period:
         kwargs["accounting_period"] = period
+    if period_from:
+        kwargs["accounting_period_from"] = period_from
+    if period_to:
+        kwargs["accounting_period_to"] = period_to
     return url_for("reportes.account_movement", company=company, account_code=str(account_code), **kwargs)
 
 
@@ -907,10 +972,36 @@ def _bool_arg(name: str) -> bool:
     return request.args.get(name, "").lower() in {"1", "true", "yes", "on"}
 
 
+def _validate_requested_period(company_code: str, period_value: str) -> None:
+    """Rechaza un período explícito inexistente o de otra compañía (#1248).
+
+    Sin esta guarda el selector conservaba el valor solicitado, ``_period_bounds``
+    devolvía límites nulos y el reporte terminaba mostrando todo el historial,
+    indistinguible de una consulta sin filtro temporal.
+    """
+    exists_for_company = database.session.execute(
+        database.select(AccountingPeriod.id)
+        .where(AccountingPeriod.entity == company_code)
+        .where((AccountingPeriod.id == period_value) | (AccountingPeriod.name == period_value))
+    ).first()
+    if exists_for_company is not None:
+        return
+    exists_elsewhere = database.session.execute(
+        database.select(AccountingPeriod.id).where(
+            (AccountingPeriod.id == period_value) | (AccountingPeriod.name == period_value)
+        )
+    ).first()
+    if exists_elsewhere is not None:
+        abort(400, description=_("El periodo contable no pertenece a la compañía seleccionada."))
+    abort(400, description=_("No existe el periodo contable seleccionado."))
+
+
 def _financial_period_filters(company_code: str) -> tuple[str | None, str | None, str | None]:
     """Resolve the selected accounting period and its report date bounds."""
     period_from, period_to = _period_params()
     requested_period = request.args.get("accounting_period")
+    if requested_period is not None:
+        _validate_requested_period(company_code, requested_period)
     accounting_period = requested_period or _default_period_for_company(company_code)
     if requested_period is None and not (period_from or period_to):
         from cacao_accounting.reportes.periods import resolve_period_range
@@ -935,7 +1026,11 @@ def _financial_filters() -> FinancialReportFilters:
     show_cancellations = _bool_arg("show_cancellations")
     requested_status = request.args.get("status") or "submitted"
     status = None if show_cancellations else requested_status
-    ledger = request.args.get("ledger") or _default_ledger_for_company(company_code)
+    requested_ledger = request.args.get("ledger") or None
+    if requested_ledger:
+        _validate_requested_ledger(company_code, requested_ledger)
+    ledger = requested_ledger or _default_ledger_for_company(company_code)
+    _validate_requested_export()
     accounting_period, period_from, period_to = _financial_period_filters(company_code)
     return FinancialReportFilters(
         company=company_code,
@@ -985,8 +1080,10 @@ def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
 
 def _spreadsheet_value(value: object) -> object:
     """Export user-controlled text literally rather than as a spreadsheet formula."""
-    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
-        return "'" + value
+    if isinstance(value, str):
+        candidate = value.lstrip("\x00\t\n\r\v\f \u00a0\ufeff")
+        if candidate.startswith(("=", "+", "-", "@")):
+            return "'" + value
     return value
 
 
@@ -1205,6 +1302,11 @@ def _export_financial_report(report, report_code: str, title: str, report_filter
     return None
 
 
+def _show_users_enabled() -> bool:
+    """Indica si la vista aplicada o la URL piden columnas de autoría."""
+    return _bool_arg("show_users") or bool(getattr(g, "view_show_users", False))
+
+
 def _compute_display_columns(report, report_code: str, saved_view: str) -> list[str]:
     selected_columns = request.args.getlist("visible_columns")
     if not selected_columns:
@@ -1214,7 +1316,7 @@ def _compute_display_columns(report, report_code: str, saved_view: str) -> list[
         columns = [column for column in columns if column in selected_columns]
     if report_code == "trial-balance":
         columns = [column for column in columns if column != "level"]
-    required_authors = {"created_by", "created_at", "approved_by", "approved_at"} if _bool_arg("show_users") else set()
+    required_authors = {"created_by", "created_at", "approved_by", "approved_at"} if _show_users_enabled() else set()
     display_columns = [
         column
         for column in columns
@@ -1253,10 +1355,16 @@ def _build_row_metadata(
             {
                 "code": account_code,
                 "parent": parent_code,
+                "section": row.get("section"),
                 "has_children": bool(child_counts.get(account_code)),
                 "level": _resolve_row_level(row, account_code),
                 "drilldown_url": _build_drill_down_url(
-                    row, report_filters.company, report_filters.ledger, report_filters.accounting_period
+                    row,
+                    report_filters.company,
+                    report_filters.ledger,
+                    report_filters.accounting_period,
+                    report_filters.period_from,
+                    report_filters.period_to,
                 ),
                 "voucher_url": _build_voucher_url(row),
                 "is_group": bool(row.get("is_group")),
@@ -1289,9 +1397,43 @@ def _apply_grouping(
     saved_view: str,
 ) -> list[dict[str, object]]:
     group_by = request.args.get("group_by") or _preferred_group_by_from_view(report_code, saved_view)
+    if report_code == "account-movement" and source_rows and "__group_position" in source_rows[0]:
+        return _group_paginated_rows(display_rows, source_rows, group_by, report.ledger_currency)
     if not (report_code == "account-movement" and group_by and group_by in (report.columns or [])):
         return display_rows
     return _group_rows_by_field(display_rows, source_rows, group_by, report.ledger_currency)
+
+
+def _group_paginated_rows(
+    display_rows: list[dict[str, object]], source_rows: list[dict[str, object]], group_by: str, ledger_currency: str | None
+) -> list[dict[str, object]]:
+    """Presenta continuación y subtotal completo sin materializar otras páginas."""
+    grouped: list[dict[str, object]] = []
+    column = {"unit_code": "unit", "project_code": "project"}.get(group_by, group_by)
+    group_index = -1
+    for index, (display, source) in enumerate(zip(display_rows, source_rows)):
+        position = int(_to_decimal_or_zero(source.get("__group_position")))
+        count = int(_to_decimal_or_zero(source.get("__group_count")))
+        if index == 0 or position == 1:
+            group_index += 1
+            raw_value = source.get("__party_group_label") if group_by == "party_id" else source.get(column)
+            group_value = _format_cell(column, raw_value, ledger_currency)
+            title = f"{_(group_by.replace('_', ' ').title())}: {group_value}"
+            if position > 1:
+                title = f"{title} ({_('Continuación')})"
+            grouped.append({"__row_type": "group", "__group_title": title})
+        row = dict(display)
+        row["__tree_group"] = group_index
+        grouped.append(row)
+        if position == count:
+            grouped.append(
+                _build_group_subtotal_row(
+                    _to_decimal_or_zero(source.get("__group_debit")),
+                    _to_decimal_or_zero(source.get("__group_credit")),
+                    ledger_currency,
+                )
+            )
+    return grouped
 
 
 def _group_rows_by_field(
@@ -1300,24 +1442,39 @@ def _group_rows_by_field(
     group_by: str,
     ledger_currency: str | None,
 ) -> list[dict[str, object]]:
+    """Agrupa el detalle en un bloque único por valor de agrupación.
+
+    El detalle se ordena por su criterio primario (normalmente la fecha) y el
+    agrupador es independiente. Agrupar solo las filas consecutivas fragmenta
+    el subtotal cuando dos valores se intercalan (A, B, A); por eso cada valor
+    se consolida en un único bloque. Los bloques conservan el orden de primera
+    aparición y las filas mantienen su orden relativo dentro del grupo.
+    """
     grouped_rows: list[dict[str, object]] = []
-    current_group: str | None = None
+    group_positions: dict[str, int] = {}
+    ordered_rows: list[tuple[int, int, str, dict[str, object]]] = []
+    for index, row in enumerate(display_rows):
+        group_value = _format_cell(group_by, source_rows[index].get(group_by), ledger_currency)
+        group_index = group_positions.setdefault(group_value, len(group_positions))
+        ordered_rows.append((group_index, index, group_value, row))
+    ordered_rows.sort(key=lambda item: (item[0], item[1]))
+    current_group: int | None = None
     group_debit = Decimal("0")
     group_credit = Decimal("0")
-    for index, row in enumerate(display_rows):
-        raw_group_value = source_rows[index].get(group_by)
-        group_value = _format_cell(group_by, raw_group_value, ledger_currency)
-        if group_value != current_group:
+    for group_index, _position, group_value, row in ordered_rows:
+        if group_index != current_group:
             if current_group is not None:
                 grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
             group_title = _(group_by.replace("_", " ").title())
             grouped_rows.append({"__row_type": "group", "__group_title": f"{group_title}: {group_value}"})
-            current_group = group_value
+            current_group = group_index
             group_debit = Decimal("0")
             group_credit = Decimal("0")
         group_debit = _add_to_decimal_or_zero(group_debit, row.get("debit"))
         group_credit = _add_to_decimal_or_zero(group_credit, row.get("credit"))
-        grouped_rows.append(row)
+        grouped_row = dict(row)
+        grouped_row["__tree_group"] = group_index
+        grouped_rows.append(grouped_row)
     if current_group is not None:
         grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
     return grouped_rows
@@ -1345,11 +1502,11 @@ def _render_financial_report(
     report,
     report_filters: FinancialReportFilters,
     saved_view: str,
-    saved_views: list[str],
+    saved_views: list[SavedReportView],
 ):
     from cacao_accounting.document_authorship import report_authorship
 
-    report = report_authorship(report, report_filters.company, _bool_arg("show_users"))
+    report = report_authorship(report, report_filters.company, _show_users_enabled())
     export_response = _export_financial_report(report, report_code, report_title, report_filters)
     if export_response is not None:
         return export_response
@@ -1364,11 +1521,32 @@ def _render_financial_report(
     row_metadata = _build_row_metadata(source_rows, report_filters)
     display_rows = _build_display_rows(source_rows, row_metadata, display_columns, report.ledger_currency)
     grouped_rows = _apply_grouping(display_rows, source_rows, report, report_code, saved_view)
+    group_page = bool(
+        report_code == "account-movement"
+        and report.total_rows
+        and group_by
+        and _movement_group_expression(group_by) is not None
+    )
+    total_pages = max((report.total_rows + report.page_size - 1) // report.page_size, 1) if group_page else 1
+    page_links: dict[str, str] = {}
+    if group_page:
+        for name, number in (("previous", report.page - 1), ("next", report.page + 1)):
+            query = request.args.to_dict(flat=False)
+            query["page"] = [str(number)]
+            page_links[name] = f"{request.path}?{urlencode(query, doseq=True)}"
     display_totals = {key: _format_cell(key, value, report.ledger_currency) for key, value in report.totals.items()}
     unclassified_count = _unclassified_accounts_count(report.totals)
     period_picker = _period_picker_payload(
         report_filters.company, getattr(report_filters, "period_from", None), getattr(report_filters, "period_to", None)
     )
+    saved_view_links: dict[str, str] = {}
+    for view in saved_views:
+        query = request.args.to_dict(flat=False)
+        query["saved_view"] = [str(view.id)]
+        saved_view_links[str(view.id)] = f"{request.path}?{urlencode(query, doseq=True)}"
+    default_query = request.args.to_dict(flat=False)
+    default_query.pop("saved_view", None)
+    default_view_url = f"{request.path}?{urlencode(default_query, doseq=True)}" if default_query else request.path
     return render_template(
         "reportes/financial_report.html",
         titulo=f"{report_title} - {APPNAME}",
@@ -1383,6 +1561,9 @@ def _render_financial_report(
         total_rows=report.total_rows,
         page=report.page,
         page_size=report.page_size,
+        total_pages=total_pages,
+        group_page=group_page,
+        page_links=page_links,
         ledger_currency=report.ledger_currency,
         context_summary=_build_context_summary(report, report_filters),
         report_filters=report_filters,
@@ -1392,6 +1573,8 @@ def _render_financial_report(
         unclassified_warning=_build_unclassified_warning(unclassified_count),
         saved_view=saved_view,
         saved_views=saved_views,
+        saved_view_links=saved_view_links,
+        default_view_url=default_view_url,
         selected_columns=display_columns,
         all_columns=all_columns,
         allow_column_selection=allow_column_selection,
@@ -1434,7 +1617,7 @@ def _render_operational_framework(
 ):
     from cacao_accounting.document_authorship import report_authorship
 
-    report = report_authorship(report, str(filter_state.get("company") or ""), _bool_arg("show_users"))
+    report = report_authorship(report, str(filter_state.get("company") or ""), _show_users_enabled())
     export_response = _export_operational_report(report, report_code, report_title, filter_state)
     if export_response is not None:
         return export_response
@@ -1513,18 +1696,26 @@ def _operational_filters(modulo: str = "accounting") -> OperationalReportFilters
 def _render_operational_report(report_name: str, report, modulo: str = "accounting"):
     company = resolve_required_company(request.args.get("company"), modulo)
     period_picker = _period_picker_payload(company)
+    rows = getattr(report, "rows", [])
+    totals = getattr(report, "totals", {}) or {}
+    column_keys = set(totals)
+    for row in rows:
+        column_keys.update(getattr(row, "values", {}) or {})
+    column_labels = {key: _column_label(key, None) for key in column_keys}
     return render_template(
         REPORT_TABLE_HTML,
         titulo=report_name + " - " + APPNAME,
         report_title=report_name,
-        rows=report.rows,
-        totals=report.totals,
+        rows=rows,
+        totals=totals,
+        column_labels=column_labels,
         total_rows=getattr(report, "total_rows", len(getattr(report, "rows", []))),
         periods=period_picker["periods"],
         period_from=period_picker["period_from"],
         period_to=period_picker["period_to"],
         period_from_label=period_picker["period_from_label"],
         period_to_label=period_picker["period_to_label"],
+        company=company,
     )
 
 

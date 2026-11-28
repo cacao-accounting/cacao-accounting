@@ -7,11 +7,11 @@ from __future__ import annotations
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from cacao_accounting.database import Bank, BankAccount, Entity, Roles, RolesUser, database
 from cacao_accounting.decorators import resolve_required_company, _single_authorized_company
-from cacao_accounting.printing.exceptions import PrintingError, TemplateValidationError
+from cacao_accounting.printing.exceptions import PrintableDocumentNotRegisteredError, PrintingError, TemplateValidationError
 from cacao_accounting.printing.models import PrintTemplate, PrintTemplateVersion
 from cacao_accounting.printing.registry import get_printable_document, list_printable_documents
 from cacao_accounting.printing.service import PrintService
@@ -40,7 +40,12 @@ def list_templates():
         .all()
     )
     bank_labels = {account["id"]: account["label"] for account in _bank_account_options()}
-    return render_template("admin/print_template_list.html", templates=templates, bank_labels=bank_labels)
+    return render_template(
+        "admin/print_template_list.html",
+        templates=templates,
+        bank_labels=bank_labels,
+        document_labels=dict(list_printable_documents()),
+    )
 
 
 @printing_admin.route("/admin/print-templates/settings", methods=["GET", "POST"])
@@ -51,7 +56,16 @@ def validation_settings():
     if request.method == "POST":
         enabled = request.form.get("external_document_validation_enabled") == "on"
         base_url = request.form.get("external_document_validation_base_url")
-        save_external_validation_settings(enabled, base_url)
+        try:
+            save_external_validation_settings(enabled, base_url)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template(
+                "admin/print_validation_settings.html",
+                validation_enabled=enabled,
+                validation_base_url=(base_url or "").strip(),
+                default_validation_base_url=DEFAULT_VALIDATION_BASE_URL,
+            )
         flash(_("Configuración de validación externa actualizada."), "success")
         return redirect(url_for("printing_admin.validation_settings"))
 
@@ -70,15 +84,25 @@ def create_template():
     _require_print_admin()
     if request.method == "POST":
         try:
+            document_type = request.form.get("document_type") or ""
+            template_body = request.form.get("template_body") or ""
+            stylesheet_body = request.form.get("stylesheet_body")
+            PrintService().validate_template(
+                template_body,
+                stylesheet_body,
+                document_type,
+                paper_size=request.form.get("paper_size") or "letter",
+                orientation=request.form.get("orientation") or "portrait",
+            )
             template = PrintTemplate(
                 company_code=request.form.get("company_code") or None,
-                document_type=request.form.get("document_type") or "",
+                document_type=document_type,
                 bank_account_id=_form_bank_account_id(),
                 code=request.form.get("code") or "",
                 name=request.form.get("name") or "",
                 description=request.form.get("description"),
-                template_body=request.form.get("template_body") or "",
-                stylesheet_body=request.form.get("stylesheet_body"),
+                template_body=template_body,
+                stylesheet_body=stylesheet_body,
                 paper_size=request.form.get("paper_size") or "letter",
                 orientation=request.form.get("orientation") or "portrait",
                 status="draft",
@@ -89,6 +113,12 @@ def create_template():
         except TemplateValidationError as exc:
             database.session.rollback()
             flash(_("Error al crear plantilla: %(error)s") % {"error": exc}, "danger")
+            return _render_form(None)
+        except IntegrityError:
+            # Un código repetido en la misma compañía y tipo documental es un
+            # conflicto de dominio, no un 500 (#1929).
+            database.session.rollback()
+            flash(_("Ya existe una plantilla con ese código para el tipo documental."), "danger")
             return _render_form(None)
         flash(_("Plantilla creada exitosamente."), "success")
         return redirect(url_for("printing_admin.edit_template", template_id=template.id))
@@ -115,24 +145,40 @@ def duplicate_template(template_id: int):
     """Duplicate a template as editable draft."""
     _require_print_admin()
     source = _get_template(template_id)
-    copy = PrintTemplate(
-        company_code=source.company_code,
-        document_type=source.document_type,
-        bank_account_id=source.bank_account_id,
-        code=_copy_code(source.code),
-        name=f"Copia de {source.name}",
-        description=source.description,
-        template_body=source.template_body,
-        stylesheet_body=source.stylesheet_body,
-        paper_size=source.paper_size,
-        orientation=source.orientation,
-        status="draft",
-        is_system=False,
-        is_default=False,
-        created_by=_current_user_id(),
-    )
-    database.session.add(copy)
-    database.session.commit()
+    try:
+        PrintService().validate_template(
+            source.template_body,
+            source.stylesheet_body,
+            source.document_type,
+            paper_size=source.paper_size,
+            orientation=source.orientation,
+        )
+        copy = PrintTemplate(
+            company_code=source.company_code,
+            document_type=source.document_type,
+            bank_account_id=source.bank_account_id,
+            code=_copy_code(source.code, source.company_code, source.document_type),
+            name=f"{_('Copia de')} {source.name}",
+            description=source.description,
+            template_body=source.template_body,
+            stylesheet_body=source.stylesheet_body,
+            paper_size=source.paper_size,
+            orientation=source.orientation,
+            status="draft",
+            is_system=False,
+            is_default=False,
+            created_by=_current_user_id(),
+        )
+        database.session.add(copy)
+        database.session.commit()
+    except TemplateValidationError as exc:
+        database.session.rollback()
+        flash(_("No se pudo duplicar la plantilla: %(error)s") % {"error": exc}, "danger")
+        return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se pudo duplicar la plantilla porque el código ya existe."), "danger")
+        return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     flash(_("Plantilla duplicada exitosamente."), "success")
     return redirect(url_for("printing_admin.edit_template", template_id=copy.id))
 
@@ -149,6 +195,8 @@ def publish_template(template_id: int):
             template.stylesheet_body,
             template.document_type,
             validate_pdf=True,
+            paper_size=template.paper_size,
+            orientation=template.orientation,
         )
         template.status = "published"
         template.updated_by = _current_user_id()
@@ -216,8 +264,10 @@ def preview_template(template_id: int):
             template_id=template.id,
             sample=True,
         )
+    except PrintableDocumentNotRegisteredError:
+        abort(404)
     except PrintingError as exc:
-        return f"Error rendering preview: {exc}", 500
+        return _("Error al generar la vista previa: %(error)s") % {"error": exc}, 500
 
 
 @printing_admin.route("/admin/print-templates/<int:template_id>/versions")
@@ -233,7 +283,13 @@ def template_versions(template_id: int):
         .scalars()
         .all()
     )
-    return render_template("admin/print_template_list.html", templates=[template], versions=versions)
+    return render_template(
+        "admin/print_template_list.html",
+        templates=[template],
+        versions=versions,
+        bank_labels={account["id"]: account["label"] for account in _bank_account_options()},
+        document_labels=dict(list_printable_documents()),
+    )
 
 
 def _update_template_from_form(template: PrintTemplate) -> None:
@@ -241,7 +297,13 @@ def _update_template_from_form(template: PrintTemplate) -> None:
     try:
         body = request.form.get("template_body") or ""
         css = request.form.get("stylesheet_body")
-        service.validate_template(body, css, template.document_type)
+        service.validate_template(
+            body,
+            css,
+            template.document_type,
+            paper_size=request.form.get("paper_size") or "letter",
+            orientation=request.form.get("orientation") or "portrait",
+        )
         service.create_version(template, change_note=request.form.get("change_note"))
         template.name = request.form.get("name") or template.name
         template.description = request.form.get("description")
@@ -335,8 +397,21 @@ def _clear_default(template: PrintTemplate) -> None:
     )
 
 
-def _copy_code(code: str) -> str:
-    return f"{code}_copy"
+def _copy_code(code: str, company_code: str | None, document_type: str | None) -> str:
+    """Genera un código de copia único dentro de compañía y tipo documental."""
+    base = f"{code}_copy"
+    candidate = base
+    suffix = 2
+    while database.session.execute(
+        select(PrintTemplate.id).filter_by(
+            company_code=company_code,
+            document_type=document_type,
+            code=candidate,
+        )
+    ).first():
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _current_user_id() -> str:
@@ -352,8 +427,12 @@ def _is_print_admin() -> bool:
     user_id = _current_user_id()
     admin_role = database.session.execute(select(Roles).filter_by(name="admin")).scalars().first()
     if admin_role is None:
-        return True
+        return False
     return (
-        database.session.execute(select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id)).scalars().first()
+        database.session.execute(
+            select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id).where(RolesUser.active.is_(True))
+        )
+        .scalars()
+        .first()
         is not None
     )

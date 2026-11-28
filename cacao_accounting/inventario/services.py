@@ -4,6 +4,8 @@
 """Modulo de Inventarios."""
 
 import logging
+import re
+import sqlite3
 
 from datetime import date
 
@@ -11,23 +13,30 @@ from decimal import Decimal
 
 from typing import Any, Mapping
 
-from cacao_accounting.exceptions import flash_error
+from sqlalchemy.exc import IntegrityError
 
-from flask import flash, redirect, render_template, request, url_for
+from cacao_accounting.exceptions import flash_error
+from cacao_accounting.numbers import coerce_decimal
+
+from flask import abort, flash, redirect, render_template, request, url_for
 
 from flask_login import current_user
 
 from cacao_accounting.database import (
     Accounts,
     CostCenter,
+    DeliveryNote,
     DocumentRelation,
     Entity,
     Item,
     ItemCategory,
+    Project,
+    PurchaseReceipt,
     StockBin,
     StockEntry,
     StockEntryItem,
     UOM,
+    Unit,
     Warehouse,
     WarehouseCompanyAccount,
     database,
@@ -47,8 +56,6 @@ from cacao_accounting.document_flow import (
 )
 
 
-from cacao_accounting.document_flow.context import company_currency  # noqa: F401  - legacy import retained for downstream
-
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.decorators import exige_acceso_compania
@@ -64,9 +71,10 @@ from cacao_accounting.inventario.service import (
     parse_item_account_rows,
     parse_item_uom_rows,
     update_item_with_uoms,
+    validate_stock_reconciliation_line_keys,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +93,50 @@ STOCK_ENTRY_PURPOSES = frozenset(
         "material_receipt",
         "material_issue",
         "material_transfer",
-        "stock_adjustment",
         "stock_reconciliation",
         "adjustment_positive",
         "adjustment_negative",
     }
 )
+
+
+def _is_duplicate_master_code_violation(error: IntegrityError, table_name: str) -> bool:
+    """Identifica colisiones conocidas de código único en UOM y bodegas."""
+    constraints_by_table = {
+        "uom": {"ix_uom_code"},
+        "warehouse": {"uq_warehouse_code", "uq_warehouse_code_global"},
+    }
+    sqlite_columns_by_table = {"uom": "uom.code", "warehouse": "warehouse.code"}
+    constraints = constraints_by_table.get(table_name)
+    sqlite_columns = sqlite_columns_by_table.get(table_name)
+    if not constraints or not sqlite_columns:
+        return False
+
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name in constraints:
+        return True
+
+    message = str(original).lower()
+    if any(constraint.lower() in message for constraint in constraints):
+        return True
+
+    dialect = database.engine.dialect.name
+    if dialect == "sqlite":
+        error_code = getattr(original, "sqlite_errorcode", None)
+        return bool(
+            error_code is not None
+            and error_code & 0xFF == sqlite3.SQLITE_CONSTRAINT
+            and "unique constraint failed" in message
+            and sqlite_columns in message
+        )
+
+    if dialect in {"mysql", "mariadb"}:
+        error_args = getattr(original, "args", ())
+        return bool(error_args and error_args[0] == 1062 and any(constraint.lower() in message for constraint in constraints))
+
+    return False
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -121,25 +167,62 @@ def _inventory_authorized_companies() -> list[str]:
     return list(permissions.obtener_companias_autorizadas()) if permissions.consultar else []
 
 
+def _inventory_company_choices() -> list[tuple[str, str]]:
+    """Compañías habilitadas sobre las que el usuario actúa en Inventario.
+
+    El selector y la validación del formulario de movimientos deben usar el
+    alcance del propio módulo; el helper contable no refleja esos permisos
+    (#1173). Se incluyen las compañías con consulta o alta para que un
+    operador de bodega sin rol contable pueda registrar movimientos y para
+    que el POST de una compañía ajena conserve la validación del servicio.
+
+    Returns:
+        Pares ``(código, nombre)`` ordenados por código; vacío sin permiso.
+    """
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    if not (permissions.consultar or permissions.crear):
+        return []
+    companies = list(permissions.obtener_companias_autorizadas())
+    if not companies:
+        return []
+    entities = database.session.execute(
+        database.select(Entity).where(Entity.code.in_(companies), Entity.enabled.is_(True)).order_by(Entity.code)
+    ).scalars()
+    return [(entity.code, entity.name or entity.company_name) for entity in entities]
+
+
 def _apply_inventory_company_scope(base_query: Any, model: type[Any]) -> Any:
     """Apply explicit or authorized company scope to an inventory list query."""
-    if hasattr(model, "company"):
-        company = request.args.get("company")
-        if company:
-            return base_query.filter(model.company == company)
-        if getattr(current_user, "classification", None) == "admin":
-            return base_query
-        companies = _inventory_authorized_companies()
-        if not companies:
-            return base_query.where(database.false())
-        return base_query.where(model.company.in_(companies))
-    return base_query
+    if not hasattr(model, "company"):
+        return base_query
+    explicit_company = request.args.get("company")
+    if explicit_company:
+        # #1176/#1543: un parámetro de filtro no debe ampliar el alcance;
+        # hay que autorizar en Inventario la compañía pedida antes de usarla.
+        if explicit_company not in _inventory_authorized_companies():
+            abort(403)
+        return base_query.filter(model.company == explicit_company)
+    if getattr(current_user, "classification", None) == "admin":
+        return base_query
+    companies = _inventory_authorized_companies()
+    if not companies:
+        return base_query.where(database.false())
+    return base_query.where(model.company.in_(companies))
 
 
 def _inventory_period_company() -> str | None:
     """Resolve the sole authorized company used by inventory period filters."""
     period_company: str | None = request.args.get("company")
-    if period_company or getattr(current_user, "classification", None) == "admin":
+    if period_company:
+        # Mismo alcance exigido que el filtro de listado: sin autorización de
+        # Inventario sobre la compañía pedida, la resolvemos sin ampliarla.
+        if period_company not in _inventory_authorized_companies():
+            abort(403)
+        return period_company
+    if getattr(current_user, "classification", None) == "admin":
         return period_company
     permissions = Permisos(
         modulo=obtener_id_modulo_por_nombre("inventory"),
@@ -240,6 +323,10 @@ def _item_params_from_form(form) -> ItemParams:
         default_uom=text("default_uom"),
         purchase_uom=optional_text("purchase_uom"),
         sale_uom=optional_text("sale_uom"),
+        weight=_form_decimal("weight"),
+        weight_uom=optional_text("weight_uom"),
+        volume=_form_decimal("volume"),
+        volume_uom=optional_text("volume_uom"),
         default_warehouse_id=optional_text("default_warehouse_id"),
         default_supplier_id=optional_text("default_supplier_id"),
         allow_negative_stock=checked("allow_negative_stock"),
@@ -288,9 +375,14 @@ def _process_item_edit(item, formulario):
         return None
 
 
-def _uom_choices() -> list[tuple[str, str]]:
-    """Devuelve las UOM disponibles para el formulario de articulo."""
-    return [(u.code, u.name) for u in database.session.execute(database.select(UOM).order_by(UOM.name)).scalars().all()]
+def _uom_choices(include_codes: set[str] | None = None) -> list[tuple[str, str]]:
+    """Devuelve las UOM activas y las históricas expresamente incluidas."""
+    incluidas = include_codes or set()
+    return [
+        (u.code, u.name)
+        for u in database.session.execute(database.select(UOM).order_by(UOM.name)).scalars().all()
+        if u.is_active or u.code in incluidas
+    ]
 
 
 def _lote_item_choices() -> list[tuple[str, str]]:
@@ -313,10 +405,29 @@ def _lote_item_choices() -> list[tuple[str, str]]:
 
 def _item_uom_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, str]]:
     """Normaliza filas de UOM para re-renderizar el formulario."""
-    parsed_rows = parse_item_uom_rows(form_data)
-    if not parsed_rows:
+    codes = _form_values(form_data, "uom_code")
+    factors = _form_values(form_data, "uom_conversion_factor")
+    if not codes and not factors:
         return [{"uom_code": "", "conversion_factor": ""}]
-    return [{"uom_code": row.uom_code, "conversion_factor": str(row.conversion_factor)} for row in parsed_rows]
+    rows = []
+    for index, code in enumerate(codes):
+        factor = factors[index] if index < len(factors) else ""
+        cleaned_code = str(code or "").strip()
+        cleaned_factor = str(factor or "").strip()
+        if cleaned_code or cleaned_factor:
+            rows.append({"uom_code": cleaned_code, "conversion_factor": cleaned_factor})
+    return rows or [{"uom_code": "", "conversion_factor": ""}]
+
+
+def _form_values(form_data: Mapping[str, Any], field_name: str) -> list[Any]:
+    """Read repeated form fields from Flask forms or plain mapping fixtures."""
+    getlist = getattr(form_data, "getlist", None)
+    values = getlist(field_name) if callable(getlist) else form_data.get(field_name)
+    if values is None:
+        return []
+    if isinstance(values, (list, tuple)):
+        return list(values)
+    return [values]
 
 
 def _company_choices() -> list[tuple[str, str]]:
@@ -443,12 +554,14 @@ def _validate_warehouse_company_rows(rows: list[dict[str, str]]) -> None:
             raise ValueError(_("La compañía seleccionada no existe."))
         account_id = row["inventory_account_id"]
         if not account_id:
-            continue
+            raise ValueError(_("La cuenta de inventario es obligatoria para la configuración de la bodega."))
         account = database.session.get(Accounts, account_id)
         if account is None or account.entity != company:
             raise ValueError(_("La cuenta de inventario debe pertenecer a la compañía seleccionada."))
         if (account.account_type or "").strip().lower() != "inventory":
             raise ValueError(_("La cuenta seleccionada debe ser de tipo inventario."))
+        if not account.active or not account.enabled or account.group:
+            raise ValueError(_("La cuenta de inventario debe estar activa, habilitada y ser una cuenta hoja."))
 
 
 def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]) -> None:
@@ -464,15 +577,26 @@ def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]
         )
 
 
-def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+def _form_decimal(
+    field_name: str,
+    default: str = "0",
+    *,
+    non_negative: bool = False,
+    positive: bool = False,
+) -> Decimal:
+    """Convierte un valor de formulario a Decimal finito o lanza un error de validación."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    return coerce_decimal(
+        value if value not in (None, "") else default,
+        field_name,
+        non_negative=non_negative,
+        positive=positive,
+    )
 
 
 def _line_amount(index: int) -> Decimal:
     """Calcula el monto de una línea con datos confiables del servidor."""
-    return _form_decimal(f"qty_{index}", "1") * _form_decimal(f"rate_{index}", "0")
+    return _form_decimal(f"qty_{index}", "1", non_negative=True) * _form_decimal(f"rate_{index}", "0", non_negative=True)
 
 
 def _create_line_relation(
@@ -505,18 +629,33 @@ def _create_line_relation(
     )
 
 
+def _stock_entry_line_detail(entry: StockEntry, index: int) -> tuple[str | None, str | None, str | None]:
+    """Devuelve centro de costo, proyecto y observaciones admitidos por la línea.
+
+    El modal genérico también envía cuenta contable y unidad de negocio; se
+    rechazan para no descartar en silencio valores editados (#1888).
+    """
+    if request.form.get(f"account_{index}", "").strip() or request.form.get(f"unit_{index}", "").strip():
+        raise ValueError(_("La línea de inventario no admite cuenta contable ni unidad de negocio."))
+    cost_center = request.form.get(f"cost_center_{index}", "").strip() or None
+    project = request.form.get(f"project_{index}", "").strip() or None
+    _validate_stock_entry_dimensions(entry.company, cost_center, None, project)
+    return cost_center, project, request.form.get(f"remarks_{index}", "").strip() or None
+
+
 def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Decimal:
     """Create one stock movement line and its source relation."""
-    _validate_stock_entry_warehouses(entry)
-    qty = _form_decimal(f"qty_{index}", "1")
-    rate = _form_decimal(f"rate_{index}", "0")
+    line_cost_center, line_project, line_remarks = _stock_entry_line_detail(entry, index)
+    qty = _form_decimal(f"qty_{index}", "1", non_negative=True)
+    rate = _form_decimal(f"rate_{index}", "0", non_negative=True)
     amount = _line_amount(index)
-    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
-        amount = _form_decimal(f"amount_{index}", "0")
+    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative"}:
+        amount = _form_decimal(f"amount_{index}", "0", non_negative=True)
     default_uom = _item_default_uom(item_code)
     uom = request.form.get(f"uom_{index}") or default_uom
     if not uom:
         raise ValueError(_("La linea del item %(item_code)s requiere una unidad de medida.") % {"item_code": item_code})
+    _validate_active_stock_uom(uom)
     qty_in_base_uom = qty
     if uom and default_uom:
         try:
@@ -526,11 +665,14 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
                 _("No se pudo convertir %(qty)s %(uom)s a %(default_uom)s para el item %(item_code)s.")
                 % {"qty": qty, "uom": uom, "default_uom": default_uom, "item_code": item_code}
             ) from exc
+    source_wh = request.form.get(f"source_warehouse_{index}", "").strip() or entry.from_warehouse
+    target_wh = request.form.get(f"target_warehouse_{index}", "").strip() or entry.to_warehouse
+    _validate_stock_entry_warehouses(entry, source_wh, target_wh)
     line = StockEntryItem(
         stock_entry_id=entry.id,
         item_code=item_code,
-        source_warehouse=entry.from_warehouse,
-        target_warehouse=entry.to_warehouse,
+        source_warehouse=source_wh,
+        target_warehouse=target_wh,
         qty=qty,
         uom=uom,
         qty_in_base_uom=qty_in_base_uom,
@@ -538,6 +680,9 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
         amount=amount,
         batch_id=request.form.get(f"batch_id_{index}") or None,
         serial_no=request.form.get(f"serial_no_{index}") or None,
+        cost_center_code=line_cost_center,
+        project_code=line_project,
+        remarks=line_remarks,
     )
     database.session.add(line)
     database.session.flush()
@@ -545,17 +690,39 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
     return amount
 
 
+def _submitted_item_code_indexes() -> list[int]:
+    """Devuelve los índices únicos de artículo enviados, ordenados numéricamente."""
+    indexes: set[int] = set()
+    for key in request.form:
+        if not key.startswith("item_code_"):
+            continue
+        suffix = key.rsplit("_", 1)[1]
+        if suffix.isdigit():
+            try:
+                indexes.add(int(suffix))
+            except ValueError:
+                continue
+    return sorted(indexes)
+
+
+def _reject_stock_entry_fiscal_charges() -> None:
+    """Rechaza cargos fiscales: StockEntry no tiene contrato contable aprobado (#1888)."""
+    for field in ("tax_lines_payload", "tax_summary_payload"):
+        payload = (request.form.get(field) or "").strip()
+        if payload and payload not in {"[]", "{}"}:
+            raise ValueError(_("Las entradas de inventario no admiten cargos fiscales."))
+
+
 def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de un movimiento de inventario."""
-    i = 0
+    _reject_stock_entry_fiscal_charges()
     total = Decimal("0")
     line_count = 0
-    while request.form.get(f"item_code_{i}"):
+    for i in _submitted_item_code_indexes():
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             total += _save_stock_entry_item(entry, i, item_code)
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(_("El documento requiere al menos una línea."), 400)
     return total
@@ -590,6 +757,17 @@ def _item_default_uom(item_code: str) -> str | None:
     return item.default_uom if item else None
 
 
+def _validate_active_stock_uom(uom_code: str) -> None:
+    """Rechaza UOM inexistentes o inactivas en una línea de inventario."""
+    uom = database.session.execute(database.select(UOM).filter_by(code=uom_code)).scalars().first()
+    if uom is None:
+        raise ValueError(_("La unidad de medida %(uom)s no existe.") % {"uom": uom_code})
+    if not uom.is_active:
+        raise ValueError(
+            _("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.") % {"uom": uom_code}
+        )
+
+
 def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: str, warehouse: str) -> Decimal:
     """Create one reconciliation line from the locked stock snapshot."""
     _validate_stock_entry_warehouses(entry, warehouse)
@@ -597,11 +775,12 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
     uom = request.form.get(f"uom_{index}") or _item_default_uom(item_code)
     if not uom:
         raise ValueError(_("La conciliación del item %(item_code)s requiere una unidad de medida.") % {"item_code": item_code})
+    _validate_active_stock_uom(uom)
     default_uom = _item_default_uom(item_code)
     if not default_uom:
         raise ValueError(_("El item %(item_code)s requiere una UOM base configurada.") % {"item_code": item_code})
     raw_counted_qty = request.form.get(f"counted_qty_{index}")
-    counted_qty = _form_decimal(f"counted_qty_{index}", str(current_qty))
+    counted_qty = _form_decimal(f"counted_qty_{index}", str(current_qty), non_negative=True)
     entered_counted_qty = counted_qty
     current_qty_in_uom = current_qty
     if uom != default_uom:
@@ -614,8 +793,8 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
                 _("No se pudo convertir %(qty)s %(uom)s a %(default_uom)s para el item %(item_code)s.")
                 % {"qty": counted_qty, "uom": uom, "default_uom": default_uom, "item_code": item_code}
             ) from exc
-    target_rate = _form_decimal(f"target_valuation_rate_{index}", str(current_rate))
-    target_value = _form_decimal(f"target_stock_value_{index}", str(counted_qty * target_rate))
+    target_rate = _form_decimal(f"target_valuation_rate_{index}", str(current_rate), non_negative=True)
+    target_value = _form_decimal(f"target_stock_value_{index}", str(counted_qty * target_rate), non_negative=True)
     qty_difference = counted_qty - current_qty
     raw_qty_difference = (
         entered_counted_qty if raw_counted_qty not in (None, "") else current_qty_in_uom
@@ -649,17 +828,19 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
 
 def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
-    i = 0
-    total_difference = Decimal("0")
-    line_count = 0
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "").strip()
-        warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
+    submitted_lines: list[tuple[int, str, str | None]] = []
+    for index in _submitted_item_code_indexes():
+        item_code = str(request.form.get(f"item_code_{index}") or "").strip()
+        warehouse = request.form.get(f"warehouse_{index}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
-            total_difference += _save_stock_reconciliation_item(entry, i, item_code, warehouse)
-            line_count += 1
-        i += 1
-    if line_count == 0:
+            submitted_lines.append((index, item_code, warehouse))
+
+    validate_stock_reconciliation_line_keys(entry.company, [(item, warehouse) for _, item, warehouse in submitted_lines])
+
+    total_difference = Decimal("0")
+    for row_index, item_code, warehouse in submitted_lines:
+        total_difference += _save_stock_reconciliation_item(entry, row_index, item_code, warehouse)
+    if not submitted_lines:
         raise DocumentFlowError(_("El documento requiere al menos una línea."), 400)
     return total_difference
 
@@ -672,8 +853,6 @@ def _infer_stock_entry_purpose(path: str) -> str | None:
         return "material_issue"
     if path.endswith("/material-transfer/new"):
         return "material_transfer"
-    if path.endswith("/adjustment/new"):
-        return "stock_adjustment"
     if path.endswith("/reconciliation/new"):
         return "stock_reconciliation"
     if path.endswith("/adjustment-positive/new"):
@@ -683,18 +862,85 @@ def _infer_stock_entry_purpose(path: str) -> str | None:
     return None
 
 
-def _stock_entry_title(purpose: str | None) -> str:
-    """Build a human friendly title for the stock entry creation page."""
-    labels: dict[str, str] = {
-        "material_receipt": "Nueva Recepción de Material",
-        "material_issue": "Nueva Salida de Material",
-        "material_transfer": "Nueva Transferencia de Material",
-        "stock_adjustment": "Nuevo Ajuste de Inventario",
-        "stock_reconciliation": "Nueva Conciliación de Inventario",
-        "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
-        "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
-    }
-    return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
+STOCK_ENTRY_PURPOSE_LABELS: dict[str, Any] = {
+    "material_receipt": _l("Recepción de Material"),
+    "material_issue": _l("Salida de Material"),
+    "material_transfer": _l("Transferencia"),
+    "stock_reconciliation": _l("Conciliación de Inventario"),
+    "adjustment_positive": _l("Ajuste Positivo"),
+    "adjustment_negative": _l("Ajuste Negativo"),
+}
+
+_STOCK_ENTRY_NEW_TITLES: dict[str, Any] = {
+    "material_receipt": _l("Nueva Recepción de Material"),
+    "material_issue": _l("Nueva Salida de Material"),
+    "material_transfer": _l("Nueva Transferencia de Material"),
+    "stock_reconciliation": _l("Nueva Conciliación de Inventario"),
+    "adjustment_positive": _l("Nuevo Ajuste Positivo de Inventario"),
+    "adjustment_negative": _l("Nuevo Ajuste Negativo de Inventario"),
+}
+
+_STOCK_ENTRY_EDIT_TITLES: dict[str, Any] = {
+    "material_receipt": _l("Editar Recepción de Material"),
+    "material_issue": _l("Editar Salida de Material"),
+    "material_transfer": _l("Editar Transferencia de Material"),
+    "stock_reconciliation": _l("Editar Conciliación de Inventario"),
+    "adjustment_positive": _l("Editar Ajuste Positivo de Inventario"),
+    "adjustment_negative": _l("Editar Ajuste Negativo de Inventario"),
+}
+
+
+def stock_entry_purpose_label(purpose: str | None) -> str:
+    """Devuelve etiqueta traducible para el propósito de StockEntry (#1875)."""
+    code = str(purpose or "").strip()
+    label = STOCK_ENTRY_PURPOSE_LABELS.get(code)
+    if label is not None:
+        return str(label)
+    return code
+
+
+def _stock_entry_title(purpose: str | None, *, editing: bool = False) -> str:
+    """Construye el título traducible del formulario de alta o edición.
+
+    La edición nunca reutiliza el título de alta: cada propósito identifica la
+    operación que se está modificando y los códigos persistidos no se traducen.
+    """
+    if editing:
+        label = _STOCK_ENTRY_EDIT_TITLES.get(purpose or "", _l("Editar Entrada de Almacén"))
+    else:
+        label = _STOCK_ENTRY_NEW_TITLES.get(purpose or "", _l("Nueva Entrada de Almacén"))
+    return str(label) + " - " + APPNAME
+
+
+def _validate_stock_entry_dimensions(
+    company: str | None,
+    cost_center_code: str | None,
+    unit_code: str | None,
+    project_code: str | None,
+) -> None:
+    """Exige que las dimensiones analíticas pertenezcan a la compañía."""
+    checks = (
+        (CostCenter, cost_center_code, _("centro de costo")),
+        (Unit, unit_code, _("unidad de negocio")),
+        (Project, project_code, _("proyecto")),
+    )
+    for model, code, label in checks:
+        if not code:
+            continue
+        exists = database.session.execute(database.select(model.id).filter_by(code=code, entity=company)).scalar_one_or_none()
+        if exists is None:
+            raise ValueError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
+
+
+def _validate_stock_entry_adjustment_account(account_id: str | None, company: str) -> None:
+    """Ensure an explicitly selected reconciliation account belongs to its company."""
+    if not account_id:
+        return
+    account = database.session.get(Accounts, account_id)
+    if account is None:
+        raise ValueError(_("La cuenta contable configurada no existe."))
+    if account.entity != company:
+        raise ValueError(_("La cuenta contable debe pertenecer a la compañía del documento."))
 
 
 def _validate_stock_entry_warehouses(entry: StockEntry, *line_warehouses: str | None) -> None:
@@ -750,12 +996,22 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
         posting_date = _validate_stock_entry_posting_date(form_data)
         posted_purpose = _validate_stock_entry_purpose(form_data.get("purpose") or "material_receipt")
         company = _validate_stock_entry_company(form_data.get("company"), "crear")
+        _validate_stock_entry_dimensions(
+            company,
+            form_data.get("cost_center_code") or None,
+            form_data.get("unit_code") or None,
+            form_data.get("project_code") or None,
+        )
         from cacao_accounting.document_flow.currency_resolver import company_functional_currency
 
         base_currency_value = company_functional_currency(company)
         if not base_currency_value:
             raise ValueError(_("La compañía requiere una moneda funcional configurada."))
         raw_currency = form_data.get("transaction_currency") or form_data.get("currency") or ""
+        if not raw_currency and posted_purpose == "stock_reconciliation":
+            # #1811: el formulario de conciliación no presenta moneda; se deriva
+            # explícitamente de la moneda funcional ya validada de la compañía.
+            raw_currency = base_currency_value
         if not raw_currency:
             raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
         entry = StockEntry(
@@ -794,9 +1050,15 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
         flash_error(exc)
 
 
+_SAFE_SOURCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def _source_context(source_type: str | None, source_id: str | None) -> tuple[str | None, str]:
     """Build the source document api context for pre-filling inventory lines."""
     if not source_type or not source_id:
+        return None, _LABEL_DOCUMENTO_ORIGEN
+    # #1867: source_id is reflected into JS/HTML contexts; reject unsafe shapes.
+    if not _SAFE_SOURCE_ID_RE.fullmatch(source_id):
         return None, _LABEL_DOCUMENTO_ORIGEN
     if source_type == "purchase_receipt":
         return f"/api/buying/purchase-receipt/{source_id}/items", "recepción de compra"
@@ -805,6 +1067,57 @@ def _source_context(source_type: str | None, source_id: str | None) -> tuple[str
     if source_type == "stock_entry":
         return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
     return None, _LABEL_DOCUMENTO_ORIGEN
+
+
+_SOURCE_MODELS: dict[str, Any] = {
+    "purchase_receipt": PurchaseReceipt,
+    "delivery_note": DeliveryNote,
+    "stock_entry": StockEntry,
+}
+
+_SOURCE_READ_MODULES: dict[str, tuple[str, ...]] = {
+    "purchase_receipt": ("purchases", "inventory"),
+    "delivery_note": ("sales", "inventory"),
+    "stock_entry": ("inventory",),
+}
+
+
+def _source_read_allowed(read_modules: tuple[str, ...], company: str) -> bool:
+    """Indica si el usuario puede consultar el origen en alguno de sus módulos."""
+    for module in read_modules:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        if permissions.consultar and permissions.tiene_acceso_compania(company):
+            return True
+    return False
+
+
+def stock_entry_source_header(source_type: str | None, source_id: str | None) -> dict[str, str] | None:
+    """Devuelve la compañía y moneda del origen para hidratar la cabecera bloqueada.
+
+    Solo hidrata cuando el documento existe, declara compañía y moneda
+    transaccional, y el usuario puede consultar el documento origen en su
+    módulo y compañía. Sin moneda (datos legacy o importados) la cabecera
+    queda editable para no bloquear un formulario imposible (#1874). Un origen
+    de otra compañía o sin permiso de lectura del origen responde igual que uno
+    inexistente para no permitir enumerar IDs (#1874 QA).
+    """
+    model = _SOURCE_MODELS.get(source_type or "")
+    read_modules = _SOURCE_READ_MODULES.get(source_type or "")
+    if model is None or not read_modules or not source_id:
+        return None
+    source = database.session.get(model, source_id)
+    company = getattr(source, "company", None)
+    if source is None or not company:
+        return None
+    currency = str(getattr(source, "transaction_currency", "") or "").strip()
+    if not currency:
+        return None
+    # #1874: requiere lectura del origen antes de exponer su existencia/moneda.
+    # Sin permiso se responde igual que un origen inexistente para no permitir
+    # enumerar IDs por la diferencia entre 403 y 200.
+    if not _source_read_allowed(read_modules, str(company)):
+        return None
+    return {"company": str(company), "currency": currency}
 
 
 def _handle_stock_entry_edit_post(registro: StockEntry):
@@ -821,15 +1134,75 @@ def _handle_stock_entry_edit_post(registro: StockEntry):
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
-        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+        return None
+
+
+def _submitted_stock_entry_lines() -> list[dict[str, str]]:
+    """Return posted line values so a rejected edit can be corrected in place."""
+    indexes = _submitted_item_code_indexes()
+    fields = (
+        ("item_code", "item_code"),
+        ("item_name", "item_name"),
+        ("qty", "qty"),
+        ("uom", "uom"),
+        ("rate", "rate"),
+        ("amount", "amount"),
+        ("batch_id", "batch_id"),
+        ("serial_no", "serial_no"),
+        ("source_warehouse", "source_warehouse"),
+        ("target_warehouse", "target_warehouse"),
+        ("source_type", "source_type"),
+        ("source_id", "source_id"),
+        ("source_item_id", "source_item_id"),
+        ("account", "account"),
+        ("cost_center", "cost_center"),
+        ("unit", "unit"),
+        ("project", "project"),
+        ("remarks", "remarks"),
+    )
+    return [{name: request.form.get(f"{field}_{index}", "") for name, field in fields} for index in indexes]
+
+
+def _submitted_stock_reconciliation_lines() -> list[dict[str, str]]:
+    """Return posted reconciliation values after an edit validation failure."""
+    indexes = _submitted_item_code_indexes()
+    fields = (
+        "item_code",
+        "uom",
+        "warehouse",
+        "current_qty",
+        "counted_qty",
+        "current_valuation_rate",
+        "target_valuation_rate",
+        "current_stock_value",
+        "target_stock_value",
+    )
+    return [{field: request.form.get(f"{field}_{index}", "") for field in fields} for index in indexes]
+
+
+def _stock_entry_snapshot_value(value: Any) -> Any:
+    """Serializa valores de cabecera para comparar snapshots de auditoría."""
+    if isinstance(value, (date, Decimal)):
+        return str(value)
+    return value
 
 
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
-    """Captura el estado del registro antes/después de la edición."""
+    """Captura el estado completo de la cabecera antes/después de la edición."""
     state = {
         "purpose": registro.purpose,
         "company": registro.company,
-        "posting_date": str(registro.posting_date or ""),
+        "posting_date": _stock_entry_snapshot_value(registro.posting_date or ""),
+        "from_warehouse": registro.from_warehouse,
+        "to_warehouse": registro.to_warehouse,
+        "adjustment_account_id": registro.adjustment_account_id,
+        "cost_center_code": registro.cost_center_code,
+        "unit_code": registro.unit_code,
+        "project_code": registro.project_code,
+        "transaction_currency": registro.transaction_currency,
+        "base_currency": registro.base_currency,
+        "exchange_rate": _stock_entry_snapshot_value(registro.exchange_rate),
+        "total_amount": _stock_entry_snapshot_value(registro.total_amount),
         "remarks": registro.remarks or "",
     }
 
@@ -848,16 +1221,29 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
         raise ValueError(_("No se puede cambiar el propósito de una entrada de almacén existente."))
     if company != registro.company:
         raise ValueError(_("No se puede cambiar la compañía de una entrada de almacén existente."))
+    if purpose == "stock_reconciliation":
+        adjustment_account_id = request.form.get("adjustment_account_id", registro.adjustment_account_id) or None
+        cost_center_code = request.form.get("cost_center_code", registro.cost_center_code) or None
+        unit_code = request.form.get("unit_code", registro.unit_code) or None
+        project_code = request.form.get("project_code", registro.project_code) or None
+    else:
+        adjustment_account_id = registro.adjustment_account_id
+        cost_center_code = registro.cost_center_code
+        unit_code = registro.unit_code
+        project_code = registro.project_code
+    if purpose == "stock_reconciliation":
+        _validate_stock_entry_adjustment_account(adjustment_account_id, company)
+    _validate_stock_entry_dimensions(company, cost_center_code, unit_code, project_code)
     registro.purpose = purpose
     registro.company = company
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
-    registro.from_warehouse = request.form.get("from_warehouse") or None
-    registro.to_warehouse = request.form.get("to_warehouse") or None
-    registro.adjustment_account_id = request.form.get("adjustment_account_id") or None
-    registro.cost_center_code = request.form.get("cost_center_code") or None
-    registro.unit_code = request.form.get("unit_code") or None
-    registro.project_code = request.form.get("project_code") or None
-    registro.remarks = request.form.get("remarks")
+    registro.from_warehouse = request.form.get("from_warehouse", registro.from_warehouse) or None
+    registro.to_warehouse = request.form.get("to_warehouse", registro.to_warehouse) or None
+    registro.adjustment_account_id = adjustment_account_id
+    registro.cost_center_code = cost_center_code
+    registro.unit_code = unit_code
+    registro.project_code = project_code
+    registro.remarks = request.form.get("remarks", registro.remarks)
     raw_currency = request.form.get("transaction_currency") or request.form.get("currency") or ""
     if not raw_currency and not registro.transaction_currency:
         raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
@@ -871,20 +1257,172 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.base_currency = base_currency_value
 
 
-def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
-    """Elimina y recrea los items de la entrada de inventario.
+def _normalized_line_number(value: Any) -> str:
+    """Normaliza un decimal de línea para comparar sin depender de la escala."""
+    return format(Decimal(str(value if value is not None else 0)).normalize(), "f")
 
-    Primero elimina las relaciones documentales existentes (lineas 1229-1232),
-    luego los items (linea 1233-1234), y finalmente recrea todo via
-    ``_save_stock_entry_items`` que tambien recrea las relaciones.
-    Este patron de delete-then-resave es intencional para mantener
-    consistencia entre items y relaciones documentales en ediciones.
-    """
-    # INV-05: Limpiar relaciones documentales huérfanas antes de recrear items
-    for rel in database.session.execute(
-        database.select(DocumentRelation).filter_by(target_type="stock_entry", target_id=registro.id)
-    ).scalars():
-        database.session.delete(rel)
+
+def _persisted_stock_entry_line_signatures(entry: StockEntry) -> list[tuple]:
+    """Firma de las líneas persistidas usada para detectar cambios reales."""
+    lines = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalars().all()
+    if entry.purpose == "stock_reconciliation":
+        return sorted(
+            (
+                line.item_code,
+                line.uom or "",
+                line.source_warehouse or "",
+                _normalized_line_number(line.counted_qty),
+                _normalized_line_number(line.target_valuation_rate),
+            )
+            for line in lines
+        )
+    return sorted(
+        (
+            line.item_code,
+            _normalized_line_number(line.qty),
+            line.uom or "",
+            _normalized_line_number(line.basic_rate),
+            _normalized_line_number(line.amount),
+            line.batch_id or "",
+            line.serial_no or "",
+            line.source_warehouse or "",
+            line.target_warehouse or "",
+            _normalized_line_number(line.qty_in_base_uom if line.qty_in_base_uom is not None else line.qty),
+        )
+        for line in lines
+    )
+
+
+def _submitted_reconciliation_signatures(entry: StockEntry) -> list[tuple]:
+    """Firma de las líneas de conciliación enviadas por el formulario."""
+    signatures = []
+    for row in _submitted_stock_reconciliation_lines():
+        if not row["item_code"].strip():
+            continue
+        uom = row["uom"] or _item_default_uom(row["item_code"]) or ""
+        warehouse = row["warehouse"] or entry.to_warehouse or entry.from_warehouse or ""
+        signatures.append(
+            (
+                row["item_code"],
+                uom,
+                warehouse,
+                _normalized_line_number(row["counted_qty"] or 0),
+                _normalized_line_number(row["target_valuation_rate"] or 0),
+            )
+        )
+    return sorted(signatures)
+
+
+def _converted_line_base_qty(item_code: str, qty: Decimal, uom: str, default_uom: str | None) -> Decimal | None:
+    """Convierte la cantidad a la UOM base o devuelve ``None`` si no es comparable."""
+    if not uom or not default_uom or uom == default_uom:
+        return qty
+    from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
+
+    try:
+        return convert_item_qty(item_code, qty, uom, default_uom)
+    except InventoryServiceError:
+        return None
+
+
+def _submitted_material_line_signature(entry: StockEntry, index: int, row: dict[str, str]) -> tuple | None:
+    """Firma de una línea material enviada o ``None`` si no puede compararse."""
+    item_code = row["item_code"]
+    qty = coerce_decimal(row["qty"] or "1", f"qty_{index}")
+    rate = coerce_decimal(row["rate"] or "0", f"rate_{index}")
+    amount = qty * rate
+    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative"}:
+        amount = coerce_decimal(row["amount"] or "0", f"amount_{index}")
+    default_uom = _item_default_uom(item_code)
+    uom = row["uom"] or default_uom or ""
+    qty_in_base_uom = _converted_line_base_qty(item_code, qty, uom, default_uom)
+    if qty_in_base_uom is None:
+        return None
+    return (
+        item_code,
+        _normalized_line_number(qty),
+        uom,
+        _normalized_line_number(rate),
+        _normalized_line_number(amount),
+        row["batch_id"] or "",
+        row["serial_no"] or "",
+        entry.from_warehouse or "",
+        entry.to_warehouse or "",
+        _normalized_line_number(qty_in_base_uom),
+    )
+
+
+def _persisted_stock_entry_origin_signature(entry: StockEntry) -> list[tuple[str, ...]]:
+    """Origen documental persistido por línea, incluido el vínculo nulo (#1865)."""
+    rows = database.session.execute(
+        database.select(
+            StockEntryItem.item_code,
+            DocumentRelation.source_type,
+            DocumentRelation.source_id,
+            DocumentRelation.source_item_id,
+        )
+        .outerjoin(
+            DocumentRelation,
+            database.and_(
+                DocumentRelation.target_type == "stock_entry",
+                DocumentRelation.target_id == entry.id,
+                DocumentRelation.target_item_id == StockEntryItem.id,
+            ),
+        )
+        .where(StockEntryItem.stock_entry_id == entry.id)
+        .distinct()
+    ).all()
+    return sorted(tuple(str(value or "") for value in row) for row in rows)
+
+
+def _submitted_stock_entry_origin_signature() -> list[tuple[str, ...]]:
+    """Origen documental enviado por el formulario de líneas (#1865)."""
+    return sorted(
+        (
+            row["item_code"].strip(),
+            row["source_type"].strip(),
+            row["source_id"].strip(),
+            row["source_item_id"].strip(),
+        )
+        for row in _submitted_stock_entry_lines()
+        if row["item_code"].strip()
+    )
+
+
+def _submitted_stock_entry_line_signatures(entry: StockEntry) -> list[tuple] | None:
+    """Firma de las líneas enviadas; ``None`` si no puede compararse con seguridad."""
+    if entry.purpose == "stock_reconciliation":
+        return _submitted_reconciliation_signatures(entry)
+    signatures = []
+    for index, row in enumerate(_submitted_stock_entry_lines()):
+        if not row["item_code"].strip():
+            continue
+        signature = _submitted_material_line_signature(entry, index, row)
+        if signature is None:
+            return None
+        signatures.append(signature)
+    return sorted(signatures)
+
+
+def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
+    """Replace draft lines only when doing so cannot erase document-flow evidence."""
+    relation_exists = database.session.execute(
+        database.select(DocumentRelation.id)
+        .where(DocumentRelation.target_type == "stock_entry", DocumentRelation.target_id == registro.id)
+        .limit(1)
+    ).first()
+    if relation_exists:
+        # #1865: una edición de solo cabecera es válida si conserva exactamente
+        # las líneas y cantidades vinculadas. Solo se rechaza un cambio real.
+        origin_changed = registro.purpose != "stock_reconciliation" and (
+            _submitted_stock_entry_origin_signature() != _persisted_stock_entry_origin_signature(registro)
+        )
+        if origin_changed or _submitted_stock_entry_line_signatures(registro) != _persisted_stock_entry_line_signatures(
+            registro
+        ):
+            raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
+        return
+
     for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
         database.session.delete(item)
     if registro.purpose == "stock_reconciliation":
@@ -893,48 +1431,139 @@ def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
         registro.total_amount = _save_stock_entry_items(registro)
 
 
+def _stock_entry_line_origins(entry: StockEntry) -> dict[str, dict[str, str]]:
+    """Origen documental persistido por línea para hidratar el editor (#1865).
+
+    La firma de origen compara cada línea con su ``DocumentRelation``; el
+    formulario debe publicar los mismos valores que la firma persistida o una
+    edición de solo cabecera se rechazaría como si el origen se hubiera
+    eliminado. Cuando una línea acumula varios vínculos se conserva el activo y,
+    en su defecto, el más antiguo, de forma determinista.
+    """
+    rows = database.session.execute(
+        database.select(
+            DocumentRelation.target_item_id,
+            DocumentRelation.source_type,
+            DocumentRelation.source_id,
+            DocumentRelation.source_item_id,
+            DocumentRelation.status,
+            DocumentRelation.id,
+        ).where(DocumentRelation.target_type == "stock_entry", DocumentRelation.target_id == entry.id)
+    ).all()
+    origins: dict[str, dict[str, str]] = {}
+    for target_item_id, source_type, source_id, source_item_id, _status, _relation_id in sorted(
+        rows, key=lambda row: (row.status != "active", row.id)
+    ):
+        if not target_item_id or target_item_id in origins:
+            continue
+        origins[target_item_id] = {
+            "source_type": str(source_type or ""),
+            "source_id": str(source_id or ""),
+            "source_item_id": str(source_item_id or ""),
+        }
+    return origins
+
+
+def _stock_entry_item_names(codes: set[str]) -> dict[str, str]:
+    """Devuelve el nombre del artículo para cada código solicitado."""
+    if not codes:
+        return {}
+    return {
+        code: name
+        for code, name in database.session.execute(database.select(Item.code, Item.name).where(Item.code.in_(codes))).all()
+    }
+
+
+def attach_stock_entry_item_names(lineas: list[StockEntryItem]) -> list[StockEntryItem]:
+    """Adjunta el nombre del artículo a líneas usadas en vistas de lectura.
+
+    ``StockEntryItem`` no denormaliza ``item_name`` y las plantillas de detalle
+    lo leen; sin este atributo la descripción se renderiza vacía (#1810).
+    """
+    item_names = _stock_entry_item_names({line.item_code for line in lineas if line.item_code})
+    for line in lineas:
+        setattr(line, "item_name", item_names.get(line.item_code or "", ""))
+    return lineas
+
+
+def _stock_entry_line_form_data(
+    item: StockEntryItem,
+    item_names: dict[str, str],
+    origins: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """Serializa una línea persistida, incluido su origen documental (#1865)."""
+    origin = origins.get(item.id, {})
+    return {
+        "item_code": item.item_code,
+        "item_name": item_names.get(item.item_code or "", ""),
+        "qty": str(item.qty),
+        "uom": item.uom or "",
+        "rate": str(item.basic_rate or 0),
+        "amount": str(item.amount or 0),
+        "batch_id": item.batch_id or "",
+        "serial_no": item.serial_no or "",
+        "source_warehouse": item.source_warehouse or "",
+        "target_warehouse": item.target_warehouse or "",
+        "source_type": origin.get("source_type", ""),
+        "source_id": origin.get("source_id", ""),
+        "source_item_id": origin.get("source_item_id", ""),
+    }
+
+
 def _render_stock_entry_edit_form(
     registro: StockEntry,
     items_disponibles: list,
     uoms_disponibles: list,
+    formulario=None,
 ):
     """Renderiza el formulario de edición de entrada de inventario."""
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
-    formulario = FormularioEntradaAlmacen(obj=registro)
+    formulario = formulario or FormularioEntradaAlmacen(obj=registro)
 
-    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars().all()
+    item_names = _stock_entry_item_names({item.item_code for item in lineas if item.item_code})
+    origins = {} if request.method == "POST" else _stock_entry_line_origins(registro)
+    initial_lines = (
+        _submitted_stock_entry_lines()
+        if request.method == "POST"
+        else [_stock_entry_line_form_data(item, item_names, origins) for item in lineas]
+    )
+    bodegas_disponibles = [
+        {"code": warehouse.code, "name": warehouse.name}
+        for (warehouse,) in database.session.execute(
+            database.select(Warehouse).filter_by(company=registro.company, is_active=True)
+        ).all()
+    ]
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
         "enableBatchSerial": True,
-        "allowManualAmount": registro.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
+        "allowManualAmount": registro.purpose in {"adjustment_positive", "adjustment_negative"},
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "showLineWarehouses": True,
+        "columns": [
+            {"field": "source_warehouse", "label": _("Bodega origen"), "visible": True, "width": 2},
+            {"field": "target_warehouse", "label": _("Bodega destino"), "visible": True, "width": 2},
+        ],
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
         "initialHeader": {
-            "company": registro.company or "",
-            "posting_date": str(registro.posting_date or ""),
-            "remarks": registro.remarks or "",
+            "company": request.form.get("company", registro.company or ""),
+            "naming_series": request.form.get("naming_series", registro.naming_series_id or ""),
+            "currency": request.form.get("currency", registro.transaction_currency or ""),
+            "posting_date": request.form.get("posting_date", str(registro.posting_date or "")),
+            "from_warehouse": request.form.get("from_warehouse", registro.from_warehouse or ""),
+            "to_warehouse": request.form.get("to_warehouse", registro.to_warehouse or ""),
+            "remarks": request.form.get("remarks", registro.remarks or ""),
         },
-        "initialLines": [
-            {
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "qty": str(item.qty),
-                "uom": item.uom or "",
-                "rate": str(item.basic_rate or 0),
-                "amount": str(item.amount or 0),
-                "batch_id": item.batch_id or "",
-                "serial_no": item.serial_no or "",
-            }
-            for item in lineas
-        ],
+        "initialLines": initial_lines,
     }
-    titulo = _stock_entry_title(registro.purpose)
+    titulo = _stock_entry_title(registro.purpose, editing=True)
     return render_template(
         "inventario/entrada_nuevo.html",
         form=formulario,
@@ -953,36 +1582,45 @@ def _render_stock_reconciliation_edit_form(
     registro: StockEntry,
     items_disponibles: list,
     uoms_disponibles: list,
+    formulario=None,
 ):
     """Renderiza el formulario específico para editar una conciliación."""
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
-    formulario = FormularioEntradaAlmacen(obj=registro)
+    formulario = formulario or FormularioEntradaAlmacen(obj=registro)
     lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    submitted = request.method == "POST"
     reconciliation_config = {
         "header": {
-            "company": registro.company or "",
-            "posting_date": str(registro.posting_date or ""),
-            "adjustment_account_id": registro.adjustment_account_id or "",
-            "cost_center_code": registro.cost_center_code or "",
-            "unit_code": registro.unit_code or "",
-            "project_code": registro.project_code or "",
-            "remarks": registro.remarks or "",
+            "company": request.form.get("company", registro.company or ""),
+            "posting_date": request.form.get("posting_date", str(registro.posting_date or "")),
+            "naming_series": request.form.get("naming_series", registro.naming_series_id or ""),
+            "from_warehouse": request.form.get("from_warehouse", registro.from_warehouse or ""),
+            "to_warehouse": request.form.get("to_warehouse", registro.to_warehouse or ""),
+            "adjustment_account_id": request.form.get("adjustment_account_id", registro.adjustment_account_id or ""),
+            "cost_center_code": request.form.get("cost_center_code", registro.cost_center_code or ""),
+            "unit_code": request.form.get("unit_code", registro.unit_code or ""),
+            "project_code": request.form.get("project_code", registro.project_code or ""),
+            "remarks": request.form.get("remarks", registro.remarks or ""),
         },
-        "lines": [
-            {
-                "item_code": line.item_code,
-                "warehouse": line.target_warehouse or line.source_warehouse or "",
-                "uom": line.uom or "",
-                "current_qty": str(line.current_qty or 0),
-                "counted_qty": str(line.counted_qty or 0),
-                "current_valuation_rate": str(line.current_valuation_rate or 0),
-                "target_valuation_rate": str(line.target_valuation_rate or 0),
-                "current_stock_value": str(line.current_stock_value or 0),
-                "target_stock_value": str(line.target_stock_value or 0),
-            }
-            for line in lineas
-        ],
+        "lines": (
+            _submitted_stock_reconciliation_lines()
+            if submitted
+            else [
+                {
+                    "item_code": line.item_code,
+                    "warehouse": line.target_warehouse or line.source_warehouse or "",
+                    "uom": line.uom or "",
+                    "current_qty": str(line.current_qty or 0),
+                    "counted_qty": str(line.counted_qty or 0),
+                    "current_valuation_rate": str(line.current_valuation_rate or 0),
+                    "target_valuation_rate": str(line.target_valuation_rate or 0),
+                    "current_stock_value": str(line.current_stock_value or 0),
+                    "target_stock_value": str(line.target_stock_value or 0),
+                }
+                for line in lineas
+            ]
+        ),
     }
     return render_template(
         "inventario/stock_reconciliation_nuevo.html",

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a></li>
@@ -13,6 +13,7 @@
   <p class="text-muted small">{{ _("Los roles definen acciones; estas asignaciones delimitan las compañías donde puede ejecutarlas.") }}</p>
   <form method="post" id="companies-form">
     {{ form.hidden_tag() }}
+    {% for error in form.companies.errors %}<div class="text-danger small mb-2" role="alert">{{ error }}</div>{% endfor %}
     <div class="row g-3">
       {% for subfield in form.companies %}
       <div class="col-12 col-md-6 col-lg-4"><div class="form-check">

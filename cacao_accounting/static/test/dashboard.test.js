@@ -63,6 +63,31 @@ describe("dashboard", function () {
     assert.strictEqual(dashboard.payload.sections.version, "new");
   });
 
+  it("hides previous figures while the new period request is pending", async function () {
+    const firstRequest = deferred();
+    const secondRequest = deferred();
+    const requests = [firstRequest, secondRequest];
+    const dashboard = loadDashboard(() => requests.shift().promise);
+    dashboard.filters.company = "COMP";
+
+    dashboard.fetchData();
+    firstRequest.resolve(response({ sections: { version: "old" } }));
+    await flushPromises();
+    assert.strictEqual(dashboard.payload.sections.version, "old");
+
+    dashboard.filters.period = "PER-NEW";
+    dashboard.fetchData();
+
+    assert.deepStrictEqual(dashboard.payload, { sections: {} });
+    assert.strictEqual(dashboard.loading, true);
+
+    secondRequest.resolve(response({ sections: { version: "new" } }));
+    await flushPromises();
+
+    assert.strictEqual(dashboard.payload.sections.version, "new");
+    assert.strictEqual(dashboard.loading, false);
+  });
+
   it("does not let a late response replace newer data or its error state", async function () {
     const oldRequest = deferred();
     const newRequest = deferred();
@@ -108,6 +133,7 @@ describe("dashboard", function () {
     const currentRequest = deferred();
     const dashboard = loadDashboard(() => currentRequest.promise);
     dashboard.filters.company = "COMP";
+    dashboard.payload = { sections: { version: "old" } };
 
     dashboard.fetchData();
     currentRequest.reject(new Error("network failure"));
@@ -115,6 +141,7 @@ describe("dashboard", function () {
 
     assert.strictEqual(dashboard.error, "No se pudo cargar el dashboard.");
     assert.strictEqual(dashboard.loading, false);
+    assert.deepStrictEqual(dashboard.payload, { sections: {} });
   });
 
   it("invalidates pending requests when the company filter is cleared", async function () {
@@ -133,6 +160,25 @@ describe("dashboard", function () {
     assert.strictEqual(dashboard.error, "");
   });
 
+  it("exposes loading state for a pending request and clears it on success", async function () {
+    globalThis.dashboardConfig = { messages: { dashboardLoading: "Cargando dashboard..." } };
+    const pendingRequest = deferred();
+    const dashboard = loadDashboard(() => pendingRequest.promise);
+    dashboard.filters.company = "COMP";
+
+    dashboard.fetchData();
+
+    assert.strictEqual(dashboard.loading, true);
+    assert.strictEqual(dashboard.error, "");
+    assert.deepStrictEqual(dashboard.payload, { sections: {} });
+
+    pendingRequest.resolve(response({ sections: { version: "ok" } }));
+    await flushPromises();
+
+    assert.strictEqual(dashboard.loading, false);
+    assert.strictEqual(dashboard.payload.sections.version, "ok");
+  });
+
   it("uses the warehouse to distinguish repeated inventory item rows", function () {
     const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
 
@@ -140,5 +186,57 @@ describe("dashboard", function () {
     const secondKey = dashboard.rowKey({ item_code: "ITEM-001", warehouse: "Bodega Sur" });
 
     assert.notStrictEqual(firstKey, secondKey);
+  });
+
+  it("uses the customer identity to distinguish rows with the same visible name", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    const firstKey = dashboard.rowKey({ customer_id: "CUSTOMER-1", name: "Acme SA" });
+    const secondKey = dashboard.rowKey({ customer_id: "CUSTOMER-2", name: "Acme SA" });
+
+    assert.notStrictEqual(firstKey, secondKey);
+  });
+
+  it("preserves sub-cent stock quantities in the inventory table", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    const formatted = dashboard.formatQuantity("0.004");
+    const quantityCell = dashboard.tableCells("inventory", {
+      item_code: "ITEM-001",
+      item_name: "Art?culo fraccionado",
+      warehouse: "Bodega Norte",
+      current_qty: "0.004",
+    })[2];
+
+    assert.notStrictEqual(formatted, "0");
+    assert.notStrictEqual(formatted, "0,00");
+    assert.strictEqual(quantityCell.value, formatted);
+  });
+
+  it("keeps nine decimals available for the stored unit precision", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    assert.match(dashboard.formatQuantity("0.000000001"), /^0[.,]000000001$/);
+  });
+
+  it("falls back safely when currency code is invalid", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    assert.strictEqual(dashboard.formatCurrency(1234.5, "PE NT"), "1234.5");
+    assert.strictEqual(dashboard.formatKpi({ format: "money", value: 10, currency: "pesos" }), "10");
+  });
+
+  it("keeps number formatting resilient to formatter failures", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+    const original = Intl.NumberFormat;
+    Intl.NumberFormat = function () {
+      throw new RangeError("boom");
+    };
+    try {
+      assert.strictEqual(dashboard.formatNumber(42), "42");
+      assert.strictEqual(dashboard.formatQuantity(0.004), "0.004");
+    } finally {
+      Intl.NumberFormat = original;
+    }
   });
 });

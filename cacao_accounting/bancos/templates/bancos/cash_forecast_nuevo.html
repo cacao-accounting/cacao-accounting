@@ -5,7 +5,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Caja y Bancos") }}</a></li>
@@ -20,47 +20,50 @@
   </div>
 
   <div class="card-body p-4">
-    <form method="POST" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
+    <form method="get" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3 mb-3">
       <div class="col-md-6">
         <label for="company" class="form-label fw-bold">{{ _("Compañía") }}</label>
-        <select name="company" id="company" class="form-select" required>
+        <select name="company" id="company" class="form-select" onchange="this.form.submit()">
           {% for code, name in companies %}
           <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
           {% endfor %}
         </select>
         <div class="form-text">{{ _("La compañía para la cual se calculará y guardará el pronóstico.") }}</div>
       </div>
+    </form>
+
+    <form method="POST" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="company" value="{{ selected_company or '' }}">
 
       <div class="col-md-6">
         <label for="fiscal_year_id" class="form-label fw-bold">{{ _("Año Fiscal") }}</label>
         <select name="fiscal_year_id" id="fiscal_year_id" class="form-select" required>
-          <option value="" disabled selected>{{ _("Seleccione Año Fiscal") }}</option>
+          <option value="" disabled {{ 'selected' if not submitted or not submitted.get('fiscal_year_id') }}>{{ _("Seleccione Año Fiscal") }}</option>
           {% for fy in fiscal_years %}
-          <option value="{{ fy.id }}">{{ fy.name }} ({{ fy.year_start_date.strftime('%d/%m/%Y') }} - {{ fy.year_end_date.strftime('%d/%m/%Y') }})</option>
+          <option value="{{ fy.id }}" {{ 'selected' if submitted and submitted.get('fiscal_year_id') == fy.id }}>{{ fy.name }} ({{ fy.year_start_date.strftime('%d/%m/%Y') }} - {{ fy.year_end_date.strftime('%d/%m/%Y') }})</option>
           {% endfor %}
         </select>
       </div>
 
       <div class="col-md-6">
         <label for="version" class="form-label fw-bold">{{ _("Versión / Identificador") }}</label>
-        <input type="text" name="version" id="version" class="form-control" placeholder="{{ _('Ej: Q3-2026, Escenario Optimista, v1') }}" required>
+        <input type="text" name="version" id="version" class="form-control" value="{{ (submitted or {}).get('version', '') }}" placeholder="{{ _('Ej: Q3-2026, Escenario Optimista, v1') }}" required>
         <div class="form-text">{{ _("Nombre único para identificar esta versión del pronóstico de caja.") }}</div>
       </div>
 
       <div class="col-md-6">
         <label for="periodicity" class="form-label fw-bold">{{ _("Periodicidad") }}</label>
         <select name="periodicity" id="periodicity" class="form-select" required>
-          <option value="weekly">{{ _("Semanal") }}</option>
-          <option value="monthly" selected>{{ _("Mensual") }}</option>
+          <option value="weekly" {{ 'selected' if submitted and submitted.get('periodicity') == 'weekly' }}>{{ _("Semanal") }}</option>
+          <option value="monthly" {{ 'selected' if not submitted or not submitted.get('periodicity') or submitted.get('periodicity') == 'monthly' }}>{{ _("Mensual") }}</option>
         </select>
         <div class="form-text">{{ _("Define la división temporal de las proyecciones (semanal o mensual).") }}</div>
       </div>
 
       <div class="col-12">
         <label for="description" class="form-label fw-bold">{{ _("Descripción") }}</label>
-        <textarea name="description" id="description" class="form-control" rows="3" placeholder="{{ _('Añada notas sobre el escenario, suposiciones, objetivos...') }}"></textarea>
+        <textarea name="description" id="description" class="form-control" rows="3" placeholder="{{ _('Añada notas sobre el escenario, suposiciones, objetivos...') }}">{{ (submitted or {}).get('description', '') }}</textarea>
       </div>
 
       <div class="col-12 mt-4 d-flex justify-content-end gap-2">

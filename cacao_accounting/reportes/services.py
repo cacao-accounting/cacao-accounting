@@ -16,9 +16,11 @@ from sqlalchemy import and_, case, func, literal, or_, select
 from sqlalchemy.orm import aliased
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 from cacao_accounting.database import (
     AccountingPeriod,
     ARAPLedgerEntry,
+    ARAPLedgerBookEntry,
     Accounts,
     Batch,
     BankAccount,
@@ -29,6 +31,7 @@ from cacao_accounting.database import (
     CompanyDefaultAccount,
     CompanyParty,
     CostCenter,
+    ComprobanteContable,
     DocumentTransition,
     Entity,
     ExchangeRate,
@@ -42,12 +45,17 @@ from cacao_accounting.database import (
     PurchaseInvoiceItem,
     Reconciliation,
     ReconciliationItem,
+    DocumentTaxLine,
+    DocumentTaxSummary,
     SalesInvoice,
     SalesInvoiceItem,
+    Tax,
+    TaxTemplateItem,
     SerialNumber,
     StockBin,
     StockEntry,
     StockEntryItem,
+    StockLedgerBookEntry,
     StockLedgerEntry,
     StockValuationLayer,
     WithholdingCertificate,
@@ -57,7 +65,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount, source_qty_in_base_uom
 from cacao_accounting.document_flow.payment import _document_active_at_cutoff
-from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
+from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries, primary_ledger_id
 
 
 from cacao_accounting.i18n import _
@@ -275,6 +283,13 @@ KNOWN_ACCOUNT_CLASSIFICATIONS = frozenset(
     }
 )
 
+#: Tipos de cuenta que identifican un costo de ventas o de servicio aunque la
+#: clasificación histórica del catálogo los haya registrado como gasto.
+COST_ACCOUNT_TYPES = frozenset({"cost_of_goods_sold", "cost_of_service"})
+
+#: Clasificaciones cuyo saldo natural es deudor.
+DEBIT_POSITIVE_CLASSIFICATIONS = frozenset({"activo", "asset", "costo", "cost", "gasto", "expense"})
+
 
 def normalize_account_classification_value(value: str | None) -> str | None:
     """Normaliza un valor de clasificación al token canónico reconocido.
@@ -294,10 +309,46 @@ def account_classification_is_known(value: str | None) -> bool:
     return normalize_account_classification_value(value) in KNOWN_ACCOUNT_CLASSIFICATIONS
 
 
+def account_classification_filter_values(value: str) -> set[str]:
+    """Return recognized persisted spellings for the same accounting classification."""
+    normalized = normalize_account_classification_value(value)
+    groups = (
+        {"activo", "asset"},
+        {"pasivo", "liability"},
+        {"patrimonio", "equity"},
+        {"ingreso", "income"},
+        {"costo", "cost"},
+        {"gasto", "expense"},
+    )
+    group = next((group for group in groups if normalized in group), set())
+    return group | {alias for alias, canonical in _CLASSIFICATION_ALIASES.items() if canonical in group}
+
+
+def normalize_account_classification(classification: str | None, account_type: str | None = None) -> str:
+    """Resuelve la clasificación contable que usan los reportes financieros.
+
+    Los tipos de cuenta de costo de ventas y costo de servicio prevalecen sobre
+    la clasificación histórica, de modo que los catálogos que registraron esas
+    cuentas como ``Expense`` se presenten en la sección de costos sin modificar
+    los datos maestros ni los asientos ya publicados. En los demás casos se usa
+    la clasificación normalizada y, si no existe, se devuelve una cadena vacía.
+    """
+    normalized_type = (account_type or "").strip().lower()
+    if normalized_type in COST_ACCOUNT_TYPES:
+        return "cost"
+    return normalize_account_classification_value(classification) or ""
+
+
+def account_classification_is_debit_positive(value: str | None) -> bool:
+    """Indica si una clasificación acumula su saldo natural en el debe."""
+    return normalize_account_classification_value(value) in DEBIT_POSITIVE_CLASSIFICATIONS
+
+
 def _normalize_account_classification(account: Accounts | None) -> str:
-    """Normaliza aliases de clasificaciones de cuentas para reportes financieros."""
-    raw_classification = (account.classification or "").strip().lower() if account else ""
-    return _CLASSIFICATION_ALIASES.get(raw_classification, raw_classification)
+    """Normaliza clasificación y tipo de cuenta para reportes financieros."""
+    if account is None:
+        return ""
+    return normalize_account_classification(account.classification, account.account_type)
 
 
 def _payment_allocations(document: Any, as_of_date: date | None) -> Decimal:
@@ -417,7 +468,11 @@ def _subledger_document_amounts(
         # Keep the report aligned with the document balance helper, which also
         # accounts for effective legacy allocations not represented in AR/AP.
         outstanding = compute_outstanding_amount(document, as_of_date=effective_as_of)
-        paid = max(original_amount - _decimal_value(ledger_balance) + pending_amount, Decimal("0"))
+        # #1116: una devolución abre con document_amount negativo. Se orienta el
+        # saldo del ledger a la magnitud del documento para no contar el pago dos
+        # veces; el signo de presentación se aplica una sola vez en _subledger_row.
+        oriented_balance = _document_sign(document) * _decimal_value(ledger_balance)
+        paid = max(original_amount - oriented_balance + pending_amount, Decimal("0"))
         return paid, outstanding
     return (
         _payment_allocations(document, effective_as_of),
@@ -567,10 +622,13 @@ def _reconciliation_gl_amount(
     """Calcula el saldo GL filtrando todas las dimensiones contables."""
     if not account_ids:
         return Decimal("0")
-    query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
         GLEntry.company == company,
         GLEntry.ledger_id == ledger_id,
         GLEntry.account_id.in_(list(account_ids)),
+        *effective_gl_scope(date_to),
     )
     if date_from is not None:
         query = query.where(GLEntry.posting_date >= date_from)
@@ -637,17 +695,12 @@ def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
     as_of_date = context.as_of_date
     ar_account = str(defaults.default_receivable) if defaults and defaults.default_receivable else None
     ap_account = str(defaults.default_payable) if defaults and defaults.default_payable else None
-    ar_subledger = get_ar_ap_subledger(
-        SubledgerFilters(company=filters.company, party_type="customer", as_of_date=as_of_date)
-    ).totals.get("outstanding_amount", Decimal("0"))
-    ap_subledger = get_ar_ap_subledger(
-        SubledgerFilters(company=filters.company, party_type="supplier", as_of_date=as_of_date)
-    ).totals.get("outstanding_amount", Decimal("0"))
+    ar_subledger, ap_subledger = _reconciliation_ar_ap_book_totals(context)
     return [
         _reconciliation_row(
             "AR",
             [ar_account] if ar_account else [],
-            context.convert(ar_subledger, context.company_currency),
+            ar_subledger,
             _reconciliation_gl_amount(
                 filters.company,
                 context.ledger.id,
@@ -662,7 +715,7 @@ def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
         _reconciliation_row(
             "AP",
             [ap_account] if ap_account else [],
-            context.convert(-ap_subledger, context.company_currency),
+            -ap_subledger,
             _reconciliation_gl_amount(
                 filters.company,
                 context.ledger.id,
@@ -675,6 +728,37 @@ def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
             note=_("Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto."),
         ),
     ]
+
+
+def _reconciliation_ar_ap_book_totals(
+    context: _ReconciliationContext,
+) -> tuple[Decimal, Decimal]:  # pylint: disable=not-callable
+    """Sum signed AR/AP evidence already valued in the selected book."""
+    query = select(
+        func.coalesce(func.sum(case((ARAPLedgerEntry.ledger_type == "AR", ARAPLedgerBookEntry.book_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((ARAPLedgerEntry.ledger_type == "AP", ARAPLedgerBookEntry.book_amount), else_=0)), 0),
+        func.count(func.distinct(ARAPLedgerBookEntry.ledger_entry_id)),  # pylint: disable=not-callable
+    ).join(ARAPLedgerEntry, ARAPLedgerEntry.id == ARAPLedgerBookEntry.ledger_entry_id)
+    query = query.where(
+        ARAPLedgerEntry.company == context.filters.company,
+        ARAPLedgerEntry.posting_date <= context.as_of_date,
+        ARAPLedgerBookEntry.posting_date <= context.as_of_date,
+        ARAPLedgerBookEntry.ledger_id == context.ledger.id,
+        ARAPLedgerBookEntry.book_currency == context.comparison_currency,
+    )
+    receivable, payable, valued_count = database.session.execute(query).one()
+    source_count = database.session.execute(
+        select(func.count(ARAPLedgerEntry.id)).where(  # pylint: disable=not-callable
+            ARAPLedgerEntry.company == context.filters.company,
+            ARAPLedgerEntry.ledger_type.in_(("AR", "AP")),
+            ARAPLedgerEntry.posting_date <= context.as_of_date,
+        )
+    ).scalar_one()
+    if int(valued_count) != int(source_count):
+        raise ValueError(
+            _("Falta la valoración AR/AP del libro %(ledger)s para uno o más movimientos.") % {"ledger": context.ledger.code}
+        )
+    return _decimal_value(receivable), _decimal_value(payable)
 
 
 def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
@@ -692,17 +776,11 @@ def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
         ).scalars()
         if account_id
     ]
-    inventory_query = exclude_cancelled_stock_entries(
-        select(func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0)).where(
-            StockLedgerEntry.company == filters.company,
-            StockLedgerEntry.posting_date <= as_of_date,
-        )
-    )
-    inventory_subledger = _decimal_value(database.session.execute(inventory_query).scalar_one())
+    inventory_subledger = _reconciliation_inventory_book_amount(context)
     return _reconciliation_row(
         "Inventory",
         inventory_accounts,
-        context.convert(inventory_subledger, context.company_currency),
+        inventory_subledger,
         _reconciliation_gl_amount(
             filters.company, context.ledger.id, inventory_accounts, date_to=as_of_date, currency=context.comparison_currency
         ),
@@ -710,6 +788,38 @@ def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
         currency=context.ledger.currency,
         note=_("Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega."),
     )
+
+
+def _reconciliation_inventory_book_amount(context: _ReconciliationContext) -> Decimal:  # pylint: disable=not-callable
+    """Read stock valuation snapshots for the selected book and cutoff."""
+    stock_query = exclude_cancelled_stock_entries(
+        select(func.count(StockLedgerEntry.id)),  # pylint: disable=not-callable
+        context.as_of_date,
+    ).where(  # pylint: disable=not-callable
+        StockLedgerEntry.company == context.filters.company,
+        StockLedgerEntry.posting_date <= context.as_of_date,
+    )
+    stock_count = int(database.session.execute(stock_query).scalar_one())
+    book_query = exclude_cancelled_stock_entries(
+        select(
+            func.coalesce(func.sum(StockLedgerBookEntry.book_amount), 0),
+            func.count(func.distinct(StockLedgerBookEntry.stock_ledger_entry_id)),  # pylint: disable=not-callable
+        ).join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id),
+        context.as_of_date,
+    ).where(
+        StockLedgerEntry.company == context.filters.company,
+        StockLedgerEntry.posting_date <= context.as_of_date,
+        StockLedgerBookEntry.posting_date <= context.as_of_date,
+        StockLedgerBookEntry.ledger_id == context.ledger.id,
+        StockLedgerBookEntry.book_currency == context.comparison_currency,
+    )
+    amount, valued_count = database.session.execute(book_query).one()
+    if int(valued_count) != stock_count:
+        raise ValueError(
+            _("Falta la valoración del libro %(ledger)s para uno o más movimientos de inventario.")
+            % {"ledger": context.ledger.code}
+        )
+    return _decimal_value(amount)
 
 
 def _reconcile_grni_row(context: _ReconciliationContext) -> ReportRow:
@@ -771,20 +881,100 @@ def _reconcile_purchase_tax_amount(filters: ReconciliationFilters, as_of_date: d
     )
 
 
+def _tax_invoice_scope(model: Any, context: _ReconciliationContext) -> list[Any]:
+    """Return the document and date filters shared by tax reconciliation queries."""
+    return [
+        model.company == context.filters.company,
+        _document_active_at_cutoff(model, context.as_of_date),
+        model.posting_date <= context.as_of_date,
+        model.tax_total != 0,
+    ]
+
+
+def _reconciliation_tax_accounts_for_model(context: _ReconciliationContext, model: Any, default_account_attr: str) -> set[str]:
+    """Resolve tax accounts from invoice snapshots, then legacy template fallback."""
+    company = context.filters.company
+    scope = _tax_invoice_scope(model, context)
+    eligible_documents = select(model.id).where(*scope)
+    snapshot_line_exists = (
+        select(DocumentTaxLine.id)
+        .join(DocumentTaxSummary, DocumentTaxSummary.id == DocumentTaxLine.document_tax_summary_id)
+        .where(DocumentTaxSummary.company == company, DocumentTaxSummary.document_id == model.id)
+        .exists()
+    )
+    account_ids: set[str] = set()
+    needs_default = False
+
+    snapshot_rows = database.session.execute(
+        select(DocumentTaxLine.account_id)
+        .join(DocumentTaxSummary, DocumentTaxSummary.id == DocumentTaxLine.document_tax_summary_id)
+        .where(
+            DocumentTaxSummary.company == company,
+            DocumentTaxSummary.document_id.in_(eligible_documents),
+            DocumentTaxLine.amount != 0,
+            DocumentTaxLine.included_in_price.is_(False),
+        )
+    ).scalars()
+    for account_id in snapshot_rows:
+        if account_id:
+            account_ids.add(str(account_id))
+        else:
+            needs_default = True
+
+    legacy_templates = select(model.tax_template_id).where(*scope, ~snapshot_line_exists, model.tax_template_id.is_not(None))
+    legacy_rows = database.session.execute(
+        select(Tax.account_id)
+        .join(TaxTemplateItem, TaxTemplateItem.tax_id == Tax.id)
+        .where(
+            TaxTemplateItem.tax_template_id.in_(legacy_templates),
+            TaxTemplateItem.is_inclusive.is_(False),
+        )
+    ).scalars()
+    legacy_line_count = 0
+    for account_id in legacy_rows:
+        legacy_line_count += 1
+        if account_id:
+            account_ids.add(str(account_id))
+        else:
+            needs_default = True
+
+    legacy_documents = select(model.id).where(*scope, ~snapshot_line_exists)
+    if legacy_line_count == 0 and database.session.execute(legacy_documents.limit(1)).first():
+        needs_default = True
+
+    if needs_default:
+        defaults = context.defaults
+        default_id = getattr(defaults, default_account_attr, None) if defaults else None
+        if (
+            default_id
+            and database.session.execute(
+                select(Accounts.id).where(Accounts.id == default_id, Accounts.entity == company)
+            ).scalar_one_or_none()
+        ):
+            account_ids.add(str(default_id))
+    return account_ids
+
+
+def _reconciliation_tax_account_ids(context: _ReconciliationContext) -> list[str]:
+    """Return distinct, company-scoped tax accounts effective for invoices at cutoff."""
+    account_ids = _reconciliation_tax_accounts_for_model(context, SalesInvoice, "default_sales_tax_account_id")
+    account_ids.update(_reconciliation_tax_accounts_for_model(context, PurchaseInvoice, "default_purchase_tax_account_id"))
+    if not account_ids:
+        return []
+    return list(
+        database.session.execute(
+            select(Accounts.id).where(Accounts.entity == context.filters.company, Accounts.id.in_(account_ids))
+        ).scalars()
+    )
+
+
 def _reconcile_tax_row(context: _ReconciliationContext) -> ReportRow:
     """Construye la fila de conciliación de impuestos netos."""
     filters = context.filters
-    defaults = context.defaults
     as_of_date = context.as_of_date
-    sales_tax_account = (
-        str(defaults.default_sales_tax_account_id) if defaults and defaults.default_sales_tax_account_id else None
-    )
-    purchase_tax_account = (
-        str(defaults.default_purchase_tax_account_id) if defaults and defaults.default_purchase_tax_account_id else None
-    )
     sales_tax = _reconcile_sales_tax_amount(filters, as_of_date)
     purchase_tax = _reconcile_purchase_tax_amount(filters, as_of_date)
-    tax_accounts = [account for account in (sales_tax_account, purchase_tax_account) if account]
+    tax_accounts = _reconciliation_tax_account_ids(context)
     return _reconciliation_row(
         "Tax",
         tax_accounts,
@@ -869,7 +1059,14 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     company_currency = database.session.execute(
         select(Entity.currency).where(Entity.code == filters.company)
     ).scalar_one_or_none()
-    comparison_currency = filters.currency or selected_ledger.currency
+    requested_currency = (filters.currency or "").strip().upper()
+    ledger_currency = (selected_ledger.currency or "").strip().upper()
+    if requested_currency and requested_currency != ledger_currency:
+        raise ValueError(
+            _("La moneda de comparación debe coincidir con la moneda del libro seleccionado (%(currency)s).")
+            % {"currency": ledger_currency}
+        )
+    comparison_currency = ledger_currency
     ledger_needs_conversion = bool(
         selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
     )
@@ -1062,10 +1259,41 @@ def _batch_no_map() -> dict[str, str]:
     }
 
 
+def _kardex_opening_balance(
+    filters: KardexFilters, window_start: date | None
+) -> dict[tuple[str, str], tuple[Decimal, Decimal]]:
+    """Acumula existencia y valor anteriores al inicio del Kardex."""
+    if window_start is None:
+        return {}
+    query = exclude_cancelled_stock_entries(
+        select(
+            StockLedgerEntry.item_code,
+            StockLedgerEntry.warehouse,
+            func.sum(StockLedgerEntry.qty_change),
+            func.sum(StockLedgerEntry.stock_value_difference),
+        ).filter_by(company=filters.company),
+        window_start - timedelta(days=1),
+    )
+    if filters.item_code:
+        query = query.filter_by(item_code=filters.item_code)
+    if filters.warehouse:
+        query = query.filter_by(warehouse=filters.warehouse)
+    query = query.where(StockLedgerEntry.posting_date < window_start).group_by(
+        StockLedgerEntry.item_code, StockLedgerEntry.warehouse
+    )
+    return {
+        (str(item_code), str(warehouse)): (_decimal_value(qty), _decimal_value(value))
+        for item_code, warehouse, qty, value in database.session.execute(query)
+    }
+
+
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
     window_start, window_end = _report_window(filters)
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_stock_entries(
+        select(StockLedgerEntry).filter_by(company=filters.company),
+        window_end,
+    )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -1080,7 +1308,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
     total_in = Decimal("0")
     total_out = Decimal("0")
     total_value = Decimal("0")
-    running: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
+    running = _kardex_opening_balance(filters, window_start)
     for entry in database.session.execute(
         query.order_by(StockLedgerEntry.posting_date, StockLedgerEntry.created, StockLedgerEntry.id)
     ).scalars():
@@ -1093,7 +1321,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
         running_qty = current_qty + qty
         running_value = current_value + value_change
         running[key] = (running_qty, running_value)
-        if filters.date_from and entry.posting_date < filters.date_from:
+        if window_start and entry.posting_date < window_start:
             continue
         total_in += incoming
         total_out += outgoing
@@ -1142,7 +1370,10 @@ def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
     """Devuelve existencias de inventario a una fecha clave desde stock ledger."""
     _, window_end = _report_window(filters)
     as_of_date = filters.date_to or filters.date_from or window_end
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_stock_entries(
+        select(StockLedgerEntry).filter_by(company=filters.company),
+        as_of_date,
+    )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -1212,7 +1443,7 @@ def get_negative_stock(filters: OperationalReportFilters) -> PaginatedReport:
 
 
 def get_reorder_alerts(filters: OperationalReportFilters) -> PaginatedReport:
-    """Detecta existencias por debajo del mínimo o punto de reorden configurado."""
+    """Detecta existencias bajo el punto de reorden; el mínimo aplica si aquel falta."""
     query = (
         select(StockBin, Item)
         .join(Item, Item.code == StockBin.item_code)
@@ -1221,7 +1452,11 @@ def get_reorder_alerts(filters: OperationalReportFilters) -> PaginatedReport:
             Item.is_active.is_(True),
             or_(
                 and_(Item.reorder_level.is_not(None), StockBin.actual_qty <= Item.reorder_level),
-                and_(Item.min_stock_qty.is_not(None), StockBin.actual_qty <= Item.min_stock_qty),
+                and_(
+                    Item.reorder_level.is_(None),
+                    Item.min_stock_qty.is_not(None),
+                    StockBin.actual_qty <= Item.min_stock_qty,
+                ),
             ),
         )
     )
@@ -1257,12 +1492,18 @@ def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedRepor
     query = (
         select(StockEntry, StockEntryItem)
         .join(StockEntryItem, StockEntryItem.stock_entry_id == StockEntry.id)
-        .where(StockEntry.company == filters.company, StockEntry.purpose == "material_transfer", StockEntry.docstatus != 2)
+        .where(StockEntry.company == filters.company, StockEntry.purpose == "material_transfer", StockEntry.docstatus == 1)
     )
     if filters.item_code:
         query = query.where(StockEntryItem.item_code == filters.item_code)
     if filters.warehouse:
-        query = query.where(or_(StockEntry.from_warehouse == filters.warehouse, StockEntry.to_warehouse == filters.warehouse))
+        query = query.where(
+            or_(
+                func.coalesce(func.nullif(StockEntryItem.source_warehouse, ""), StockEntry.from_warehouse)
+                == filters.warehouse,
+                func.coalesce(func.nullif(StockEntryItem.target_warehouse, ""), StockEntry.to_warehouse) == filters.warehouse,
+            )
+        )
     if filters.date_from:
         query = query.where(StockEntry.posting_date >= filters.date_from)
     if filters.date_to:
@@ -1453,7 +1694,7 @@ def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport
     """Calcula rotación por artículo/almacén como salidas sobre stock promedio reconstruido de forma cronológica."""
     if not filters.date_from or not filters.date_to or filters.date_to < filters.date_from:
         raise ValueError(_("date_from y date_to válidos son obligatorios para calcular rotación"))
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
+    query = exclude_cancelled_stock_entries(select(StockLedgerEntry), filters.date_to).where(
         StockLedgerEntry.company == filters.company,
         StockLedgerEntry.posting_date <= filters.date_to,
     )
@@ -1602,10 +1843,16 @@ def _reconciliation_item_diagnostics(transaction_ids: set[str], company: str | N
     También diagnostica partidas bancarias activas sin contexto contable
     persistido (moneda/pierna), que deben migrarse con backfill o revisarse.
     """
-    item_query = select(ReconciliationItem).where(
-        ReconciliationItem.source_type == "bank_transaction",
-        ReconciliationItem.status != "cancelled",
+    item_query = (
+        select(ReconciliationItem)
+        .join(Reconciliation, ReconciliationItem.reconciliation_id == Reconciliation.id)
+        .where(
+            ReconciliationItem.source_type == "bank_transaction",
+            ReconciliationItem.status != "cancelled",
+        )
     )
+    if company:
+        item_query = item_query.where(Reconciliation.company == company)
     rows: list[ReportRow] = []
     flagged_ids: set[str] = set()
     for item in database.session.execute(item_query).scalars():
@@ -1704,8 +1951,15 @@ def _reconciliation_report_rows(query: Any, cancel_dates: dict[str, date], as_of
     return rows
 
 
-def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
-    """Devuelve reconciliaciones bancarias y conciliaciones de compras pendientes."""
+def get_reconciliation_report(
+    company: str, as_of_date: date | None = None, *, include_purchase_pending: bool = False
+) -> PaginatedReport:
+    """Devuelve reconciliaciones bancarias y, si se declara, pendientes de compras.
+
+    El valor por defecto excluye Compras: cada llamador debe declarar
+    explícitamente que la respuesta incluye pendientes de compras, de modo que
+    un llamador nuevo no pueda exponerlos por omisión (#1254, QA2 B8).
+    """
     query = (
         select(Reconciliation, ReconciliationItem)
         .join(
@@ -1720,7 +1974,9 @@ def get_reconciliation_report(company: str, as_of_date: date | None = None) -> P
     rows = _reconciliation_report_rows(query, _reconciliation_cancel_dates(as_of_date), as_of_date)
 
     bank_total = sum((_decimal_value(row.values["amount"]) for row in rows), Decimal("0"))
-    purchase_pending = get_purchase_reconciliation_pending(company=company, as_of_date=as_of_date)
+    purchase_pending = (
+        get_purchase_reconciliation_pending(company=company, as_of_date=as_of_date) if include_purchase_pending else []
+    )
     for pending in purchase_pending:
         rows.append(
             ReportRow(
@@ -1891,7 +2147,10 @@ def _process_payment_entries(
     total_incoming = Decimal("0")
     total_outgoing = Decimal("0")
 
-    payments = select(PaymentEntry).where(PaymentEntry.company == filters.company, PaymentEntry.docstatus == 1)
+    payments = select(PaymentEntry).where(
+        PaymentEntry.company == filters.company,
+        _document_active_at_cutoff(PaymentEntry, filters.date_to),
+    )
     if filters.date_from is not None:
         payments = payments.where(PaymentEntry.posting_date >= filters.date_from)
     if filters.date_to is not None:
@@ -1930,8 +2189,8 @@ def _process_bank_transactions(
     return rows
 
 
-def _compute_running_balance(rows: list[ReportRow]) -> Decimal:
-    running_balance = Decimal("0")
+def _compute_running_balance(rows: list[ReportRow], opening_balance: Decimal = Decimal("0")) -> Decimal:
+    running_balance = opening_balance
     for row in rows:
         running_balance += _decimal_value(row.values["incoming_amount"]) - _decimal_value(row.values["outgoing_amount"])
         row.values["running_balance"] = running_balance
@@ -1988,6 +2247,42 @@ def _bank_movement_totals(
     return incoming, outgoing, {currency: incoming[currency] - outgoing[currency] for currency in incoming}
 
 
+def _bank_opening_balance(
+    effective_filters: BankingFilters,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> Decimal | dict[str, Decimal]:
+    """Calcula el saldo anterior al inicio del rango consultado."""
+    from dataclasses import replace
+
+    if effective_filters.date_from is None:
+        return Decimal("0")
+    prior_filters = replace(
+        effective_filters,
+        date_from=None,
+        date_to=effective_filters.date_from - timedelta(days=1),
+    )
+    prior_rows = _bank_movement_rows(prior_filters, bank_accounts, party_names)
+    if not prior_rows:
+        return Decimal("0")
+    currencies = {str(row.values.get("currency")) for row in prior_rows if row.values.get("currency") is not None}
+    if len(currencies) <= 1:
+        return sum(
+            (
+                _decimal_value(row.values.get("incoming_amount")) - _decimal_value(row.values.get("outgoing_amount"))
+                for row in prior_rows
+            ),
+            Decimal("0"),
+        )
+    totals: dict[str, Decimal] = {currency: Decimal("0") for currency in currencies}
+    for row in prior_rows:
+        currency = str(row.values.get("currency"))
+        totals[currency] += _decimal_value(row.values.get("incoming_amount")) - _decimal_value(
+            row.values.get("outgoing_amount")
+        )
+    return totals
+
+
 def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     """Devuelve detalle de movimiento bancario desde pagos y extractos."""
     from dataclasses import replace
@@ -2005,12 +2300,15 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
 
     rows = _bank_movement_rows(effective_filters, bank_accounts, party_names)
-    running_balance = _compute_running_balance(rows)
+    opening_balance = _bank_opening_balance(effective_filters, bank_accounts, party_names)
+    initial = opening_balance if isinstance(opening_balance, Decimal) else Decimal("0")
+    running_balance = _compute_running_balance(rows, initial)
     total_incoming, total_outgoing, total_running_balance = _bank_movement_totals(rows, running_balance)
 
     return PaginatedReport(
         rows=rows,
         totals={
+            "opening_balance": opening_balance,
             "incoming_amount": total_incoming,
             "outgoing_amount": total_outgoing,
             "running_balance": total_running_balance,
@@ -2103,7 +2401,7 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
         .all()
     )
     rows: list[ReportRow] = []
-    total_withheld = Decimal("0")
+    withheld_by_currency: dict[str, Decimal] = {}
     line_count = 0
     for certificate in certificates:
         try:
@@ -2118,7 +2416,8 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
             if not isinstance(line, dict):
                 continue
             amount = _decimal_value(line.get("amount"))
-            total_withheld += amount
+            currency_code = certificate.currency or ""
+            withheld_by_currency[currency_code] = withheld_by_currency.get(currency_code, Decimal("0")) + amount
             line_count += 1
             rows.append(
                 ReportRow(
@@ -2139,7 +2438,9 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
     return PaginatedReport(
         rows=rows,
         totals={
-            "withheld_amount": total_withheld,
+            # #1636: no se suman monedas distintas; el formateador del reporte
+            # presenta cada codigo con su importe.
+            "withheld_amount": withheld_by_currency,
             "certificate_count": Decimal(len(certificates)),
             "line_count": Decimal(line_count),
         },
@@ -2244,17 +2545,47 @@ def _transfer_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Dec
     return _decimal_value(payment.paid_amount)
 
 
-def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
-    gl_balance_query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
+def _compute_gl_balance(
+    company: str,
+    bank_account_id: str,
+    as_of_date: date | None,
+    bank_currency: str,
+    company_currency: str | None,
+) -> Decimal:
+    """Suma el saldo GL de la cuenta en su moneda bancaria."""
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    gl_balance_query = select(GLEntry).where(
         GLEntry.company == company,
         GLEntry.bank_account_id == bank_account_id,
+        *effective_gl_scope(as_of_date),
     )
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         gl_balance_query = gl_balance_query.where(GLEntry.ledger_id == ledger_id)
     if as_of_date is not None:
         gl_balance_query = gl_balance_query.where(GLEntry.posting_date <= as_of_date)
-    return _decimal_value(database.session.execute(gl_balance_query).scalar_one())
+    balance = Decimal("0")
+    entries = database.session.execute(gl_balance_query).scalars()
+    for entry in entries:
+        account_currency = entry.account_currency
+        debit_in_account_currency = entry.debit_in_account_currency
+        credit_in_account_currency = entry.credit_in_account_currency
+        if account_currency == bank_currency and (
+            debit_in_account_currency is not None or credit_in_account_currency is not None
+        ):
+            balance += _decimal_value(debit_in_account_currency) - _decimal_value(credit_in_account_currency)
+            continue
+
+        company_amount = _decimal_value(entry.debit) - _decimal_value(entry.credit)
+        source_currency = entry.company_currency or company_currency
+        if source_currency == bank_currency:
+            balance += company_amount
+        else:
+            if not source_currency:
+                raise ValueError(_("La entrada GL no tiene moneda funcional para convertir el saldo bancario."))
+            balance += _convert_to_ledger_currency(company_amount, source_currency, bank_currency, entry.posting_date)
+    return balance
 
 
 def _bank_balance_totals(
@@ -2272,6 +2603,8 @@ def _bank_balance_totals(
 
 def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     """Devuelve resumen de saldos bancarios por cuenta."""
+    company_record = database.session.execute(select(Entity).filter_by(code=filters.company)).scalar_one_or_none()
+    company_currency = company_record.currency if company_record else None
     bank_accounts_query = select(BankAccount).where(BankAccount.company == filters.company)
     if filters.bank_account_id:
         bank_accounts_query = bank_accounts_query.where(BankAccount.id == filters.bank_account_id)
@@ -2279,7 +2612,10 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
 
     rows: list[ReportRow] = []
     for bank_account in bank_accounts:
-        balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date)
+        bank_currency = bank_account.currency or company_currency
+        if not bank_currency:
+            raise ValueError(_("La cuenta bancaria no tiene una moneda configurada."))
+        balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date, bank_currency, company_currency)
         receipts, payments = _compute_account_receipts_and_payments(bank_account.id, filters.company, filters.as_of_date)
 
         rows.append(
@@ -2287,7 +2623,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
                 values={
                     "bank_account": bank_account.account_name,
                     "account_no": bank_account.account_no,
-                    "currency": bank_account.currency,
+                    "currency": bank_currency,
                     "receipts_amount": receipts,
                     "payments_amount": payments,
                     "ending_balance": balance,
@@ -2404,8 +2740,8 @@ def _apply_gl_filters(
     query = _apply_base_filters(query, filters)
     query = _apply_account_filters(query, filters)
     query = _apply_party_filters(query, filters)
-    query = _apply_cancellation_scope(query, filters)
-    query = _apply_status_filter(query, filters)
+    query = _apply_cancellation_scope(query, filters, period_end)
+    query = _apply_status_filter(query, filters, period_end)
     query = _apply_period_filter(query, period_ids, period_start, period_end)
     return query
 
@@ -2463,21 +2799,29 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
     return query
 
 
-def _apply_cancellation_scope(query: Any, filters: FinancialReportFilters) -> Any:
-    from cacao_accounting.cancellation_scope import ordinary_gl_scope
+def _apply_cancellation_scope(
+    query: Any,
+    filters: FinancialReportFilters,
+    as_of_date: date | None,
+) -> Any:
+    from cacao_accounting.cancellation_scope import effective_gl_scope
 
     if filters.include_cancellations or filters.status == "cancelled":
         return query
-    return query.where(*ordinary_gl_scope())
+    return query.where(*effective_gl_scope(as_of_date))
 
 
-def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
-    from cacao_accounting.cancellation_scope import cancelled_originals_scope, ordinary_gl_scope
+def _apply_status_filter(
+    query: Any,
+    filters: FinancialReportFilters,
+    as_of_date: date | None,
+) -> Any:
+    from cacao_accounting.cancellation_scope import cancelled_originals_scope, effective_gl_scope
 
     if filters.status == "cancelled":
-        query = query.where(*cancelled_originals_scope())
+        query = query.where(*cancelled_originals_scope(as_of_date))
     elif filters.status in {"submitted", "posted"}:
-        query = query.where(*ordinary_gl_scope())
+        query = query.where(*effective_gl_scope(as_of_date))
     return query
 
 
@@ -2511,7 +2855,8 @@ def _apply_period_filter(query: Any, period_ids: list[str] | None, period_start:
     return query
 
 
-def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
+def _gl_sort_order(sort_by: str, sort_dir: str) -> tuple[Any, Any]:
+    """Construye un orden determinista compartido por consulta y ventanas."""
     sort_columns = {
         "posting_date": GLEntry.posting_date,
         "document_no": GLEntry.document_no,
@@ -2522,7 +2867,11 @@ def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
     }
     column = sort_columns.get(sort_by, GLEntry.posting_date)
     direction = column.desc() if sort_dir.lower() == "desc" else column.asc()
-    return query.order_by(direction, GLEntry.id.asc())
+    return direction, GLEntry.id.asc()
+
+
+def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
+    return query.order_by(*_gl_sort_order(sort_by, sort_dir))
 
 
 def _movement_voucher_status(entry: GLEntry) -> str:
@@ -2536,22 +2885,30 @@ def _movement_voucher_status(entry: GLEntry) -> str:
 
 def _movement_cancellation_metadata(entry: GLEntry) -> dict[str, Any]:
     """Obtiene la transición y los metadatos de cancelación de una línea."""
-    transition = (
-        database.session.execute(
-            select(DocumentTransition)
-            .where(
-                DocumentTransition.transition_type.in_(("cancellation", "reversal")),
-                DocumentTransition.source_type == entry.voucher_type,
-                or_(
-                    DocumentTransition.source_id == entry.voucher_id,
-                    DocumentTransition.target_id == entry.voucher_id,
-                ),
-            )
-            .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
+    transitions = database.session.execute(
+        select(DocumentTransition)
+        .where(
+            DocumentTransition.source_type == entry.voucher_type,
+            or_(
+                DocumentTransition.source_id == entry.voucher_id,
+                DocumentTransition.target_id == entry.voucher_id,
+            ),
         )
-        .scalars()
-        .first()
-    )
+        .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
+    ).scalars()
+    transition = None
+    for candidate in transitions:
+        if candidate.transition_type == "cancellation":
+            transition = candidate
+            break
+        if not _is_posted_reversal_transition(candidate):
+            continue
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == candidate.target_id)
+        ).scalar_one_or_none()
+        if target_status == "submitted":
+            transition = candidate
+            break
     if transition is None:
         return {
             "is_cancelled": bool(entry.is_cancelled),
@@ -2573,6 +2930,16 @@ def _movement_cancellation_metadata(entry: GLEntry) -> dict[str, Any]:
         "cancellation_actor": transition.actor_user_id,
         "cancellation_reason": transition.reason,
     }
+
+
+def _is_posted_reversal_transition(transition: DocumentTransition) -> bool:
+    """Recognize append-only reversal attempts without exposing rejected drafts as ledger events."""
+    if transition.transition_type == "reversal":
+        return True
+    if not transition.transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX):
+        return False
+    retry_number = transition.transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)
+    return retry_number.isdigit() and len(retry_number) == 5
 
 
 def _movement_detail_row_values(
@@ -2604,6 +2971,7 @@ def _movement_detail_row_values(
         "project": entry.project_code,
         "party_type": entry.party_type,
         "party_id": party.name or party.code if party else entry.party_id,
+        "__party_group_label": f"{party.name} ({party.code})" if party else entry.party_id,
         "line_comment": entry.remarks,
         "created_by": entry.created_by,
         "created_at": entry.created,
@@ -2621,9 +2989,10 @@ def _collect_movement_detail_rows(
     selected_ledger: Book,
     filters: FinancialReportFilters,
     display_from_index: int,
+    opening_balances: dict[str, Decimal],
 ) -> tuple[list[ReportRow], Decimal, Decimal]:
     """Convierte las entradas del mayor en filas y totales para el reporte."""
-    running_per_account: dict[str, Decimal] = defaultdict(Decimal)
+    running_per_account: dict[str, Decimal] = defaultdict(Decimal, opening_balances)
     rows: list[ReportRow] = []
     total_debit = Decimal("0")
     total_credit = Decimal("0")
@@ -2677,7 +3046,128 @@ def _movement_detail_query(
     return _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
 
 
-def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
+def _movement_detail_opening_balances(
+    filters: FinancialReportFilters,
+    period_start: date | None,
+    selected_ledger: Book,
+) -> dict[str, Decimal]:
+    """Obtiene el saldo por cuenta anterior al primer día del detalle visible."""
+    if not filters.include_running_balance or period_start is None:
+        return {}
+
+    opening_filters = replace(filters, accounting_period=None, period_from=None, period_to=None)
+    query = select(
+        GLEntry.account_code,
+        Accounts.code,
+        func.sum(GLEntry.debit - GLEntry.credit),
+    ).join(
+        Accounts,
+        Accounts.id == GLEntry.account_id,
+        isouter=True,
+    )
+    query = _apply_gl_filters(query, opening_filters, None, None, []).where(
+        GLEntry.ledger_id == selected_ledger.id,
+        GLEntry.posting_date < period_start,
+    )
+    opening_balances: dict[str, Decimal] = {}
+    for entry_code, account_code, balance in database.session.execute(
+        query.group_by(GLEntry.account_code, Accounts.code)
+    ).all():
+        code = str(entry_code or account_code or "")
+        opening_balances[code] = opening_balances.get(code, Decimal("0")) + _decimal_value(balance)
+    return opening_balances
+
+
+def _movement_group_expression(group_by: str) -> Any | None:
+    """Resuelve únicamente dimensiones del detalle disponibles en el selector."""
+    expressions = {
+        "account_code": func.coalesce(func.nullif(GLEntry.account_code, ""), Accounts.code, ""),
+        "unit_code": GLEntry.unit_code,
+        "project_code": GLEntry.project_code,
+        "voucher_type": GLEntry.voucher_type,
+        "document_no": func.coalesce(func.nullif(GLEntry.document_no, ""), GLEntry.voucher_id),
+        "cost_center": GLEntry.cost_center_code,
+        "party_id": GLEntry.party_id,
+        "posting_date": GLEntry.posting_date,
+        "accounting_period": AccountingPeriod.name,
+    }
+    expression = expressions.get(group_by)
+    if expression is not None and group_by != "posting_date":
+        return func.coalesce(func.nullif(expression, ""), "")
+    return expression
+
+
+def _grouped_movement_query(query: Any, filters: FinancialReportFilters, group_expression: Any) -> Any:
+    """Calcula orden, saldos y subtotales en SQL sin materializar el mayor."""
+    order = _gl_sort_order(filters.sort_by, filters.sort_dir)
+    account = func.coalesce(func.nullif(GLEntry.account_code, ""), Accounts.code, "")
+    indexed = (
+        query.order_by(None)
+        .with_only_columns(
+            GLEntry.id.label("entry_id"),
+            group_expression.label("group_value"),
+            GLEntry.debit.label("debit"),
+            GLEntry.credit.label("credit"),
+            func.row_number().over(order_by=order).label("original_position"),
+            func.sum(GLEntry.debit - GLEntry.credit).over(partition_by=account, order_by=order).label("running_balance"),
+            maintain_column_froms=True,
+        )
+        .subquery()
+    )
+    group = indexed.c.group_value
+    return select(
+        indexed,
+        func.min(indexed.c.original_position).over(partition_by=group).label("group_first"),
+        func.row_number().over(partition_by=group, order_by=indexed.c.original_position).label("group_position"),
+        func.count().over(partition_by=group).label("group_count"),
+        func.sum(indexed.c.debit).over(partition_by=group).label("group_debit"),
+        func.sum(indexed.c.credit).over(partition_by=group).label("group_credit"),
+    ).subquery()
+
+
+def _collect_grouped_movement_rows(
+    query: Any,
+    grouped: Any,
+    filters: FinancialReportFilters,
+    ledger: Book,
+    opening_balances: dict[str, Decimal],
+) -> list[ReportRow]:
+    """Recupera solo la página solicitada y sus metadatos de grupo."""
+    page = max(filters.page, 1)
+    size = max(filters.page_size, 1)
+    page_query = (
+        query.order_by(None)
+        .join(grouped, grouped.c.entry_id == GLEntry.id)
+        .add_columns(
+            grouped.c.group_position,
+            grouped.c.group_count,
+            grouped.c.group_debit,
+            grouped.c.group_credit,
+            grouped.c.running_balance,
+        )
+        .order_by(grouped.c.group_first, grouped.c.original_position)
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    rows: list[ReportRow] = []
+    for entry, account, period, party, position, count, debit, credit, running_balance in database.session.execute(page_query):
+        account_code = entry.account_code or (account.code if account else None) or ""
+        values = _movement_detail_row_values(
+            entry,
+            account,
+            period,
+            party,
+            ledger,
+            _decimal_value(running_balance) + opening_balances.get(account_code, Decimal("0")),
+            filters.include_running_balance,
+            filters.include_cancellations or filters.status == "cancelled",
+        )
+        values.update(__group_position=position, __group_count=count, __group_debit=debit, __group_credit=credit)
+        rows.append(ReportRow(values=values))
+    return rows
+
+
+def get_account_movement_detail(filters: FinancialReportFilters, *, group_by: str | None = None) -> PaginatedReport:
     """Detalle de movimiento contable (diario + mayor) desde GL."""
     period_start, period_end, _ = _report_period_bounds(filters)
     period_ids = _report_period_ids(filters)
@@ -2686,11 +3176,27 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
         return PaginatedReport(rows=[], totals={"debit": Decimal("0"), "credit": Decimal("0")}, columns=[])
 
     query = _movement_detail_query(filters, period_start, period_end, period_ids, selected_ledger)
+    opening_balances = _movement_detail_opening_balances(filters, period_start, selected_ledger)
 
     count_query = query.order_by(None).with_only_columns(func.count())
     total_rows = database.session.execute(count_query).scalar_one()
     page = max(filters.page, 1)
     page_size = max(filters.page_size, 1)
+    group_expression = _movement_group_expression(group_by or "")
+    if group_expression is not None and not filters.export_all:
+        grouped = _grouped_movement_query(query, filters, group_expression)
+        rows = _collect_grouped_movement_rows(query, grouped, filters, selected_ledger, opening_balances)
+        total_debit = sum((_decimal_value(row.values["debit"]) for row in rows), Decimal("0"))
+        total_credit = sum((_decimal_value(row.values["credit"]) for row in rows), Decimal("0"))
+        return PaginatedReport(
+            rows=rows,
+            totals={"debit": total_debit, "credit": total_credit, "difference": total_debit - total_credit},
+            columns=[key for key in rows[0].values if not key.startswith("__")] if rows else [],
+            total_rows=total_rows,
+            page=page,
+            page_size=page_size,
+            ledger_currency=selected_ledger.currency,
+        )
     row_offset = (page - 1) * page_size
     display_from_index = 0
     if not filters.export_all:
@@ -2704,9 +3210,11 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
         Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None, Party | None]],
         database.session.execute(query).all(),
     )
-    rows, total_debit, total_credit = _collect_movement_detail_rows(entries, selected_ledger, filters, display_from_index)
+    rows, total_debit, total_credit = _collect_movement_detail_rows(
+        entries, selected_ledger, filters, display_from_index, opening_balances
+    )
 
-    columns = list(rows[0].values.keys()) if rows else []
+    columns = [key for key in rows[0].values if not key.startswith("__")] if rows else []
     return PaginatedReport(
         rows=rows,
         totals={"debit": total_debit, "credit": total_credit, "difference": total_debit - total_credit},
@@ -2727,14 +3235,15 @@ def _build_actual_query(
     period_end: date,
 ) -> Any:
     """Build the query to fetch actual GL amount for a budget line."""
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     actual_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
         GLEntry.company == filters.company,
         GLEntry.ledger_id == selected_ledger.id,
         GLEntry.account_id == line.account_id,
         GLEntry.posting_date >= period_start,
         GLEntry.posting_date <= period_end,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
+        *effective_gl_scope(period_end),
         GLEntry.is_fiscal_year_closing.is_(False),
     )
     if cost_center and cost_center.code:
@@ -2816,6 +3325,45 @@ def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     )
 
 
+def _grouped_movement_condition(
+    period_start: date | None,
+    period_end: date | None,
+    period_ids: list[str],
+) -> Any:
+    """Predicado del movimiento del período consultado.
+
+    La identidad dimensional (``accounting_period_id``) tiene prioridad; las
+    fechas solo completan el rango cuando no hay período resuelto o para los
+    asientos heredados sin período asignado.
+    """
+    dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
+    if dimension_clause is not None:
+        return dimension_clause
+    date_conditions = []
+    if period_start is not None:
+        date_conditions.append(GLEntry.posting_date >= period_start)
+    if period_end is not None:
+        date_conditions.append(GLEntry.posting_date <= period_end)
+    return and_(*date_conditions) if date_conditions else literal(True)
+
+
+def _grouped_opening_condition(period_start: date | None, period_ids: list[str]) -> Any:
+    """Predicado de la apertura: filas anteriores que no son movimiento.
+
+    Excluye las filas que el predicado dimensional clasifica como movimiento
+    para un asiento fechado antes del período pero asignado al período
+    seleccionado, evitando contarlo dos veces.
+    """
+    if period_start is None:
+        return literal(False)
+    if not period_ids:
+        return GLEntry.posting_date < period_start
+    return and_(
+        GLEntry.posting_date < period_start,
+        or_(GLEntry.accounting_period_id.is_(None), ~GLEntry.accounting_period_id.in_(period_ids)),
+    )
+
+
 def _grouped_account_gl_query(
     filters: FinancialReportFilters,
     period_start: date | None,
@@ -2827,22 +3375,17 @@ def _grouped_account_gl_query(
 
     La ventana de movimiento se acota por la dimensión ``accounting_period_id``
     (identidad del período), mientras que el saldo inicial conserva su
-    acumulado anterior a la ventana mediante ``period_start``.
+    acumulado anterior a la ventana mediante ``period_start``. La consulta no
+    se acota por período en el ``WHERE``: la apertura necesita ver filas de
+    períodos previos y la clasificación movimiento/apertura se resuelve con
+    los ``CASE`` siguientes. Los grupos sin apertura ni movimiento se
+    descartan para no mostrar cuentas ajenas a la ventana consultada.
     """
     account_code = func.coalesce(GLEntry.account_code, Accounts.code, "")
-    dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
-    movement_condition = dimension_clause if dimension_clause is not None else literal(True)
-    # El saldo inicial usa la frontera temporal, pero excluye cualquier fila
-    # que el mismo predicado dimensional clasifica como movimiento. Así un
-    # asiento fechado antes del período, pero asignado al período seleccionado,
-    # no se cuenta dos veces.
-    if period_start and period_ids:
-        opening_condition = and_(
-            GLEntry.posting_date < period_start,
-            or_(GLEntry.accounting_period_id.is_(None), ~GLEntry.accounting_period_id.in_(period_ids)),
-        )
-    else:
-        opening_condition = GLEntry.posting_date < period_start if period_start else literal(False)
+    movement_condition = _grouped_movement_condition(period_start, period_end, period_ids)
+    opening_condition = _grouped_opening_condition(period_start, period_ids)
+    if not filters.include_closing:
+        movement_condition = and_(movement_condition, GLEntry.is_fiscal_year_closing.is_(False))
     opening_value = case((opening_condition, GLEntry.debit - GLEntry.credit), else_=0)
     movement_debit = case((movement_condition, GLEntry.debit), else_=0)
     movement_credit = case((movement_condition, GLEntry.credit), else_=0)
@@ -2860,8 +3403,18 @@ def _grouped_account_gl_query(
         func.min(case((movement_condition, GLEntry.posting_date), else_=None)).label("first_movement"),
         func.max(case((movement_condition, GLEntry.posting_date), else_=None)).label("last_movement"),
     ).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    query = _apply_gl_filters(query, filters, None, None, period_ids).where(GLEntry.ledger_id == ledger_id)
-    return query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
+    # El filtro controla los cierres del movimiento, no su efecto histórico en
+    # el saldo inicial del siguiente período.
+    query_filters = replace(filters, include_closing=True)
+    query = _apply_gl_filters(query, query_filters, None, None, None).where(GLEntry.ledger_id == ledger_id)
+    query = query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
+    return query.having(
+        or_(
+            func.sum(opening_value) != 0,
+            func.sum(movement_debit) != 0,
+            func.sum(movement_credit) != 0,
+        )
+    )
 
 
 def _account_code_level(account_code: str) -> int:
@@ -3108,13 +3661,14 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         Accounts.code.label("account_code"),
         Accounts.name.label("account_name"),
         Accounts.classification.label("classification"),
+        Accounts.account_type.label("account_type"),
         func.coalesce(func.sum(GLEntry.debit), 0).label("debit"),
         func.coalesce(func.sum(GLEntry.credit), 0).label("credit"),
     ).join(Accounts, Accounts.id == GLEntry.account_id)
     base_query = _apply_gl_filters(base_query, filters, period_start, period_end, period_ids).where(
         GLEntry.ledger_id == selected_ledger.id
     )
-    base_query = base_query.group_by(Accounts.code, Accounts.name, Accounts.classification)
+    base_query = base_query.group_by(Accounts.code, Accounts.name, Accounts.classification, Accounts.account_type)
     summary: dict[str, Decimal] = {
         "income": Decimal("0"),
         "cost": Decimal("0"),
@@ -3123,9 +3677,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
     account_summary: dict[str, dict[str, Any]] = {}
     unclassified: dict[str, dict[str, Any]] = {}
     for row in database.session.execute(base_query).all():
-        classification = _CLASSIFICATION_ALIASES.get(
-            (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
-        )
+        classification = normalize_account_classification(row.classification, row.account_type)
         debit = _decimal_value(row.debit)
         credit = _decimal_value(row.credit)
         account_code = row.account_code or ""
@@ -3533,10 +4085,16 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
 
 def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
     """Margen bruto basado en GL: ingresos menos COGS."""
-    query = exclude_cancelled_gl_entries(
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    query = (
         select(GLEntry, Accounts)
         .join(Accounts, Accounts.id == GLEntry.account_id)
-        .where(GLEntry.company == filters.company, Accounts.entity == filters.company)
+        .where(
+            GLEntry.company == filters.company,
+            Accounts.entity == filters.company,
+            *effective_gl_scope(filters.date_to),
+        )
     )
     # El margen bruto representa la operación del período.  Los asientos de
     # cierre anual neutralizan las cuentas de resultado y por ello no deben
@@ -3559,8 +4117,20 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
             income += _decimal_value(entry.credit) - _decimal_value(entry.debit)
     margin = income - cogs
     return PaginatedReport(
-        rows=[ReportRow({"income": income, "cogs": cogs, "gross_margin": margin})],
-        totals={"income": income, "cogs": cogs, "gross_margin": margin},
+        rows=[
+            ReportRow(
+                {
+                    "income": income,
+                    "cogs": cogs,
+                    "gross_margin": margin,
+                }
+            )
+        ],
+        totals={
+            "income": income,
+            "cogs": cogs,
+            "gross_margin": margin,
+        },
     )
 
 
@@ -3643,6 +4213,11 @@ def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
     cero cuando la compañía tiene evidencia del lote pero no movimientos vigentes.
     """
     query = select(Batch)
+    evidence = select(StockLedgerEntry.batch_id).where(
+        StockLedgerEntry.batch_id.isnot(None),
+        StockLedgerEntry.company == filters.company,
+    )
+    query = query.where(Batch.id.in_(evidence))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     batches = database.session.execute(query.order_by(Batch.item_code, Batch.batch_no)).scalars().all()

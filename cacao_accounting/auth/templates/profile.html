@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item active" aria-current="page">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
@@ -132,5 +132,19 @@
       </form>
     </div>
   </div>
+
+  {% if api_credential_available %}
+  <div class="col-12">
+    <div class="ca-card p-4">
+      <h5 class="mb-3">{{ _("Credencial API para integraciones") }}</h5>
+      <p class="text-muted">
+        {{ _("Emita, rote o revoque la credencial que usan las integraciones autorizadas. El secreto se muestra una sola vez.") }}
+      </p>
+      <a href="{{ url_for('login.api_credential') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-key me-1"></i>{{ _("Gestionar credencial API") }}
+      </a>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -40,9 +40,10 @@ def list_companies(
 
     query = database.select(Entity)
 
-    if context.allow_all_companies:
-        query = query.where(Entity.enabled.is_(True))
-    else:
+    # #1338: el listado expone únicamente compañías habilitadas, incluso cuando
+    # el contexto usa una allowlist específica.
+    query = query.where(Entity.enabled.is_(True))
+    if not context.allow_all_companies:
         query = query.where(Entity.code.in_(context.company_ids))
 
     total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar() or 0

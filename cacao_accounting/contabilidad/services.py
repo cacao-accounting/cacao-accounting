@@ -3,14 +3,18 @@
 
 """Modulo de Contabilidad."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from typing import Any
 
 from datetime import date, datetime, timezone
+import sqlite3
 
 
 from decimal import Decimal
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from cacao_accounting.exceptions import flash_error
 
@@ -49,8 +53,6 @@ from cacao_accounting.contabilidad.currency_guard import CurrencyGuard
 
 from cacao_accounting.runtime_mode import force_single_entity
 
-from cacao_accounting.contabilidad.gl import gl
-
 
 from cacao_accounting.database import (
     Accounts,
@@ -62,7 +64,6 @@ from cacao_accounting.database import (
 from cacao_accounting.database.helpers import (
     check_hierarchy_cycle,
     get_descendant_ids,
-    update_hierarchy_attributes,
 )
 
 from cacao_accounting.decorators import exige_acceso_compania
@@ -71,8 +72,6 @@ from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.i18n import _, _l
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
-
-contabilidad.register_blueprint(gl, url_prefix="/gl")
 
 contabilidad.register_blueprint(presupuestos, url_prefix="/presupuestos")
 
@@ -174,13 +173,12 @@ def enforce_close_and_recurring_company_access():
     if request.path.startswith("/accounting/period-close/"):
         from cacao_accounting.database import PeriodCloseRun
 
-        _enforce_accounting_resource_access(
-            PeriodCloseRun, identifier, "autorizar" if request.method == "POST" else "consultar"
-        )
+        # El guard solo aísla la compañía del recurso; la acción concreta
+        # (autorizar, editar, crear, anular) la exige el decorador de cada ruta
+        # (#1797).
+        _enforce_accounting_resource_access(PeriodCloseRun, identifier, "consultar")
     elif request.path.startswith("/accounting/journal/recurring/"):
-        _enforce_accounting_resource_access(
-            RecurringJournalTemplate, identifier, "autorizar" if request.method == "POST" else "consultar"
-        )
+        _enforce_accounting_resource_access(RecurringJournalTemplate, identifier, "consultar")
     elif request.path.startswith("/accounting/exchange-revaluation/"):
         from cacao_accounting.database import ExchangeRevaluation
 
@@ -221,6 +219,30 @@ def _accounting_period_status_label(enabled: bool, is_closed: bool) -> str:
     return "deshabilitado_cerrado"
 
 
+def _validate_accounting_period_range(entity: str, start: date, end: date, exclude_id: str | None = None) -> None:
+    """Rechaza un rango invertido o superpuesto con otro período de la compañía.
+
+    Los períodos son inclusivos en ambos extremos, así que dos rangos se
+    superponen cuando ``start <= otro.end`` y ``end >= otro.start``. La consulta
+    se limita a la compañía del período; dos compañías pueden usar las mismas
+    fechas sin conflicto.
+    """
+    from cacao_accounting.database import AccountingPeriod
+
+    if start > end:
+        raise ValueError(_("La fecha final no puede ser anterior a la fecha de inicio."))
+
+    query = database.select(AccountingPeriod.id).where(
+        AccountingPeriod.entity == entity,
+        AccountingPeriod.start <= end,
+        AccountingPeriod.end >= start,
+    )
+    if exclude_id:
+        query = query.where(AccountingPeriod.id != exclude_id)
+    if database.session.execute(query.limit(1)).first() is not None:
+        raise ValueError(_("El rango del período se superpone con otro período de la misma compañía."))
+
+
 def _validate_entity_can_be_deactivated(company_code: str) -> None:
     """Valida reglas administrativas antes de desactivar una entidad."""
     from cacao_accounting.database import Entity
@@ -236,16 +258,24 @@ def _validate_entity_can_be_deactivated(company_code: str) -> None:
         raise ValueError(_("No se puede desactivar la única entidad activa en modo escritorio."))
 
 
-def _account_descendant_codes(entity: str, account_code: str) -> set[str]:
+def _account_select(statement, *, for_update: bool):
+    """Aplica lectura actual bajo lock, conservando el snapshot refresh."""
+    statement = statement.execution_options(populate_existing=True)
+    return statement.with_for_update() if for_update else statement
+
+
+def _account_descendant_codes(entity: str, account_code: str, *, for_update: bool = False) -> set[str]:
     from cacao_accounting.database import Accounts
 
     descendants: set[str] = set()
     pending = [account_code]
     while pending:
         current = pending.pop()
-        children = database.session.execute(
-            database.select(Accounts.code).filter(Accounts.entity == entity, Accounts.parent == current)
-        ).scalars()
+        sentencia = _account_select(
+            database.select(Accounts.code).filter(Accounts.entity == entity, Accounts.parent == current),
+            for_update=for_update,
+        )
+        children = database.session.execute(sentencia).scalars()
         for child_code in children:
             if child_code not in descendants:
                 descendants.add(child_code)
@@ -253,7 +283,7 @@ def _account_descendant_codes(entity: str, account_code: str) -> set[str]:
     return descendants
 
 
-def _resolve_account_parent(entity: str, parent_ref: str) -> tuple[str, str]:
+def _resolve_account_parent(entity: str, parent_ref: str, *, for_update: bool = False) -> tuple[str, str]:
     from cacao_accounting.database import Accounts
 
     normalized_ref = str(parent_ref).strip()
@@ -267,27 +297,38 @@ def _resolve_account_parent(entity: str, parent_ref: str) -> tuple[str, str]:
     parent = None
     if id_value is not None:
         parent = database.session.execute(
-            database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == id_value)
+            _account_select(
+                database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == id_value),
+                for_update=for_update,
+            )
         ).scalar_one_or_none()
     if parent is None:
         parent = database.session.execute(
-            database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == normalized_ref)
+            _account_select(
+                database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == normalized_ref),
+                for_update=for_update,
+            )
         ).scalar_one_or_none()
     if parent is None:
         raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
     return parent.code, f"{parent.code} - {parent.name}"
 
 
-def _validate_account_parent(entity: str, parent_ref: str | None, *, current_code: str | None = None) -> str | None:
+def _validate_account_parent(
+    entity: str, parent_ref: str | None, *, current_code: str | None = None, for_update: bool = False
+) -> str | None:
     from cacao_accounting.database import Accounts
 
     if not parent_ref:
         return None
-    parent_code, _parent_label = _resolve_account_parent(entity, parent_ref)
+    parent_code, _parent_label = _resolve_account_parent(entity, parent_ref, for_update=for_update)
     if current_code and parent_code == current_code:
         raise ValueError(_("Una cuenta no puede ser padre de si misma."))
     parent = database.session.execute(
-        database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == parent_code)
+        _account_select(
+            database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == parent_code),
+            for_update=for_update,
+        )
     ).scalar_one_or_none()
     if parent is None:
         raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
@@ -295,9 +336,21 @@ def _validate_account_parent(entity: str, parent_ref: str | None, *, current_cod
         raise ValueError(_("La cuenta padre debe estar activa."))
     if not bool(parent.group):
         raise ValueError(_("La cuenta padre debe ser una cuenta de grupo."))
-    if current_code and parent_code in _account_descendant_codes(entity, current_code):
+    if current_code and parent_code in _account_descendant_codes(entity, current_code, for_update=for_update):
         raise ValueError(_("La cuenta padre seleccionada genera un ciclo jerarquico."))
     return parent_code
+
+
+def _lock_account_row(entity: str, account_id: str):
+    """Recarga la cuenta bajo `FOR UPDATE` tras adquirir el lock de jerarquía."""
+    from cacao_accounting.database import Accounts
+
+    return database.session.execute(
+        _account_select(
+            database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == account_id),
+            for_update=True,
+        )
+    ).scalar_one_or_none()
 
 
 def _build_cost_center_edit_form(registro):
@@ -364,13 +417,144 @@ def _cost_center_descendant_codes(entity: str, center_code: str) -> set[str]:
     while pending:
         current = pending.pop()
         children = database.session.execute(
-            database.select(CostCenter.code).filter(CostCenter.entity == entity, CostCenter.parent == current)
+            database.select(CostCenter.code)
+            .filter(CostCenter.entity == entity, CostCenter.parent == current)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalars()
         for child_code in children:
             if child_code not in descendants:
                 descendants.add(child_code)
                 pending.append(child_code)
     return descendants
+
+
+def _lock_cost_center_companies(company_codes: Sequence[str]) -> None:
+    """Serialize cost center hierarchy changes in deterministic company order."""
+    from cacao_accounting.database import Entity
+
+    for company_code in sorted(set(code for code in company_codes if code)):
+        database.session.execute(
+            database.select(Entity.code)
+            .where(Entity.code == company_code)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+
+def _lock_cost_center(entity: str, center_code: str) -> Any | None:
+    """Refresh and lock one cost center before changing its hierarchy role."""
+    from cacao_accounting.database import CostCenter
+
+    _lock_cost_center_companies((entity,))
+    return database.session.execute(
+        database.select(CostCenter)
+        .where(CostCenter.entity == entity, CostCenter.code == center_code)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
+def _cost_center_has_children(entity: str, center_code: str) -> bool:
+    """Check for a current direct child while holding its row lock."""
+    from cacao_accounting.database import CostCenter
+
+    child = database.session.execute(
+        database.select(CostCenter.id)
+        .where(CostCenter.entity == entity, CostCenter.parent == center_code)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+        .limit(1)
+    ).first()
+    return child is not None
+
+
+def _choose_default_cost_center(centers: list[Any], preferred_id: str | None) -> Any | None:
+    """Selecciona el centro predeterminado entre los candidatos postables."""
+    active_postable = [cc for cc in centers if bool(cc.active) and bool(cc.enabled) and not bool(cc.group)]
+    defaults = [cc for cc in centers if bool(cc.default)]
+    chosen = None
+    if preferred_id:
+        chosen = next((cc for cc in active_postable if cc.id == preferred_id), None)
+    if chosen is None and len(defaults) == 1 and defaults[0] in active_postable:
+        chosen = defaults[0]
+    if chosen is None:
+        chosen = next((cc for cc in active_postable if cc.code == "MAIN"), None)
+    if chosen is None and active_postable:
+        chosen = active_postable[0]
+    return chosen
+
+
+def _ensure_main_cost_center(entity: str, centers: list[Any]) -> Any:
+    """Reactiva o crea el centro MAIN histórico y lo deja como único predeterminado."""
+    from cacao_accounting.database import CostCenter
+
+    existing_main = next((cc for cc in centers if cc.code == "MAIN"), None)
+    if existing_main is not None:
+        if _cost_center_has_children(entity, "MAIN"):
+            raise ValueError(_("El centro de costo MAIN hist?rico no es utilizable como predeterminado y tiene hijos."))
+        existing_main.active = True
+        existing_main.enabled = True
+        existing_main.group = False
+        existing_main.default = True
+        existing_main.status = "activo"
+        chosen = existing_main
+    else:
+        chosen = CostCenter(
+            entity=entity,
+            code="MAIN",
+            name="Principal",
+            active=True,
+            enabled=True,
+            default=True,
+            group=False,
+            status="activo",
+        )
+        database.session.add(chosen)
+        database.session.flush()
+    for cc in centers:
+        if cc.id != chosen.id and bool(cc.default):
+            cc.default = False
+    return chosen
+
+
+def _ensure_single_default_cost_center(entity: str, *, preferred_id: str | None = None) -> Any:
+    """Garantiza exactamente un centro de costo predeterminado por compa??a."""
+    from cacao_accounting.database import CostCenter
+    from cacao_accounting.default_scope import lock_default_scope
+
+    _lock_cost_center_companies((entity,))
+    lock_default_scope("cost_center_default", entity)
+    centers = (
+        database.session.execute(
+            database.select(CostCenter)
+            .where(CostCenter.entity == entity)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+            .order_by(CostCenter.code)
+        )
+        .scalars()
+        .all()
+    )
+
+    chosen = _choose_default_cost_center(centers, preferred_id)
+    if chosen is None:
+        return _ensure_main_cost_center(entity, centers)
+
+    for cc in centers:
+        desired = cc.id == chosen.id
+        if bool(cc.default) != desired:
+            cc.default = desired
+    if not bool(chosen.active) or not bool(chosen.enabled) or bool(chosen.group):
+        raise ValueError(_("El centro de costo predeterminado debe estar activo y no ser de grupo."))
+    return chosen
+
+
+def _set_company_default_cost_center(entity: str, target: Any) -> None:
+    """Marca target como ?nico predeterminado de la compa??a."""
+    if not bool(target.active) or not bool(target.enabled) or bool(target.group):
+        raise ValueError(_("El centro de costo predeterminado debe estar activo y no ser de grupo."))
+    _ensure_single_default_cost_center(entity, preferred_id=target.id)
 
 
 def _resolve_cost_center_parent(entity: str, parent_ref: str) -> tuple[str, str]:
@@ -404,16 +588,13 @@ def _validate_cost_center_parent(
     *,
     current_code: str | None = None,
 ) -> str | None:
-    from cacao_accounting.database import CostCenter
-
+    _lock_cost_center_companies((entity,))
     if not parent_ref:
         return None
     parent_code, _parent_label = _resolve_cost_center_parent(entity, parent_ref)
     if current_code and parent_code == current_code:
         raise ValueError(_("Un centro de costos no puede ser padre de si mismo."))
-    parent = database.session.execute(
-        database.select(CostCenter).filter(CostCenter.entity == entity, CostCenter.code == parent_code)
-    ).scalar_one_or_none()
+    parent = _lock_cost_center(entity, parent_code)
     if parent is None:
         raise ValueError(_("El centro de costos padre indicado no existe para la entidad seleccionada."))
     if not bool(parent.active) or not bool(parent.enabled):
@@ -431,9 +612,9 @@ def _validate_project_creation_form(formulario: Any) -> tuple[str | None, str | 
     Retorna (parent_id, capitalization_account_id, error_flag).
     """
     _validate_active_entity_submission(request.form.get("entidad", ""))
+    entity = request.form.get("entidad", "")
     parent_id = request.form.get("parent_id") or None
-    if parent_id:
-        check_hierarchy_cycle(Project, None, parent_id)
+    check_hierarchy_cycle(Project, None, parent_id, entity=entity)
 
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None
@@ -443,25 +624,6 @@ def _validate_project_creation_form(formulario: Any) -> tuple[str | None, str | 
         capitalization_account_id = None
 
     return parent_id, capitalization_account_id, capitalizable
-
-
-def _build_project_from_form(formulario: Any, budget_currency: str | None) -> Project:
-    """Construye un objeto Project desde los datos del formulario."""
-    budget_amount = formulario.presupuesto.data
-    return Project(
-        code=request.form.get("id", None),
-        name=request.form.get("nombre", None),
-        entity=request.form.get("entidad", None),
-        start=formulario.inicio.data,
-        end=formulario.fin.data,
-        budget=Decimal(str(budget_amount or 0)),
-        budget_currency_code=budget_currency,
-        enabled=bool(formulario.habilitado.data),
-        status=formulario.status.data or "open",
-        parent_id=request.form.get("parent_id") or None,
-        capitalizable=bool(formulario.capitalizable.data),
-        capitalization_account_id=request.form.get("capitalization_account_id") or None,
-    )
 
 
 def _populate_project_edit_form(formulario: Any, proyecto: Any) -> None:
@@ -478,15 +640,50 @@ def _populate_project_edit_form(formulario: Any, proyecto: Any) -> None:
     formulario.capitalization_account_id.data = proyecto.capitalization_account_id or ""
 
 
+def hierarchy_parent_choices(
+    node_class: Any, entity: str | None = None, exclude_ids: set[str] | None = None
+) -> list[tuple[str, str]]:
+    """Return parent options limited to companies the current accounting user can access."""
+    if not entity:
+        return []
+
+    from cacao_accounting.company_context import authorized_company_codes
+
+    companies = authorized_company_codes("accounting")
+    if entity not in companies:
+        return []
+    query = database.select(node_class).where(node_class.entity.in_(companies))
+    query = query.where(node_class.entity == entity)
+    if exclude_ids:
+        query = query.where(node_class.id.notin_(exclude_ids))
+    nodes = database.session.execute(query.order_by(node_class.code)).scalars().all()
+    return [(node.id, f"{node.code} - {node.name}") for node in nodes]
+
+
+def commit_hierarchy_change(update: Callable[[], None]) -> bool:
+    """Commit a hierarchy change, rolling back a concurrent constraint conflict."""
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        update()
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        return False
+    return True
+
+
 def _validate_project_edit_form(formulario: Any, proyecto: Any) -> tuple[str | None, str | None]:
     """Valida los campos del formulario de edicion de proyecto.
 
     Retorna (parent_id, capitalization_account_id).
     """
-    _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
+    entity = request.form.get("entidad", proyecto.entity)
+    _validate_active_entity_submission(entity)
+    if entity != proyecto.entity:
+        raise ValueError(_("La compañía de un proyecto no puede cambiarse después de crearlo."))
     parent_id = request.form.get("parent_id") or None
-    if parent_id:
-        check_hierarchy_cycle(Project, proyecto.id, parent_id)
+    check_hierarchy_cycle(Project, proyecto.id, parent_id, entity=entity, current_entity=proyecto.entity)
 
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None
@@ -503,14 +700,9 @@ def _setup_project_edit_form(formulario: Any, proyecto: Any) -> None:
     exclude_ids = {proyecto.id, *get_descendant_ids(Project, proyecto.id)}
     formulario.id.data = proyecto.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguno —")] + [
-        (p.id, f"{p.code} - {p.name}")
-        for p in database.session.execute(
-            database.select(Project).where(Project.id.notin_(exclude_ids)).order_by(Project.code)
-        )
-        .scalars()
-        .all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguno —")] + hierarchy_parent_choices(
+        Project, formulario.entidad.data, exclude_ids
+    )
     formulario.capitalization_account_id.choices = [("", "— Seleccionar Cuenta —")] + [
         (a.id, f"{a.code} - {a.name}")
         for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
@@ -526,6 +718,7 @@ def _render_project_edit_form(formulario: Any, titulo: str, proyecto: Any, entit
         edit=True,
         budget_currency_code=proyecto.budget_currency_code or "",
         entity_initial_label=entity_initial_label,
+        parent_exclude_id=proyecto.id,
     )
 
 
@@ -544,7 +737,8 @@ def _update_project_from_form(
 ) -> None:
     """Actualiza un proyecto editado con los valores enviados por formulario."""
     proyecto.name = request.form.get("nombre", proyecto.name)
-    proyecto.entity = request.form.get("entidad", proyecto.entity)
+    # La compañía propietaria es inmutable; para operar en otra se crea un
+    # registro nuevo y se preservan las referencias históricas.
     proyecto.start = formulario.inicio.data
     proyecto.end = formulario.fin.data
     proyecto.budget = Decimal(str(budget_amount or 0))
@@ -557,15 +751,17 @@ def _update_project_from_form(
     if not proyecto.capitalizable:
         proyecto.capitalization_account_id = None
 
-    update_hierarchy_attributes(proyecto)
 
+def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequence[Any], list[str], list[str]]:
+    """Obtiene plantillas, aplicaciones completadas y aplicaciones recuperables.
 
-def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequence[Any], list[str]]:
-    """Obtiene plantillas aplicables y sus aplicaciones para un periodo de cierre."""
+    Una aplicación ``pending`` no cuenta como completada: debe volver a enviarse
+    en el reintento para que se recupere su comprobante y llegue a GL.
+    """
     from cacao_accounting.database import RecurringJournalApplication, RecurringJournalTemplate
 
     if not period:
-        return (), []
+        return (), [], []
 
     templates = (
         database.session.execute(
@@ -584,13 +780,14 @@ def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequenc
         .filter_by(
             company=close_run.company,
             fiscal_year=str(period.fiscal_year_id),
-            accounting_period=period.name,
-            status="applied",
+            accounting_period_id=period.id,
         )
+        .filter(RecurringJournalApplication.status.in_(["pending", "applied"]))
         .all()
     )
-    applied_ids = [app.template_id for app in applied_apps]
-    return templates, applied_ids
+    applied_ids = [app.template_id for app in applied_apps if app.status == "applied"]
+    pending_ids = [app.template_id for app in applied_apps if app.status == "pending"]
+    return templates, applied_ids, pending_ids
 
 
 def _get_period_close_checks(close_run: Any) -> list[Any]:
@@ -777,17 +974,133 @@ def _record_monthly_integrity_checks(close_run: Any, period: Any) -> None:
         )
 
 
+def _reserve_monthly_close_sqlite_writer() -> None:
+    """Reserve SQLite's writer before a monthly-close read-then-write flow."""
+    session = database.session
+    if session.get_bind().dialect.name != "sqlite":
+        return
+
+    connection = session.connection()
+    raw_connection = connection.connection.driver_connection
+    if raw_connection is None or raw_connection.in_transaction:
+        return
+
+    original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+    connection.exec_driver_sql("PRAGMA busy_timeout=5000")
+    busy_error: OperationalError | None = None
+    try:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+    except OperationalError as exc:
+        error_code = getattr(exc.orig, "sqlite_errorcode", None)
+        if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            raise
+        busy_error = exc
+    finally:
+        connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+    if busy_error is not None:
+        session.rollback()
+        raise PeriodCloseError(_("Otro cierre mensual está en curso para este período. Intente nuevamente.")) from busy_error
+
+
+def _lock_monthly_close_period(company: str, period_id: str) -> Any:
+    """Lock and refresh the period before locking any associated close run."""
+    from cacao_accounting.database import AccountingPeriod
+
+    _reserve_monthly_close_sqlite_writer()
+    period = database.session.execute(
+        select(AccountingPeriod)
+        .where(AccountingPeriod.id == period_id, AccountingPeriod.entity == company)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if period is None:
+        raise PeriodCloseError(_("El período no existe o ya no pertenece a esta compañía."))
+    if period.enabled is False:
+        raise PeriodCloseError(_("El período está deshabilitado y no admite cierre mensual."))
+    return period
+
+
+def create_monthly_close_run(company: str, period_id: str) -> tuple[Any, bool]:
+    """Create at most one monthly close run for an accounting period."""
+    from cacao_accounting.database import PeriodCloseRun
+
+    session = database.session
+    period = _lock_monthly_close_period(company, period_id)
+    if period.is_closed:
+        raise PeriodCloseError(_("El periodo ya se encuentra cerrado."))
+
+    existing = (
+        session.execute(
+            select(PeriodCloseRun)
+            .where(PeriodCloseRun.company == company, PeriodCloseRun.period_id == period_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .first()
+    )
+    if existing:
+        return existing, False
+
+    close_run = PeriodCloseRun(company=company, period_id=period_id, run_status="open")
+    session.add(close_run)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        if not _is_monthly_close_unique_violation(exc):
+            raise
+        session.rollback()
+        period = _lock_monthly_close_period(company, period_id)
+        if period.is_closed:
+            raise PeriodCloseError(_("El periodo ya se encuentra cerrado.")) from exc
+        existing = session.execute(
+            select(PeriodCloseRun)
+            .where(PeriodCloseRun.company == company, PeriodCloseRun.period_id == period_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if existing is None:
+            raise
+        return existing, False
+    return close_run, True
+
+
+def _is_monthly_close_unique_violation(error: IntegrityError) -> bool:
+    """Return whether an integrity error is the monthly-close key collision."""
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_period_close_run_company_period":
+        return True
+
+    message = str(original).lower()
+    if "uq_period_close_run_company_period" in message:
+        return True
+
+    error_code = getattr(original, "sqlite_errorcode", None)
+    return bool(
+        error_code is not None
+        and error_code & 0xFF == sqlite3.SQLITE_CONSTRAINT
+        and "period_close_run.company, period_close_run.period_id" in message
+    )
+
+
 def finalize_monthly_close(close_run_id: str, user_id: str, *, commit: bool = True) -> Any:
     """Valida y finaliza un cierre mensual de forma atómica."""
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+    from cacao_accounting.database import PeriodCloseRun
 
     if not user_id:
         raise PeriodCloseError(_("El cierre mensual requiere un usuario responsable."))
-    close_run = database.session.get(PeriodCloseRun, close_run_id, with_for_update=True)
-    if close_run is None:
+    initial_close_run = database.session.get(PeriodCloseRun, close_run_id)
+    if initial_close_run is None:
         raise PeriodCloseError(_("Cierre mensual no encontrado."))
-    period = database.session.get(AccountingPeriod, close_run.period_id, with_for_update=True)
-    if period is None or period.entity != close_run.company:
+    period = _lock_monthly_close_period(initial_close_run.company, initial_close_run.period_id)
+    close_run = database.session.execute(
+        select(PeriodCloseRun)
+        .where(PeriodCloseRun.id == close_run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if close_run is None or period.entity != close_run.company or period.id != close_run.period_id:
         raise PeriodCloseError(_("El periodo del cierre no existe o no pertenece a la compañía."))
     if period.is_closed or close_run.run_status == "closed":
         raise PeriodCloseError(_("El periodo ya se encuentra cerrado."))
@@ -922,8 +1235,7 @@ def reopen_accounting_period(period_id: str, user_id: str, reason: str, *, commi
                 database.session.commit()
             return pending
         period.is_closed = False
-        period.enabled = True
-        period.status = _accounting_period_status_label(True, False)
+        period.status = _accounting_period_status_label(bool(period.enabled), False)
         close_run.run_status = "open"
         log_task_event(
             period,
@@ -938,7 +1250,15 @@ def reopen_accounting_period(period_id: str, user_id: str, reason: str, *, commi
     return period
 
 
-def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
+def _discover_applicable_templates(company: str, period_id: str, period_end: date) -> list[str]:
+    """Descubre plantillas vigentes que aún no fueron aplicadas al período."""
+    from cacao_accounting.database import RecurringJournalApplication
+
+    applied_template_ids = select(RecurringJournalApplication.template_id).where(
+        RecurringJournalApplication.company == company,
+        RecurringJournalApplication.accounting_period_id == period_id,
+        RecurringJournalApplication.status == "applied",
+    )
     templates = (
         database.session.execute(
             database.select(RecurringJournalTemplate)
@@ -946,6 +1266,8 @@ def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
             .where(RecurringJournalTemplate.start_date <= period_end)
             .where(RecurringJournalTemplate.end_date >= period_end)
             .where(RecurringJournalTemplate.is_completed.is_(False))
+            .where(RecurringJournalTemplate.id.not_in(applied_template_ids))
+            .order_by(RecurringJournalTemplate.code, RecurringJournalTemplate.id)
         )
         .scalars()
         .all()
@@ -977,6 +1299,7 @@ def _apply_recurring_templates(
                 application_date=application_date,
                 user_id=user_id,
                 company=company,
+                submit=True,
             )
             success_count += 1
         except RecurringJournalError as exc:
@@ -1018,19 +1341,21 @@ def _resolve_period_from_date(company: str, year: str, month: str) -> tuple[str,
         period_date = date(int(year), int(month), 1)
     except ValueError:
         return "", ""
-    period = (
+    periods = (
         database.session.execute(
             database.select(AccountingPeriod)
-            .filter_by(entity=company, enabled=True)
-            .where(AccountingPeriod.start <= period_date)
+            .filter_by(entity=company, enabled=True, is_closed=False)
+            .where(AccountingPeriod.start <= date(period_date.year, period_date.month, 28))
             .where(AccountingPeriod.end >= period_date)
+            .order_by(AccountingPeriod.start, AccountingPeriod.id)
         )
         .scalars()
-        .first()
+        .all()
     )
-    if period:
-        return period.fiscal_year_id or "", period.id
-    return "", ""
+    if len(periods) != 1:
+        return "", ""
+    period = periods[0]
+    return period.fiscal_year_id or "", period.id
 
 
 def _validate_exchange_revaluation_period(company: str, fiscal_year_id: str, period_id: str):
@@ -1164,6 +1489,22 @@ def _get_journal_currency_label(journal, entity) -> str:
     return _("Moneda local")
 
 
+def validate_monthly_reset_prefix(prefix_template: str | None, reset_policy: str | None) -> None:
+    """Exige tokens de mes y año para una política de reinicio mensual."""
+    if str(reset_policy or "never") != "monthly":
+        return
+    prefix = str(prefix_template or "")
+    month_tokens = ("*MM*", "*MMM*")
+    year_tokens = ("*YYYY*", "*YY*")
+    if not any(token in prefix for token in month_tokens) or not any(token in prefix for token in year_tokens):
+        raise ValueError(
+            _(
+                "La política de reinicio mensual requiere que el prefijo incluya un token de mes "
+                "(*MM* o *MMM*) y uno de año (*YYYY* o *YY*)."
+            )
+        )
+
+
 def _update_series_sequence(serie, form):
     from cacao_accounting.database import Sequence, SeriesSequenceMap
     from cacao_accounting.logs import log
@@ -1184,32 +1525,42 @@ def _update_series_sequence(serie, form):
 
 
 def _update_counter_from_form(counter: Any, form: Any) -> None:
-    """Apply form field values to an ExternalCounter instance."""
+    """Apply form field values to an ExternalCounter instance.
+
+    ``last_used`` is intentionally not applied here: manual changes to the
+    last used number require a reason and are recorded by the dedicated
+    adjust operation (``adjust_external_counter``), so the general edit form
+    keeps it outside the editable surface (#1733).
+    """
     counter.company = form.company.data
     counter.name = form.nombre.data
     counter.counter_type = form.counter_type.data or None
     counter.prefix = form.prefix.data or None
-    counter.last_used = form.last_used.data or 0
     counter.padding = form.padding.data or 5
     counter.is_active = bool(form.is_active.data)
     counter.description = form.description.data or None
 
 
 def _sync_counter_naming_series_map(counter: Any, new_naming_series_id: str | None) -> None:
-    """Synchronize the SeriesExternalCounterMap for a counter."""
+    """Synchronize every SeriesExternalCounterMap row for a counter.
+
+    El modelo es N:M y una cuenta bancaria puede generar una fila por condición;
+    actualizar solo la primera perdería mapeos o fallaría con MultipleResultsFound.
+    """
     from cacao_accounting.database import SeriesExternalCounterMap
 
     if counter.naming_series_id == new_naming_series_id:
         return
 
     counter.naming_series_id = new_naming_series_id
-    existing_map = database.session.execute(
-        database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)
-    ).scalar_one_or_none()
+    existing_maps = list(
+        database.session.execute(database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)).scalars()
+    )
 
     if new_naming_series_id:
-        if existing_map:
-            existing_map.naming_series_id = new_naming_series_id
+        if existing_maps:
+            for mapping in existing_maps:
+                mapping.naming_series_id = new_naming_series_id
         else:
             database.session.add(
                 SeriesExternalCounterMap(
@@ -1219,5 +1570,6 @@ def _sync_counter_naming_series_map(counter: Any, new_naming_series_id: str | No
                     condition_json=None,
                 )
             )
-    elif existing_map:
-        database.session.delete(existing_map)
+    else:
+        for mapping in existing_maps:
+            database.session.delete(mapping)

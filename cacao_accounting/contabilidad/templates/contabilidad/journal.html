@@ -100,12 +100,14 @@
                     <i class="bi bi-copy me-1"></i>{{ _('Duplicar') }}
                 </button>
             </form>
+            {% if registro.status == "submitted" %}
             <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="modal"
                 data-bs-target="#reversalModal">
                     <i class="bi bi-arrow-left-right me-1"></i>{{ _('Revertir') }}
             </button>
             {% endif %}
-            {% if registro.status == "submitted" %}
+            {% endif %}
+            {% if registro.status == "submitted" and (not registro.is_fiscal_year_closing or current_user.classification == "admin") %}
             <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}"
                 onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -121,7 +123,7 @@
             <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
                 <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
             </a>
-            {{ macros.document_print_button("journal_entry", registro.id) }}
+            {{ macros.document_print_button("journal_entry", registro.id, company=registro.entity) }}
         </div>
         <div class="ca-detail-actions-menu dropdown">
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ _('Acciones del documento') }}">
@@ -154,12 +156,14 @@
                         <i class="bi bi-copy me-1"></i>{{ _('Duplicar') }}
                     </button>
                 </form>
+                {% if registro.status == "submitted" %}
                 <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="modal"
                     data-bs-target="#reversalModal">
                         <i class="bi bi-arrow-left-right me-1"></i>{{ _('Revertir') }}
                 </button>
                 {% endif %}
-                {% if registro.status == "submitted" %}
+                {% endif %}
+                {% if registro.status == "submitted" and (not registro.is_fiscal_year_closing or current_user.classification == "admin") %}
                 <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}"
                     onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -175,7 +179,7 @@
                 <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
                     <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
                 </a>
-                {{ macros.document_print_button("journal_entry", registro.id) }}
+                {{ macros.document_print_button("journal_entry", registro.id, company=registro.entity) }}
             </div>
         </div>
     </div>
@@ -532,7 +536,14 @@
         var reversalDateInput = document.getElementById('reversal_date');
         var guidance = document.getElementById('reversal-period-guidance');
         var originalPostingDate = {{ (registro.date.isoformat() if registro.date else "") | tojson }};
+        var accountingPeriods = {{ reversal_periods | tojson }};
         if (!reversalDateInput || !guidance || !originalPostingDate) return;
+
+        function periodForDate(dateValue) {
+            return accountingPeriods.find(function (period) {
+                return period.start <= dateValue && dateValue <= period.end;
+            }) || null;
+        }
 
         function updateReversalGuidance() {
             var selectedDate = reversalDateInput.value || '';
@@ -540,8 +551,21 @@
                 guidance.textContent = {{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') | tojson }};
                 return;
             }
-            var samePeriod = selectedDate.slice(0, 7) === originalPostingDate.slice(0, 7);
-            guidance.textContent = samePeriod
+            var selectedPeriod = periodForDate(selectedDate);
+            var originalPeriod = periodForDate(originalPostingDate);
+            if (!selectedPeriod) {
+                guidance.textContent = {{ _('La fecha elegida no pertenece a un período contable configurado.') | tojson }};
+                return;
+            }
+            if (!selectedPeriod.enabled || selectedPeriod.closed) {
+                guidance.textContent = {{ _('El período contable de la fecha elegida está cerrado o deshabilitado.') | tojson }};
+                return;
+            }
+            if (!originalPeriod) {
+                guidance.textContent = {{ _('No se encontró el período contable del comprobante.') | tojson }};
+                return;
+            }
+            guidance.textContent = selectedPeriod.id === originalPeriod.id
                 ? {{ _('La fecha elegida cae en el mismo período. Debe usar una fecha de otro período para revertir este comprobante.') | tojson }}
                 : {{ _('La fecha elegida cae en un período distinto. Se puede crear el borrador de reversión para el nuevo período contable.') | tojson }};
         }

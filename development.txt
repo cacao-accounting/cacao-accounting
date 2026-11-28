@@ -28,4 +28,4 @@ mypy==2.3.0
 pathspec==1.1.1
 
 # Complejidad
-complexipy
+complexipy==9.0.0

@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from cacao_accounting.database import User, database
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.i18n import _
 from cacao_accounting.logs import log
 
@@ -39,6 +40,13 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _as_utc_naive(value: datetime) -> datetime:
+    """Normaliza timestamps aware y naive al formato UTC naive del módulo."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _lockout_minutes(failed_count: int) -> int:
     """Retorna los minutos de bloqueo según el número de intentos fallidos."""
     for threshold, minutes in reversed(LOCKOUT_THRESHOLDS):
@@ -52,7 +60,10 @@ def esta_bloqueada(usuario: User) -> bool:
     if usuario.lockout_until is None:
         return False
     ahora = _now_utc()
-    if usuario.lockout_until > ahora:
+    # PostgreSQL devuelve la columna con zona; se compara en UTC naive como
+    # el resto del módulo (#1738).
+    bloqueo = _as_utc_naive(usuario.lockout_until)
+    if bloqueo > ahora:
         return True
     _desbloquear_cuenta(usuario)
     return False
@@ -122,7 +133,7 @@ def tiempo_restante_bloqueo(usuario: User) -> int | None:
     if usuario.lockout_until is None:
         return None
     ahora = _now_utc()
-    delta = usuario.lockout_until - ahora
+    delta = _as_utc_naive(usuario.lockout_until) - ahora
     if delta.total_seconds() <= 0:
         _desbloquear_cuenta(usuario)
         return None
@@ -135,8 +146,8 @@ def listar_cuentas_bloqueadas() -> list[tuple[User, int]]:
     usuarios = database.session.scalars(select(User).filter(User.lockout_until.isnot(None))).all()
     ahora = _now_utc()
     for u in usuarios:
-        if u.lockout_until and u.lockout_until > ahora:
-            segundos = int((u.lockout_until - ahora).total_seconds())
+        if u.lockout_until and _as_utc_naive(u.lockout_until) > ahora:
+            segundos = int((_as_utc_naive(u.lockout_until) - ahora).total_seconds())
             resultado.append((u, segundos))
     return resultado
 
@@ -145,7 +156,8 @@ def notificar_intento_fallido(usuario: User) -> None:
     """Envía correo de alerta al usuario tras intentos fallidos."""
     from cacao_accounting.messaging.email import EmailError, send_email
 
-    if not usuario.e_mail:
+    recipient_email = normalize_user_email(usuario.e_mail)
+    if not recipient_email:
         return
 
     intentos = usuario.failed_login_count or 0
@@ -170,10 +182,10 @@ def notificar_intento_fallido(usuario: User) -> None:
 
     try:
         send_email(
-            to_email=usuario.e_mail,
+            to_email=recipient_email,
             subject=str(asunto),
             body=cuerpo,
             is_html=False,
         )
     except EmailError as exc:
-        log.error("Error sending failed login notification to %s: %s", usuario.e_mail, exc)
+        log.error("Error sending failed login notification to %s: %s", recipient_email, exc)

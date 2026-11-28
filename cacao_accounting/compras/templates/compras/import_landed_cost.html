@@ -9,7 +9,7 @@
 </div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -23,7 +23,7 @@
 {% set buttons %}
 {% if registro.docstatus == 0 %}
 <a class="btn btn-sm btn-outline-secondary"
-  href="{{ url_for('compras.compras_import_landed_cost_nuevo', landed_cost_id=registro.id) }}">
+  href="{{ url_for('compras.compras_import_landed_cost_editar', landed_cost_id=registro.id) }}">
   <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
 </a>
 {% endif %}
@@ -36,7 +36,7 @@
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_import_landed_cost_lista'),
             url_for('compras.compras_import_landed_cost_nuevo')) }}
-{{ macros.document_print_button("landed_cost", registro.id) }}
+{{ macros.document_print_button("landed_cost", registro.id, company=registro.company) }}
 {% endset %}
 
 {{ dv_macros.detail_header(

@@ -15,6 +15,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import Entity, database
 from cacao_accounting.printing.models import PublicDocumentValidation
@@ -71,8 +72,12 @@ def generate_validation_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def get_canonical_payload(document_data: dict[str, Any]) -> str:
-    """Serialize validation-safe document data deterministically."""
+def get_canonical_payload(document_data: dict[str, Any], *, legacy: bool = False) -> str:
+    """Serialize validation-safe document data deterministically.
+
+    ``legacy=True`` reproduce la serialización anterior a #2019 para que los
+    tokens QR emitidos entonces sigan siendo verificables.
+    """
     allowed_keys = {
         "company_code",
         "company_tax_id",
@@ -86,13 +91,28 @@ def get_canonical_payload(document_data: dict[str, Any]) -> str:
         "party_tax_id",
         "line_count",
     }
-    payload = {key: _json_value(value) for key, value in document_data.items() if key in allowed_keys}
+    serializador = _json_value_legacy if legacy else _json_value
+    payload = {key: serializador(value) for key, value in document_data.items() if key in allowed_keys}
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def calculate_validation_hash(canonical_payload: str) -> str:
     """Return the SHA256 hash for a canonical payload."""
     return hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+
+
+def validation_hash_matches(stored_hash: str, document_data: dict[str, Any]) -> bool:
+    """Acepta la huella canónica actual o una histórica equivalente.
+
+    Los QR anteriores a #2019 serializaban el ``Decimal`` con la escala que
+    tenía al emitirse. Al releer de ``Numeric`` la escala puede ser distinta,
+    así que se comparan todas las representaciones compatibles del mismo
+    importe. Las variantes nunca redondean: si el valor cambió, no coinciden.
+    """
+    current = calculate_validation_hash(get_canonical_payload(document_data))
+    if stored_hash == current:
+        return True
+    return stored_hash in _legacy_validation_hashes(document_data)
 
 
 class ValidationService:
@@ -109,37 +129,64 @@ class ValidationService:
         if status in {"draft", "borrador"}:
             return None
 
-        existing = (
+        existing = self._find_validation(document_type, str(document_id))
+        validation_hash = calculate_validation_hash(get_canonical_payload(document_data))
+        if existing is not None:
+            self._apply_document_state(existing, document_data, status, validation_hash)
+            return existing
+
+        try:
+            with database.session.begin_nested():
+                record = PublicDocumentValidation(
+                    public_token=generate_validation_token(),
+                    company_code=str(document_data.get("company_code") or ""),
+                    document_type=document_type,
+                    document_id=str(document_id),
+                    document_number=str(document_data.get("document_number") or ""),
+                    document_date=document_data.get("document_date"),
+                    document_status=status,
+                    validation_hash=validation_hash,
+                    is_enabled=True,
+                )
+                database.session.add(record)
+                database.session.flush()
+        except IntegrityError:
+            # #2131: otra transacción publicó la fila entre la lectura y el insert. La savepoint
+            # del intento deja la transacción externa usable y se actualiza la fila confirmada,
+            # conservando el token del QR ya impreso.
+            merged = self._find_validation(document_type, str(document_id))
+            if merged is None:
+                raise
+            self._apply_document_state(merged, document_data, status, validation_hash)
+            return merged
+        return record
+
+    @staticmethod
+    def _apply_document_state(
+        record: PublicDocumentValidation,
+        document_data: dict[str, Any],
+        status: str,
+        validation_hash: str,
+    ) -> None:
+        """Actualiza la fila existente con el estado actual del documento."""
+        record.validation_hash = validation_hash
+        record.document_status = status
+        record.document_date = document_data.get("document_date") or record.document_date
+        record.document_number = str(document_data.get("document_number") or record.document_number)
+
+    @staticmethod
+    def _find_validation(document_type: str, document_id: str) -> PublicDocumentValidation | None:
+        """Busca la validación ya publicada de un documento, si existe."""
+        return (
             database.session.execute(
                 select(PublicDocumentValidation).filter_by(
                     document_type=document_type,
-                    document_id=str(document_id),
+                    document_id=document_id,
                 )
             )
             .scalars()
             .first()
         )
-        validation_hash = calculate_validation_hash(get_canonical_payload(document_data))
-        if existing is not None:
-            existing.validation_hash = validation_hash
-            existing.document_status = status
-            existing.document_date = document_data.get("document_date")
-            existing.document_number = str(document_data.get("document_number") or existing.document_number)
-            return existing
-
-        record = PublicDocumentValidation(
-            public_token=generate_validation_token(),
-            company_code=str(document_data.get("company_code") or ""),
-            document_type=document_type,
-            document_id=str(document_id),
-            document_number=str(document_data.get("document_number") or ""),
-            document_date=document_data.get("document_date"),
-            document_status=status,
-            validation_hash=validation_hash,
-            is_enabled=True,
-        )
-        database.session.add(record)
-        return record
 
     def validate_token(self, token: str) -> dict[str, Any]:
         """Validate a public token against the current document state."""
@@ -157,8 +204,10 @@ class ValidationService:
         if status == "reverted":
             return {"status": VALIDATION_STATUS_REVERTED, "record": record, "data": current_data}
 
-        current_hash = calculate_validation_hash(get_canonical_payload(current_data))
-        result = VALIDATION_STATUS_VALID if current_hash == record.validation_hash else VALIDATION_STATUS_INVALID
+        if validation_hash_matches(record.validation_hash, current_data):
+            result = VALIDATION_STATUS_VALID
+        else:
+            result = VALIDATION_STATUS_INVALID
         return {"status": result, "record": record, "data": current_data}
 
     def build_public_view(self, validation_result: dict[str, Any]) -> PublicValidationView | None:
@@ -376,8 +425,56 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (date, datetime)):
         return value.strftime("%Y-%m-%d")
     if isinstance(value, Decimal):
+        if value == 0:
+            return "0"
+        return format(value.normalize(), "f")
+    return value
+
+
+def _json_value_legacy(value: Any) -> Any:
+    """Serializa como antes de #2019 para verificar QR históricos."""
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, Decimal):
         return format(value, "f")
     return value
+
+
+_LEGACY_MAX_DECIMALS = 8
+
+
+def _legacy_decimal_variants(value: Decimal) -> set[str]:
+    """Representaciones históricas del mismo importe con 0 a 8 decimales."""
+    if value == 0:
+        zero_variants = {"0", "-0"}
+        for scale in range(1, _LEGACY_MAX_DECIMALS + 1):
+            zeros = "0" * scale
+            zero_variants.update({f"0.{zeros}", f"-0.{zeros}"})
+        return zero_variants
+
+    variantes: set[str] = set()
+    for scale in range(_LEGACY_MAX_DECIMALS + 1):
+        quantum = Decimal(1).scaleb(-scale)
+        try:
+            quantized = value.quantize(quantum)
+        except InvalidOperation:
+            continue
+        if quantized == value:
+            variantes.add(format(quantized, "f"))
+    return variantes
+
+
+def _legacy_validation_hashes(document_data: dict[str, Any]) -> set[str]:
+    """Hashes legacy del payload actual y de sus escalas monetarias equivalentes."""
+    hashes = {calculate_validation_hash(get_canonical_payload(document_data, legacy=True))}
+    total = document_data.get("grand_total")
+    if isinstance(total, Decimal):
+        for variant in _legacy_decimal_variants(total):
+            if variant == _json_value_legacy(total):
+                continue
+            variante_datos = {**document_data, "grand_total": variant}
+            hashes.add(calculate_validation_hash(get_canonical_payload(variante_datos, legacy=True)))
+    return hashes
 
 
 def _as_decimal(value: Any) -> Decimal:

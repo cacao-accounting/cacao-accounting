@@ -6,11 +6,12 @@
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from copy import deepcopy
 import os
 import tempfile
 import unicodedata
 import zipfile
-from typing import Any, cast
+from typing import Any, Iterable, cast
 
 from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
@@ -23,6 +24,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
     ARAPOpenItem,
     Accounts,
+    BankAccount,
     Book,
     CompanyParty,
     CostCenter,
@@ -34,12 +36,14 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     Project,
     SalesInvoice,
-    UOM,
+    Unit,
     Warehouse,
     database,
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.registry import normalize_doctype
+from cacao_accounting.document_flow.service import qty_in_base_uom
+from cacao_accounting.imports.utils.validation import item_import_uom, validate_import_item, validate_import_uom
 
 from cacao_accounting.i18n import _
 
@@ -113,7 +117,11 @@ def get_schema() -> ResponseReturnValue:
     schema = LineImportSchemaRegistry.get_schema(doctype)
     if not schema:
         return jsonify({"error": _("Doctype no soportado")}), 400
-    return jsonify(schema)
+    localized_schema = deepcopy(schema)
+    localized_schema["label"] = _(localized_schema["label"])
+    for column in localized_schema.get("columns", []):
+        column["label"] = _(column["label"])
+    return jsonify(localized_schema)
 
 
 @line_import_bp.route("/api/line-import/open-items")
@@ -125,15 +133,7 @@ def get_open_items() -> ResponseReturnValue:
     company = (request.args.get("company") or "").strip()
     party_type = (request.args.get("party_type") or "").strip().lower()
     party = (request.args.get("party") or "").strip()
-    reference_type = (request.args.get("reference_type") or "").strip()
-    reference_type = {
-        "invoice": "sales_invoice" if party_type == "customer" else "purchase_invoice",
-        "debit_note": "sales_debit_note" if party_type == "customer" else "purchase_debit_note",
-        "credit_note": "sales_credit_note" if party_type == "customer" else "purchase_credit_note",
-        "payment": "payment_entry",
-        "payment_entry": "payment_entry",
-        "journal_entry": "journal_entry",
-    }.get(reference_type, reference_type)
+    reference_type = _normalize_open_item_reference_type((request.args.get("reference_type") or "").strip(), party_type)
     query_text = (request.args.get("q") or "").strip().casefold()
     if not company or party_type not in {"customer", "supplier"} or not party:
         return jsonify({"results": []})
@@ -145,6 +145,25 @@ def get_open_items() -> ResponseReturnValue:
     items = list_cached_open_items(company=company, party_type=party_type, party_id=party)
     if not items:
         items = list_open_items(company=company, party_type=party_type, party_id=party)
+    return jsonify({"results": _filter_open_item_results(items, reference_type, query_text)})
+
+
+def _normalize_open_item_reference_type(reference_type: str, party_type: str) -> str:
+    """Map selector aliases to the document types stored by the ledger."""
+    sales = party_type == "customer"
+    reference_aliases = {
+        "invoice": "sales_invoice" if sales else "purchase_invoice",
+        "debit_note": "sales_debit_note" if sales else "purchase_debit_note",
+        "credit_note": "sales_credit_note" if sales else "purchase_credit_note",
+        "payment": "payment_entry",
+        "payment_entry": "payment_entry",
+        "journal_entry": "journal_entry",
+    }
+    return reference_aliases.get(reference_type, reference_type)
+
+
+def _filter_open_item_results(items: tuple[Any, ...], reference_type: str, query_text: str) -> list[dict[str, Any]]:
+    """Filter open documents and shape the bounded response used by the selector."""
     results = []
     for item in items:
         if reference_type and item.document_type != reference_type:
@@ -168,7 +187,7 @@ def get_open_items() -> ResponseReturnValue:
                 "line_number": item.line_number,
             }
         )
-    return jsonify({"results": results[:100]})
+    return results[:100]
 
 
 def _normalize_header(value: Any) -> str:
@@ -200,6 +219,11 @@ def _xlsx_archive_is_safe(path: str) -> tuple[bool, str | None]:
             forbidden = ("vbaProject", "externalLink", "embeddings/", "connections.xml")
             if any(any(token in item.filename for token in forbidden) for item in entries):
                 return False, _("El archivo contiene macros, enlaces o contenido embebido no permitido.")
+            names = {item.filename.replace("\\", "/") for item in entries}
+            # #1400: un ZIP válido que no sea OOXML hace que openpyxl lance
+            # KeyError al buscar [Content_Types].xml; se rechaza como formato.
+            if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+                return False, _("El archivo XLSX está dañado o no es válido.")
     except (OSError, zipfile.BadZipFile):
         return False, _("El archivo XLSX está dañado o no es válido.")
     return True, None
@@ -210,6 +234,10 @@ def _select_xlsx_worksheet(workbook: Any) -> tuple[Any | None, list[dict[str, An
     if len(workbook.worksheets) > 10:
         return None, [{"row": None, "field": "file", "message": _("El archivo contiene demasiadas hojas.")}]
     named = [sheet for sheet in workbook.worksheets if _normalize_header(sheet.title) in {"lineas", "lines"}]
+    # #1401: dos hojas de líneas obligan a rechazar el archivo; importar solo la
+    # primera descartaría filas sin avisar.
+    if len(named) > 1:
+        return None, [{"row": None, "field": "sheet", "message": _("Debe existir una única hoja de líneas importable.")}]
     if named:
         return named[0], []
     if len(workbook.worksheets) == 1:
@@ -226,28 +254,20 @@ def _xlsx_column_mapping(schema: dict[str, Any]) -> dict[str, str]:
     return column_by_header
 
 
-def _xlsx_header_has_data(rows: list[tuple[Any, ...]], index: int) -> bool:
+def _xlsx_header_has_data(row: tuple[Any, ...], index: int) -> bool:
     """Return whether an unlabeled spreadsheet column contains data."""
-    return any(index < len(row) and row[index].value not in (None, "") for row in rows[1:])
+    return index < len(row) and row[index].value not in (None, "")
 
 
 def _map_xlsx_headers(
-    normalized_headers: list[str], rows: list[tuple[Any, ...]], column_by_header: dict[str, str]
+    normalized_headers: list[str], column_by_header: dict[str, str]
 ) -> tuple[list[str | None], set[str], list[dict[str, Any]]]:
-    """Map spreadsheet headers while collecting unknown and duplicate-column errors."""
+    """Map spreadsheet headers and collect unknown and duplicate-column errors."""
     mapped: list[str | None] = []
     seen: set[str] = set()
     errors: list[dict[str, Any]] = []
-    for index, header in enumerate(normalized_headers):
+    for header in normalized_headers:
         if not header:
-            if _xlsx_header_has_data(rows, index):
-                errors.append(
-                    {
-                        "row": 1,
-                        "field": f"column_{index + 1}",
-                        "message": _("La columna tiene datos pero no tiene encabezado."),
-                    }
-                )
             mapped.append(None)
             continue
         key = column_by_header.get(header)
@@ -287,15 +307,39 @@ def _canonical_xlsx_row(
     return item
 
 
+def _xlsx_unlabeled_data_errors(row: tuple[Any, ...], unlabeled: set[int], errors: list[dict[str, Any]]) -> None:
+    """Reporta columnas sin encabezado que contienen datos, sin releer la hoja."""
+    for index in sorted(unlabeled):
+        if _xlsx_header_has_data(row, index):
+            errors.append(
+                {
+                    "row": 1,
+                    "field": f"column_{index + 1}",
+                    "message": _("La columna tiene datos pero no tiene encabezado."),
+                }
+            )
+            unlabeled.discard(index)
+
+
 def _canonical_xlsx_rows(
-    rows: list[tuple[Any, ...]], mapped: list[str | None], errors: list[dict[str, Any]]
+    rows: Iterable[tuple[Any, ...]], mapped: list[str | None], errors: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Convert populated XLSX rows and enforce the import row limit."""
+    """Convierte filas de forma incremental y corta al superar el máximo.
+
+    ``rows`` es el iterador del libro abierto: no se materializa la hoja
+    completa, por lo que una dimensión inflada o un archivo con muchas filas
+    reales no consume memoria más allá del máximo permitido (#1206/#1373).
+    """
     canonical_rows: list[dict[str, Any]] = []
-    for excel_row, row in enumerate(rows[1:], start=2):
+    unlabeled = {index for index, key in enumerate(mapped) if key is None}
+    for excel_row, row in enumerate(rows, start=2):
         values = [cell.value for cell in row]
         if not any(value not in (None, "") for value in values):
             continue
+        if len(row) > 100:
+            errors.append({"row": excel_row, "field": "file", "message": _("El archivo contiene demasiadas columnas.")})
+            break
+        _xlsx_unlabeled_data_errors(row, unlabeled, errors)
         if len(canonical_rows) >= 500:
             errors.append({"row": excel_row, "field": "file", "message": _("Límite máximo de 500 líneas excedido.")})
             break
@@ -304,25 +348,44 @@ def _canonical_xlsx_rows(
 
 
 def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Read an XLSX sheet and return canonical rows plus structural errors."""
+    """Read an XLSX sheet and return canonical rows plus structural errors.
+
+    El libro se cierra siempre para liberar el descriptor del archivo; en
+    Windows el archivo temporal no se puede eliminar mientras siga abierto.
+    """
     workbook = load_workbook(path, read_only=True, data_only=False, keep_links=False)
+    try:
+        return _read_xlsx_workbook(workbook, schema)
+    finally:
+        workbook.close()
+
+
+def _read_xlsx_workbook(workbook, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Extrae filas canónicas de un libro XLSX ya abierto.
+
+    La lectura es incremental: se reinicia la dimensión declarada (no es
+    confiable) y solo se consumen las filas necesarias hasta el límite
+    (#1206/#1373), sin materializar la hoja completa.
+    """
     worksheet, structure_errors = _select_xlsx_worksheet(workbook)
     if structure_errors or worksheet is None:
         return [], structure_errors
-    rows = list(worksheet.iter_rows())
-    if not rows:
+    if hasattr(worksheet, "reset_dimensions"):
+        worksheet.reset_dimensions()
+    rows_iter = iter(worksheet.iter_rows())
+    header_cells = next(rows_iter, None)
+    if header_cells is None:
         return [], [{"row": None, "field": "sheet", "message": _("La hoja no contiene encabezados.")}]
-    header_cells = rows[0]
     normalized_headers = [_normalize_header(cell.value) for cell in header_cells]
     if len(normalized_headers) > 100:
         return [], [{"row": 1, "field": "header", "message": _("El archivo contiene demasiadas columnas.")}]
     column_by_header = _xlsx_column_mapping(schema)
-    mapped, seen, errors = _map_xlsx_headers(normalized_headers, rows, column_by_header)
+    mapped, seen, errors = _map_xlsx_headers(normalized_headers, column_by_header)
     required = {str(column["key"]) for column in schema.get("columns", []) if column.get("required")}
     missing = required - seen
     for key in sorted(missing):
         errors.append({"row": 1, "field": key, "message": _("Campo requerido faltante.")})
-    return _canonical_xlsx_rows(rows, mapped, errors), errors
+    return _canonical_xlsx_rows(rows_iter, mapped, errors), errors
 
 
 @line_import_bp.route("/api/line-import/parse-xlsx", methods=["POST"])
@@ -338,10 +401,13 @@ def parse_xlsx_lines() -> ResponseReturnValue:
         return jsonify({"valid": False, "errors": [{"field": "file", "message": _("Debe seleccionar un archivo XLSX.")}]}), 400
     if not str(uploaded.filename).casefold().endswith(".xlsx"):
         return jsonify({"valid": False, "errors": [{"field": "file", "message": _("Solo se admite formato XLSX.")}]}), 400
+    # #2352: el handle se cierra antes de escribir y el archivo temporal
+    # permanece dentro del try/finally, de modo que una copia incompleta
+    # también se elimina (incluido Windows, donde no se puede borrar abierto).
     with tempfile.NamedTemporaryFile(prefix="cacao-import-", suffix=".xlsx", delete=False) as temporary:
-        uploaded.save(temporary)
         path = temporary.name
     try:
+        uploaded.save(path)
         safe, reason = _xlsx_archive_is_safe(path)
         if not safe:
             return jsonify({"valid": False, "errors": [{"field": "file", "message": reason}]}), 400
@@ -349,7 +415,16 @@ def parse_xlsx_lines() -> ResponseReturnValue:
         if errors:
             return jsonify({"valid": False, "rows": [], "errors": errors})
         return jsonify({"valid": True, "rows": rows, "errors": []})
-    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+    except (zipfile.BadZipFile, KeyError):
+        # #1400: openpyxl lanza KeyError cuando el OOXML no contiene las partes
+        # obligatorias; la ruta responde 400 accionable en lugar de 500.
+        return (
+            jsonify(
+                {"valid": False, "errors": [{"field": "file", "message": _("El archivo XLSX está dañado o no es válido.")}]}
+            ),
+            400,
+        )
+    except (OSError, ValueError) as exc:
         return jsonify({"valid": False, "errors": [{"field": "file", "message": str(exc)}]}), 400
     finally:
         try:
@@ -389,8 +464,21 @@ def validate_lines() -> ResponseReturnValue:
     if rows_error:
         return rows_error
 
+    party_type, party_id, party_error = _payment_reconciliation_party_context(str(payload.doctype), payload.context)
+    if party_error:
+        return party_error
+
+    allocation_date = None
+    if str(payload.doctype) == "payment_reconciliation":
+        try:
+            allocation_date = _payment_reconciliation_allocation_date(payload.context)
+        except ValueError:
+            return _invalid_payload_response("allocation_date", _("La fecha de aplicación no es válida."), 400)
+
     errors: list[dict[str, Any]] = []
     validated_rows: list[dict[str, Any]] = []
+    reconciliation_remaining: dict[str, Decimal] = {}
+    document_remaining: dict[str, Decimal] = {}
     for row_index, row in enumerate(payload.rows):
         row_errors, validated_row = _validate_import_row(
             row=row,
@@ -398,6 +486,11 @@ def validate_lines() -> ResponseReturnValue:
             schema=schema,
             doctype=str(payload.doctype),
             company_id=company_id,
+            party_type=party_type,
+            party_id=party_id,
+            reconciliation_remaining=reconciliation_remaining,
+            document_remaining=document_remaining,
+            allocation_date=allocation_date,
         )
         errors.extend(row_errors)
         validated_rows.append(validated_row)
@@ -413,7 +506,7 @@ def _validate_complete_journal_import(
 ) -> None:
     """Validate imported lines together with the lines already in the voucher."""
     from cacao_accounting.contabilidad.journal_service import (
-        _normalize_line,
+        _normalize_journal_payload,
         _validate_ar_ap_lines,
         _validate_balanced_lines,
         _validate_line_books,
@@ -433,19 +526,19 @@ def _validate_complete_journal_import(
             if normalized.get("reference_document") and not normalized.get("reference_name"):
                 normalized["reference_name"] = normalized["reference_document"]
             normalized_rows.append(normalized)
-        lines = [_normalize_line(row, index + 1) for index, row in enumerate(normalized_rows)]
-        lines = [line for line in lines if line.account or line.debit or line.credit]
-        transaction_currency = str(context.get("transaction_currency") or "") or None
-        header_rate = context.get("exchange_rate")
-        _validate_balanced_lines(
-            company_id,
-            lines,
-            transaction_currency,
-            Decimal(str(header_rate)) if header_rate not in (None, "") else None,
-            context.get("books") or None,
+        data = _normalize_journal_payload(
+            {
+                "company": company_id,
+                "posting_date": context.get("posting_date"),
+                "books": context.get("books") or None,
+                "transaction_currency": context.get("transaction_currency"),
+                "exchange_rate": context.get("exchange_rate"),
+                "lines": normalized_rows,
+            }
         )
-        _validate_line_books(company_id, context.get("books") or None, lines)
-        _validate_ar_ap_lines(company_id, lines)
+        _validate_balanced_lines(data)
+        _validate_line_books(company_id, data.books, data.lines)
+        _validate_ar_ap_lines(company_id, data.lines)
     except (ValueError, InvalidOperation) as exc:
         errors.append({"row": None, "field": "voucher", "message": str(exc)})
 
@@ -479,6 +572,10 @@ def _validate_company_context(context: dict[str, Any]) -> tuple[str | None, Resp
     company_id = context.get("company_id")
     if not company_id:
         return None, _invalid_payload_response("company_id", _("Compañía no especificada en el contexto."), 400)
+    if not isinstance(company_id, str):
+        # Un valor no escalar llegaría al filtro SQL y provocaría un error de
+        # programación en lugar de un 400 (#1966).
+        return None, _invalid_payload_response("company_id", _("El identificador de compañía no es válido."), 400)
     company = database.session.query(Entity).filter(or_(Entity.id == company_id, Entity.code == company_id)).first()
     if not company:
         return None, _error_response(_("La compañía seleccionada no existe."), 400)
@@ -510,16 +607,39 @@ def _validate_import_row(
     schema: dict[str, Any],
     doctype: str,
     company_id: str,
+    party_type: str = "",
+    party_id: str = "",
+    reconciliation_remaining: dict[str, Decimal] | None = None,
+    document_remaining: dict[str, Decimal] | None = None,
+    allocation_date: date | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Validate and enrich one imported line."""
     errors: list[dict[str, Any]] = []
     validated_row = row.copy()
     _validate_schema_columns(row, row_no, schema, errors)
-    _enrich_and_validate_master_data(row, validated_row, row_no, company_id, errors)
+    if "description" not in {column["key"] for column in schema["columns"]} and str(row.get("description") or "").strip():
+        errors.append(
+            {
+                "row": row_no,
+                "field": "description",
+                "message": _("Este tipo de documento no admite descripción por línea."),
+            }
+        )
+    _enrich_and_validate_master_data(row, validated_row, row_no, company_id, doctype, errors)
     if doctype == "journal_entry":
         _validate_journal_entry_row(row, row_no, errors)
     elif doctype == "payment_reconciliation":
-        _validate_payment_reconciliation_row(row, row_no, company_id, errors)
+        _validate_payment_reconciliation_row(
+            row,
+            row_no,
+            company_id,
+            errors,
+            party_type=party_type,
+            party_id=party_id,
+            payment_remaining=reconciliation_remaining,
+            document_remaining=document_remaining,
+            allocation_date=allocation_date,
+        )
     return errors, validated_row
 
 
@@ -598,44 +718,85 @@ def _enrich_and_validate_master_data(
     validated_row: dict[str, Any],
     row_no: int,
     company_id: str,
+    doctype: str,
     errors: list[dict[str, Any]],
 ) -> None:
     """Validate master-data references and enrich the imported row."""
-    _validate_item_reference(row, validated_row, row_no, errors)
-    _validate_uom_reference(row, row_no, errors)
+    item = _validate_item_reference(row, validated_row, row_no, doctype, errors)
+    _validate_uom_reference(row, row_no, item, errors)
     _validate_account_reference(row, validated_row, row_no, company_id, errors)
+    _validate_bank_account_reference(row, validated_row, row_no, company_id, errors)
     _validate_cost_center_reference(row, row_no, company_id, errors)
     _validate_project_reference(row, row_no, company_id, errors)
+    _validate_unit_reference(row, row_no, company_id, errors)
     _validate_warehouse_reference(row, row_no, company_id, errors)
     if row.get("book"):
         _validate_book_reference(row, validated_row, row_no, company_id, errors)
     if row.get("currency"):
         _validate_currency_reference(row, validated_row, row_no, errors)
     _validate_party_reference(row, validated_row, row_no, company_id, errors)
-    _validate_open_item_reference(row, validated_row, row_no, company_id, errors)
+    if doctype != "payment_reconciliation":
+        _validate_open_item_reference(row, validated_row, row_no, company_id, errors)
+
+
+def _validate_bank_account_reference(
+    row: dict[str, Any],
+    validated_row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+) -> None:
+    """Validate and canonicalize a bank account reference for its company."""
+    bank_account_id = str(row.get("bank_account") or "").strip()
+    if not bank_account_id:
+        return
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if bank_account is None or bank_account.company != company_id:
+        errors.append(
+            {
+                "row": row_no,
+                "field": "bank_account",
+                "message": _("La cuenta bancaria no existe o no pertenece a la compañía."),
+            }
+        )
+        return
+    validated_row["bank_account"] = str(bank_account.id)
 
 
 def _validate_item_reference(
     row: dict[str, Any],
     validated_row: dict[str, Any],
     row_no: int,
+    doctype: str,
     errors: list[dict[str, Any]],
-) -> None:
+) -> Item | None:
     """Validate and enrich an item reference."""
     if not row.get("item_code"):
-        return
-    item = database.session.query(Item).filter_by(code=row["item_code"]).first()
-    if not item:
-        errors.append({"row": row_no, "field": "item_code", "message": _("El artículo no existe.")})
-        return
+        return None
+    item, item_error = validate_import_item(row["item_code"], doctype)
+    if item_error:
+        errors.append({"row": row_no, "field": "item_code", "message": item_error})
+        return None
+    if item is None:
+        return None
     validated_row["item_name"] = item.name
     validated_row["item_id"] = item.id
+    return item
 
 
-def _validate_uom_reference(row: dict[str, Any], row_no: int, errors: list[dict[str, Any]]) -> None:
+def _validate_uom_reference(row: dict[str, Any], row_no: int, item: Item | None, errors: list[dict[str, Any]]) -> None:
     """Validate a UOM reference."""
-    if row.get("uom") and not database.session.query(UOM).filter_by(code=row["uom"]).first():
-        errors.append({"row": row_no, "field": "uom", "message": _("La unidad de medida no existe.")})
+    effective_uom = item_import_uom(item, row.get("uom")) if item else row.get("uom")
+    uom_error = validate_import_uom(effective_uom)
+    if uom_error:
+        errors.append({"row": row_no, "field": "uom", "message": uom_error})
+        return
+    if item is None or not effective_uom:
+        return
+    try:
+        qty_in_base_uom(item.code, Decimal("1"), effective_uom)
+    except ValueError as exc:
+        errors.append({"row": row_no, "field": "uom", "message": str(exc)})
 
 
 def _validate_account_reference(
@@ -680,6 +841,18 @@ def _validate_project_reference(
     """Validate a project reference scoped by company."""
     if row.get("project") and not database.session.query(Project).filter_by(code=row["project"], entity=company_id).first():
         errors.append({"row": row_no, "field": "project", "message": _("El proyecto no existe.")})
+
+
+def _validate_unit_reference(
+    row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+) -> None:
+    """Validate a business unit reference scoped by company."""
+    unit = row.get("unit")
+    if unit and not database.session.query(Unit).filter_by(code=unit, entity=company_id).first():
+        errors.append({"row": row_no, "field": "unit", "message": _("La unidad no existe.")})
 
 
 def _validate_warehouse_reference(
@@ -837,7 +1010,13 @@ def _filter_open_item_reference_line(query: Any, line_hint: str) -> Any:
 
 
 def _ledger_open_item_matches(
-    *, company_id: str, party_type: str | None, party_id: Any, reference_type: str, reference_document: str
+    *,
+    company_id: str,
+    party_type: str | None,
+    party_id: Any,
+    reference_type: str,
+    reference_document: str,
+    line_hint: str = "",
 ) -> list[Any]:
     """Find available AP/AR references exposed by the financial ledger."""
     from cacao_accounting.contabilidad.arap_allocation import list_open_items
@@ -846,7 +1025,17 @@ def _ledger_open_item_matches(
         item
         for item in list_open_items(company=company_id, party_type=party_type, party_id=party_id)
         if _is_matching_ledger_open_item(item, reference_type, reference_document)
+        and _ledger_item_matches_line(item, line_hint)
     ]
+
+
+def _ledger_item_matches_line(item: Any, line_hint: str) -> bool:
+    """Indica si el open item del ledger corresponde a la línea solicitada."""
+    if not line_hint:
+        return True
+    if item.economic_line_id and str(item.economic_line_id) == line_hint:
+        return True
+    return bool(line_hint.isdigit() and item.line_number is not None and int(item.line_number) == int(line_hint))
 
 
 def _is_matching_ledger_open_item(item: Any, reference_type: str, reference_document: str) -> bool:
@@ -883,6 +1072,7 @@ def _resolve_ledger_open_item_fallback(
     party_id: Any,
     reference_type: str,
     reference_document: str,
+    line_hint: str = "",
 ) -> bool:
     """Resolve a reference from the ledger when no materialized open item exists."""
     ledger_matches = _ledger_open_item_matches(
@@ -891,6 +1081,7 @@ def _resolve_ledger_open_item_fallback(
         party_id=party_id,
         reference_type=reference_type,
         reference_document=reference_document,
+        line_hint=line_hint,
     )
     if len(ledger_matches) == 1:
         _record_open_item_reference(validated_row, reference_type, ledger_matches[0], include_open_item_id=False)
@@ -911,7 +1102,9 @@ def _validate_open_item_reference(
 ) -> None:
     """Resolve an optional AP/AR reference without applying it during import."""
     reference_type = _normalize_reference_type(row.get("reference_type"))
-    reference_document = str(row.get("reference_document") or row.get("reference_name") or "").strip()
+    reference_document = str(
+        row.get("reference_document") or row.get("reference_name") or row.get("reference_id") or ""
+    ).strip()
     if not reference_type and not reference_document:
         return
     if not reference_type or not reference_document:
@@ -940,6 +1133,7 @@ def _validate_open_item_reference(
         party_id=party_id,
         reference_type=reference_type,
         reference_document=reference_document,
+        line_hint=line_hint,
     ):
         return
     if not matches:
@@ -969,6 +1163,37 @@ def _validate_journal_entry_row(row: dict[str, Any], row_no: int, errors: list[d
                 "message": _("No puede especificar Débito y Crédito en la misma línea."),
             }
         )
+
+
+def _payment_reconciliation_party_context(
+    doctype: str, context: dict[str, Any]
+) -> tuple[str, str, ResponseReturnValue | None]:
+    """Lee el tercero seleccionado en la pantalla de conciliación (#1399).
+
+    El frontend envía ``filters.party_type`` y ``filters.party_id`` dentro del
+    contexto. Se validan antes de procesar filas para que una hoja de otro
+    tercero no se muestre como válida y falle al aplicar.
+    """
+    if doctype != "payment_reconciliation":
+        return "", "", None
+    raw_filters = context.get("filters") if isinstance(context, dict) else None
+    if not isinstance(raw_filters, dict):
+        return "", "", None
+    party_type = str(raw_filters.get("party_type") or "").strip()
+    party_id = str(raw_filters.get("party_id") or "").strip()
+    if party_type and party_type not in {"customer", "supplier"}:
+        return "", "", _invalid_payload_response("party_type", _("Tipo de tercero no válido."), 400)
+    if party_id and not party_type:
+        return "", "", _invalid_payload_response("party_type", _("Tipo de tercero no especificado."), 400)
+    return party_type, party_id, None
+
+
+def _payment_reconciliation_allocation_date(context: dict[str, Any]) -> date:
+    """Resuelve la fecha de aplicación con el mismo default que el POST real."""
+    raw_date = context.get("allocation_date")
+    if raw_date in (None, ""):
+        return date.today()
+    return date.fromisoformat(str(raw_date))
 
 
 def _append_payment_reconciliation_error(errors: list[dict[str, Any]], row_no: int, field: str, message: str) -> None:
@@ -1005,6 +1230,12 @@ def _get_payment_reconciliation_reference(
             errors, row_no, "reference_id", _("El documento de referencia no existe o no está aprobado.")
         )
         return None, reference_type
+    actual_type = normalize_doctype(str(getattr(reference, "document_type", "") or ""))
+    if actual_type != reference_type:
+        _append_payment_reconciliation_error(
+            errors, row_no, "reference_type", _("El subtipo del documento no coincide con la referencia.")
+        )
+        return None, reference_type
     return reference, reference_type
 
 
@@ -1022,9 +1253,14 @@ def _validate_payment_reconciliation_party(
 
 
 def _payment_reconciliation_rate(
-    row: dict[str, Any], payment: Any, reference: Any, row_no: int, errors: list[dict[str, Any]]
+    row: dict[str, Any],
+    payment: Any,
+    reference: Any,
+    row_no: int,
+    errors: list[dict[str, Any]],
+    allocation_date: date | None = None,
 ) -> Decimal:
-    """Resolve the exchange rate required to compare payment and document currencies."""
+    """Resuelve la tasa histórica usada por la aplicación, no la declarada."""
     document_currency = getattr(reference, "transaction_currency", None)
     payment_currency = getattr(payment, "currency", None)
     if not document_currency or not payment_currency or document_currency == payment_currency:
@@ -1035,11 +1271,40 @@ def _payment_reconciliation_rate(
             errors, row_no, "payment_exchange_rate", _("Se requiere una tasa para monedas distintas.")
         )
         return Decimal("1")
-    return Decimal(str(raw_rate))
+    from cacao_accounting.document_flow.payment import _require_available_reconciliation_rate
+
+    try:
+        return _require_available_reconciliation_rate(
+            document_currency,
+            payment_currency,
+            Decimal(str(raw_rate)),
+            allocation_date or date.today(),
+        )
+    except ValueError as exc:
+        _append_payment_reconciliation_error(errors, row_no, "payment_exchange_rate", str(exc))
+        return Decimal("1")
+
+
+def _reconciliation_available(
+    cache: dict[str, Decimal] | None, key: str, current: Decimal
+) -> tuple[Decimal, dict[str, Decimal] | None]:
+    """Devuelve el saldo disponible por clave, inicializando el acumulador."""
+    if cache is None:
+        return current, None
+    if key not in cache:
+        cache[key] = current
+    return cache[key], cache
 
 
 def _validate_payment_reconciliation_amounts(
-    row: dict[str, Any], payment: Any, reference: Any, rate: Decimal, row_no: int, errors: list[dict[str, Any]]
+    row: dict[str, Any],
+    payment: Any,
+    reference: Any,
+    rate: Decimal,
+    row_no: int,
+    errors: list[dict[str, Any]],
+    payment_remaining: dict[str, Decimal] | None = None,
+    document_remaining: dict[str, Decimal] | None = None,
 ) -> None:
     """Validate allocated amount against document and payment outstanding balances."""
     from cacao_accounting.document_flow.payment import compute_outstanding_amount, compute_payment_unallocated_amount
@@ -1049,27 +1314,90 @@ def _validate_payment_reconciliation_amounts(
     gain_loss = Decimal(str(row["gain_loss_amount"])) if _is_decimal(row.get("gain_loss_amount")) else Decimal("0")
     if allocated <= 0:
         return
-    if allocated > compute_outstanding_amount(reference) + Decimal("0.01"):
+    # #1204: el flujo de aplicación rechaza ajustes que igualan o superan el monto.
+    if discount + gain_loss >= allocated:
+        _append_payment_reconciliation_error(
+            errors,
+            row_no,
+            "discount_amount",
+            _("El descuento + diferencia de cambio no puede ser igual o mayor al monto aplicado."),
+        )
+        return
+
+    # #1205: acumula el saldo por documento y por pago a medida que avanzan las
+    # filas del lote; solo una fila aceptada consume.
+    document_key = str(getattr(reference, "id", ""))
+    document_available, document_remaining = _reconciliation_available(
+        document_remaining, document_key, compute_outstanding_amount(reference)
+    )
+    document_ok = allocated <= document_available + Decimal("0.01")
+    if not document_ok:
         _append_payment_reconciliation_error(
             errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo pendiente del documento.")
         )
+
     consumed = max(allocated - discount - gain_loss, Decimal("0")) * rate
-    if consumed > compute_payment_unallocated_amount(payment) + Decimal("0.01"):
+    payment_key = str(getattr(payment, "id", ""))
+    payment_available, payment_remaining = _reconciliation_available(
+        payment_remaining, payment_key, compute_payment_unallocated_amount(payment)
+    )
+    payment_ok = consumed <= payment_available + Decimal("0.01")
+    if not payment_ok:
         _append_payment_reconciliation_error(
             errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo disponible del pago.")
         )
 
+    if document_ok and payment_ok:
+        if document_remaining is not None:
+            document_remaining[document_key] = document_available - allocated
+        if payment_remaining is not None:
+            payment_remaining[payment_key] = payment_available - consumed
+
 
 def _validate_payment_reconciliation_row(
-    row: dict[str, Any], row_no: int, company_id: str, errors: list[dict[str, Any]]
+    row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+    *,
+    party_type: str = "",
+    party_id: str = "",
+    payment_remaining: dict[str, Decimal] | None = None,
+    document_remaining: dict[str, Decimal] | None = None,
+    allocation_date: date | None = None,
 ) -> None:
     """Validate payment/document identity before reconciliation is applied."""
     payment = _get_payment_reconciliation_payment(row, company_id, row_no, errors)
+    if payment is not None and party_id and (payment.party_type != party_type or str(payment.party_id) != str(party_id)):
+        _append_payment_reconciliation_error(
+            errors,
+            row_no,
+            "payment_id",
+            _("El pago no coincide con el tercero seleccionado en la conciliación."),
+        )
     reference, reference_type = _get_payment_reconciliation_reference(row, company_id, row_no, errors)
     if reference is not None and payment is not None:
+        from cacao_accounting.document_flow.payment import _payment_type_matches_source
+
+        if not _payment_type_matches_source(str(payment.payment_type or ""), reference_type):
+            _append_payment_reconciliation_error(
+                errors,
+                row_no,
+                "payment_id",
+                _("El tipo de pago no coincide con el documento de referencia."),
+            )
         _validate_payment_reconciliation_party(payment, reference, reference_type, row_no, errors)
-        rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors)
-        _validate_payment_reconciliation_amounts(row, payment, reference, rate, row_no, errors)
+        rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors, allocation_date=allocation_date)
+        _validate_payment_reconciliation_amounts(
+            row,
+            payment,
+            reference,
+            rate,
+            row_no,
+            errors,
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
     allocated = row.get("allocated_amount")
     if _is_decimal(allocated) and Decimal(str(allocated)) <= 0:
         _append_payment_reconciliation_error(

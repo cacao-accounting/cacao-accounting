@@ -11,7 +11,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import aliased
 
-from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+from cacao_accounting.contabilidad.journal_service import (
+    _normalize_journal_payload,
+    create_journal_draft,
+    serialize_journal_for_form,
+    submit_journal,
+)
 from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
@@ -25,6 +30,8 @@ from cacao_accounting.ledger_queries import primary_ledger_id
 
 
 from cacao_accounting.i18n import _
+
+PENDING_APPROVAL_STATUS = "Pending Approval"
 
 
 class FiscalYearClosingError(ValueError):
@@ -43,15 +50,15 @@ def _cross_year_reversal_pairs(company: str, fiscal_year: FiscalYear) -> list[tu
             original.posting_date >= fiscal_year.year_start_date,
             original.posting_date <= fiscal_year.year_end_date,
             original.is_reversal.is_(False),
-            original.is_cancelled.is_(False),
             reversal.company == company,
             reversal.posting_date > fiscal_year.year_end_date,
             reversal.is_reversal.is_(True),
             reversal.is_cancelled.is_(False),
         )
-        .distinct()
     )
-    return [(str(original_id), str(reversal_id)) for original_id, reversal_id in database.session.execute(query).all()]
+    current_rows = database.session.execute(query.with_for_update()).all()
+    reversal_pairs = {(str(original_id), str(reversal_id)) for original_id, reversal_id in current_rows}
+    return sorted(reversal_pairs)
 
 
 def calculate_closing_balances(
@@ -60,6 +67,8 @@ def calculate_closing_balances(
     ledger_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Calcula los saldos de cierre para cuentas de ingresos, costos y gastos."""
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     # Filtrar entradas por compañia y rango de fechas del año fiscal
     # Excluir registros de cierre previos si los hubiera (is_fiscal_year_closing=False)
     query = (
@@ -77,9 +86,8 @@ def calculate_closing_balances(
             GLEntry.posting_date >= fiscal_year.year_start_date,
             GLEntry.posting_date <= fiscal_year.year_end_date,
             GLEntry.is_fiscal_year_closing.is_(False),
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-            Accounts.classification.in_(["ingreso", "costo", "gasto", "income", "cost", "expense"]),
+            *effective_gl_scope(fiscal_year.year_end_date),
+            func.lower(Accounts.classification).in_(["ingreso", "costo", "gasto", "income", "cost", "expense"]),
         )
         .group_by(
             GLEntry.account_id,
@@ -233,9 +241,118 @@ def _build_closing_voucher_payload(
     }
 
 
+def _existing_fiscal_year_closing(fiscal_year_id: str, *, pending_only: bool) -> ComprobanteContable | None:
+    """Find an existing draft/proposal so retries do not create duplicate closes."""
+    query = select(ComprobanteContable).where(
+        ComprobanteContable.fiscal_year_id == fiscal_year_id,
+        ComprobanteContable.is_fiscal_year_closing.is_(True),
+    )
+    if pending_only:
+        from cacao_accounting.database import ApprovalRequest
+
+        query = (
+            query.join(
+                ApprovalRequest,
+                (ApprovalRequest.document_id == ComprobanteContable.id) & (ApprovalRequest.document_type == "journal_entry"),
+            )
+            .where(ApprovalRequest.status == PENDING_APPROVAL_STATUS)
+            .order_by(ApprovalRequest.created_at.desc())
+        )
+    else:
+        query = query.where(ComprobanteContable.status == "draft").order_by(ComprobanteContable.created.desc())
+    return database.session.execute(query.limit(1)).scalars().first()
+
+
+def _closing_draft_matches_calculated_payload(journal: ComprobanteContable, payload: dict[str, Any]) -> bool:
+    """Reject a previously rejected draft if its close content was edited."""
+    try:
+        current = _normalize_journal_payload(serialize_journal_for_form(journal))
+        expected = _normalize_journal_payload(payload)
+    except ValueError:
+        return False
+    header_fields = (
+        "company",
+        "posting_date",
+        "naming_series_id",
+        "reference",
+        "memo",
+        "transaction_currency",
+        "base_currency",
+        "exchange_rate",
+        "is_closing",
+        "is_fiscal_year_closing",
+        "fiscal_year_id",
+    )
+    return (
+        all(getattr(current, field) == getattr(expected, field) for field in header_fields)
+        and set(current.books or ()) == set(expected.books or ())
+        and current.lines == expected.lines
+    )
+
+
+def _create_or_reuse_closing_draft(
+    company: str,
+    fiscal_year: FiscalYear,
+    balances: list[dict[str, Any]],
+    retained_earnings_code: str,
+    user_id: str,
+) -> ComprobanteContable:
+    """Create a close draft or reuse it only when it still matches ledger balances."""
+    payload = _build_closing_voucher_payload(
+        company=company,
+        fiscal_year=fiscal_year,
+        balances=balances,
+        retained_earnings_code=retained_earnings_code,
+    )
+    from cacao_accounting.document_identifiers import _pick_naming_series
+
+    payload["naming_series_id"] = str(_pick_naming_series("journal_entry", company, None).id)
+    journal = _existing_fiscal_year_closing(fiscal_year.id, pending_only=False)
+    if journal:
+        if not _closing_draft_matches_calculated_payload(journal, payload):
+            raise FiscalYearClosingError(
+                _("El borrador del cierre fiscal no coincide con los saldos calculados; no se envió para aprobación.")
+            )
+        return journal
+    return create_journal_draft(
+        payload,
+        user_id=user_id,
+        allow_closing=True,
+        allow_fiscal_year_closing=True,
+        commit=False,
+    )
+
+
+def _submit_or_request_closing_approval(journal: ComprobanteContable, company: str, user_id: str) -> None:
+    """Route a fiscal close through the configured approval workflow atomically."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    if ApprovalEngine.is_enabled(company):
+        from cacao_accounting.database import User
+
+        actor = database.session.get(User, user_id)
+        request = ApprovalEngine.request_approval(journal, actor=actor)
+        if request is None:
+            if ApprovalEngine.requires_different_approver(company):
+                raise FiscalYearClosingError(
+                    _("No existe una regla de aprobación para el cierre fiscal; no se creó el asiento contable.")
+                )
+            return
+        if actor is not None and ApprovalEngine.can_approve(journal, actor):
+            ApprovalEngine.approve(journal, actor, _("Aprobado por el remitente"))
+        return
+
+    posted_entries = submit_journal(journal.id, commit=False, user_id=user_id)
+    from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
+
+    post_journal_ar_ap(journal, posted_entries)
+
+
 def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_id: str) -> ComprobanteContable:
     """Ejecuta el proceso de cierre de año fiscal."""
-    fiscal_year = database.session.get(FiscalYear, fiscal_year_id, with_for_update=True)
+    fiscal_year = database.session.execute(
+        select(FiscalYear).where(FiscalYear.id == fiscal_year_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if not fiscal_year:
         raise FiscalYearClosingError(_("Año fiscal no encontrado."))
 
@@ -268,6 +385,10 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
             % {"details": details}
         )
 
+    pending_journal = _existing_fiscal_year_closing(fiscal_year.id, pending_only=True)
+    if pending_journal:
+        return pending_journal
+
     books = list(
         database.session.execute(
             select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
@@ -288,26 +409,26 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if not retained_earnings_account:
         raise FiscalYearClosingError(_("La cuenta de utilidades acumuladas configurada no existe."))
 
-    payload = _build_closing_voucher_payload(
-        company=company,
-        fiscal_year=fiscal_year,
-        balances=balances,
-        retained_earnings_code=retained_earnings_account.code,
-    )
-
-    journal = create_journal_draft(
-        payload,
-        user_id=user_id,
-        allow_closing=True,
-        allow_fiscal_year_closing=True,
-    )
-    posted_entries = submit_journal(journal.id, user_id=user_id)
-    # ``submit_journal`` sincroniza normalmente el subledger; la llamada
-    # idempotente explícita deja documentado el contrato del cierre fiscal y
-    # cubre implementaciones que publiquen el comprobante por otro adaptador.
-    from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
-
-    post_journal_ar_ap(journal, posted_entries)
+    try:
+        journal = _create_or_reuse_closing_draft(
+            company,
+            fiscal_year,
+            balances,
+            retained_earnings_account.code,
+            user_id,
+        )
+        _submit_or_request_closing_approval(journal, company, user_id)
+        database.session.add(journal)
+        database.session.commit()
+    except FiscalYearClosingError:
+        database.session.rollback()
+        raise
+    except ValueError as exc:
+        database.session.rollback()
+        raise FiscalYearClosingError(str(exc)) from exc
+    except Exception:
+        database.session.rollback()
+        raise
     return journal
 
 

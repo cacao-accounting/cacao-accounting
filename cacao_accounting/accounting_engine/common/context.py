@@ -23,6 +23,7 @@ class ItemContext:
     discount_amount: Decimal = Decimal("0")
     net_amount: Decimal = Decimal("0")
     item_type: str = "inventory"  # inventory, service
+    item_category: Optional[str] = None
     uom: str = "unit"
     weight: Decimal = Decimal("0")
     volume: Decimal = Decimal("0")
@@ -39,7 +40,7 @@ class TaxRuleContext:
     name: str
     concept: str
     tax_type: str  # tax, charge, withholding, deduction
-    calculation_method: str  # percentage, fixed, manual, quantity
+    calculation_method: str  # percentage, fixed, manual
     rate: Decimal = Decimal("0")
     amount: Decimal = Decimal("0")
     base_mode: str = "goods"  # goods, accumulated

@@ -5,23 +5,25 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Iterable, Mapping
 
+from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
-from cacao_accounting.contabilidad.default_accounts import account_label
 from cacao_accounting.database import (
     Address,
-    Accounts,
     CompanyParty,
     Contact,
+    Entity,
     Party,
-    PartyAccount,
     PartyAddress,
     PartyContact,
     PartyGroup,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
@@ -31,6 +33,119 @@ from cacao_accounting.i18n import LazyText, _, _l
 
 NATIONALITY_LABELS: dict[str, LazyText] = {"national": _l("Nacional"), "foreign": _l("Extranjero")}
 PERSON_TYPE_LABELS: dict[str, LazyText] = {"natural": _l("Natural"), "juridical": _l("Jurídica")}
+
+
+def filtrar_parties_por_companias(query: Any, companies: Iterable[str]) -> Any:
+    """Limita una consulta de Party a los tercero vinculados a compañías concretas.
+
+    Los terceros son registros globales; su aislamiento comercial vive en los
+    vínculos ``CompanyParty``. Una consulta sin compañías autorizadas no
+    devuelve ninguna fila, evitando que un usuario con acceso vacío pueda
+    enumerar tercero privados (#1525).
+    """
+    autorizadas = [str(company) for company in companies if str(company).strip()]
+    if not autorizadas:
+        return query.where(database.false())
+    return query.where(
+        Party.id.in_(
+            database.select(CompanyParty.party_id).where(
+                CompanyParty.company.in_(autorizadas),
+                CompanyParty.is_active.is_(True),
+            )
+        )
+    )
+
+
+def tercero_tiene_vinculo_autorizado(party_id: str, companies: Iterable[str]) -> bool:
+    """Indica si un tercero tiene un vínculo activo en alguna compañía autorizada."""
+    autorizadas = [str(company) for company in companies]
+    if not autorizadas:
+        return False
+    return (
+        database.session.execute(
+            database.select(CompanyParty.id).where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.company.in_(autorizadas),
+                CompanyParty.is_active.is_(True),
+            )
+        ).first()
+        is not None
+    )
+
+
+def companias_autorizadas_por_accion(module: str, action: str) -> list[str]:
+    """Return action-scoped company grants, requiring explicit Cloud grants."""
+    from flask_login import current_user
+
+    from cacao_accounting.auth.permisos import Permisos as _Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre as _obtener_id
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    permisos = _Permisos(modulo=_obtener_id(module), usuario=getattr(current_user, "id", None))
+    if not getattr(permisos, action, False):
+        return []
+    if not is_desktop_mode():
+        return list(
+            database.session.execute(
+                database.select(UserCompanyAccess.company_code)
+                .join(Entity, Entity.code == UserCompanyAccess.company_code)
+                .where(UserCompanyAccess.user_id == current_user.id, Entity.enabled.is_(True))
+                .order_by(UserCompanyAccess.company_code)
+            ).scalars()
+        )
+    return list(permisos.obtener_companias_autorizadas())
+
+
+def companias_editables_de_modulo(module: str) -> list[str]:
+    """Compañías donde el usuario actual puede editar en el módulo dado (#1282)."""
+    return companias_autorizadas_por_accion(module, "editar")
+
+
+def exigir_companias_tercero(party_id: str, module: str, submitted: Iterable[str], action: str = "editar") -> None:
+    """Exige autorización para cada compañía procesada en la configuración (#1280).
+
+    El POST procesa las compañías presentes en el formulario y elimina las
+    asociaciones omitidas: ambas listas se validan antes de mutar.
+    """
+    from flask import abort as _abort
+
+    presentes = [str(company).strip() for company in submitted if str(company).strip()]
+    # Solo cuentan como "omitidas" las asociaciones vigentes: un vínculo
+    # inactivo o de una entidad deshabilitada no debe bloquear la limpieza
+    # con un 403 falso positivo (feedback QA1 #1280).
+    restantes = list(
+        database.session.execute(
+            database.select(CompanyParty.company)
+            .join(Entity, Entity.code == CompanyParty.company)
+            .where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.is_active.is_(True),
+                Entity.enabled.is_(True),
+            )
+        ).scalars()
+    )
+    objetivo = list(dict.fromkeys(presentes + [company for company in restantes if company not in presentes]))
+    autorizadas = set(companias_autorizadas_por_accion(module, action))
+    if any(company not in autorizadas for company in objetivo):
+        _abort(403)
+
+
+def requiere_edicion_tercero(party_id: str, module: str) -> None:
+    """Guard de mutación de contactos/direcciones/roles de un tercero (#1282).
+
+    Exige permiso de edición del módulo y que el tercero tenga vínculo en
+    alguna compañía editable (los datos son compartidos entre compañías).
+    Para una transición de rol cruzado, ``module`` es el módulo cuyo rol se
+    concede o retira: Compras al habilitar un proveedor y Ventas al habilitar
+    un cliente.
+    """
+    from flask import abort as _abort
+
+    editable = companias_editables_de_modulo(module)
+    if not editable:
+        _abort(403)
+    if not tercero_tiene_vinculo_autorizado(party_id, editable):
+        _abort(403)
 
 
 @dataclass(frozen=True)
@@ -76,25 +191,81 @@ def party_group_label(group_id: str | None) -> str:
     return group.name if group else ""
 
 
-def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
+def find_party_group_by_name(name: str | None, role: str) -> PartyGroup | None:
+    """Resuelve un grupo activo por nombre exacto y rol compatible (#1048)."""
+    if role not in ("customer", "supplier"):
+        raise ValueError(_("El rol debe ser 'customer' o 'supplier'."))
+    text = (name or "").strip()
+    if not text:
+        return None
+    return database.session.execute(
+        database.select(PartyGroup).filter_by(group_type=role, name=text, is_active=True)
+    ).scalar_one_or_none()
+
+
+def normalize_person_type(value: str | None) -> str | None:
+    """Normaliza la clasificación de tercero a natural/juridical (#1048)."""
+    text = (value or "").strip().lower()
+    return text or None
+
+
+def _lock_party_group_for_write(group_id: str) -> None:
+    """Serializa cambios/asignaciones del grupo en SQLite; PG usa FOR UPDATE."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    connection = database.session.connection()
+    original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+    connection.exec_driver_sql("PRAGMA busy_timeout=1000")
+    try:
+        connection.exec_driver_sql("UPDATE party_group SET id = id WHERE id = ?", (group_id,))
+    except OperationalError as exc:
+        error_code = getattr(exc.orig, "sqlite_errorcode", None)
+        if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            raise
+        database.session.rollback()
+        raise ValueError(_("El grupo de terceros est? siendo modificado. Intente nuevamente.")) from exc
+    finally:
+        connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+
+
+def locked_party_group(group_id: str) -> PartyGroup | None:
+    """Carga el grupo emitiendo un SELECT FOR UPDATE que refresca el identity map.
+
+    ``Session.get(..., with_for_update=True)`` puede devolver una instancia ya
+    cargada sin emitir el bloqueo. La ruta administrativa y la asignación deben
+    validar el tipo vigente bajo el mismo ancla compartida.
+    """
+    _lock_party_group_for_write(group_id)
+    return database.session.execute(
+        database.select(PartyGroup)
+        .where(PartyGroup.id == group_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
+def validate_party_group(group_id: str | None, role: str, *, lock: bool = False) -> PartyGroup | None:
     """Valida que el grupo exista, este activo y corresponda al rol del tercero."""
     if not group_id:
         return None
     if role not in ("customer", "supplier"):
         raise ValueError(_("El rol debe ser 'customer' o 'supplier'."))
-    group = database.session.get(PartyGroup, group_id)
+    if lock:
+        group = locked_party_group(group_id)
+    else:
+        group = database.session.get(PartyGroup, group_id)
     if not group:
         raise ValueError(_("El tipo seleccionado no existe."))
     if group.group_type != role:
         raise ValueError(_("El tipo seleccionado no corresponde al tercero."))
     if not group.is_active:
-        raise ValueError(_("El tipo seleccionado no está activo."))
+        raise ValueError(_("El tipo seleccionado no est? activo."))
     return group
 
 
 def apply_party_group(party: Party, group_id: str | None, role: str) -> None:
     """Asigna el grupo segun el rol (customer/supplier)."""
-    group = validate_party_group(group_id, role)
+    group = validate_party_group(group_id, role, lock=True)
     party.party_group_id = group.id if group else None
 
 
@@ -167,13 +338,15 @@ def _compose_address_label(
     return ", ".join([part for part in parts if part])
 
 
-def build_party_detail_context(party: Party) -> PartyDetailContext:
-    """Construye el contexto completo del detalle de cliente/proveedor."""
-    company_rows = (
-        database.session.execute(select(CompanyParty).filter_by(party_id=party.id).order_by(CompanyParty.company))
-        .scalars()
-        .all()
-    )
+def build_party_detail_context(party: Party, authorized_companies: Iterable[str]) -> PartyDetailContext:
+    """Construye el detalle usando solo configuraciones de compañías autorizadas."""
+    company_scope = {str(company) for company in authorized_companies if str(company).strip()}
+    company_query = select(CompanyParty).filter_by(party_id=party.id)
+    if company_scope:
+        company_query = company_query.where(CompanyParty.company.in_(company_scope))
+    else:
+        company_query = company_query.where(database.false())
+    company_rows = database.session.execute(company_query.order_by(CompanyParty.company)).scalars().all()
     settings = [build_party_company_settings(party.id, row.company) for row in company_rows]
     return PartyDetailContext(
         group_label=party_group_label(party.party_group_id) or "",
@@ -226,12 +399,63 @@ def list_party_addresses(party_id: str) -> list[AddressRow]:
     ]
 
 
-def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Contact:
-    """Crea un contacto y lo vincula al tercero."""
+def _validated_contact_email(raw_email: str | None) -> str | None:
+    """Normaliza el correo o falla si no es válido según email-validator."""
+    email = (raw_email or "").strip()
+    if not email:
+        return None
+    try:
+        return validate_email(email, check_deliverability=False).normalized
+    except EmailNotValidError as exc:
+        raise ValueError(_("El correo electrónico del contacto no es válido.")) from exc
+
+
+def validated_party_name(values: Mapping[str, str | None]) -> str:
+    """Devuelve el nombre del tercero o falla si viene vacío."""
+    name = (values.get("name") or "").strip()
+    if not name:
+        raise ValueError(_("El nombre del tercero es obligatorio."))
+    return name
+
+
+def validated_party_tax_id(values: Mapping[str, str | None], *, exclude_party_id: str | None = None) -> str | None:
+    """Devuelve la identificación fiscal o falla si ya pertenece a otro tercero."""
+    from cacao_accounting.party_identity import find_party_by_tax_id
+
+    tax_id = (values.get("tax_id") or "").strip()
+    if not tax_id:
+        return None
+    if find_party_by_tax_id(tax_id, exclude_party_id=exclude_party_id) is not None:
+        raise ValueError(_("Ya existe un tercero con ese identificador fiscal."))
+    return tax_id
+
+
+def _contact_company_for_party(party_id: str, company: str | None = None) -> str:
+    """Resuelve y valida la compañía explícita de un vínculo de contacto (#1777)."""
+    from cacao_accounting.company_context import get_active_company
+
+    target = (company or get_active_company() or "").strip()
+    if not target:
+        raise ValueError(_("La compañía del contacto es obligatoria."))
+    link = database.session.execute(
+        select(CompanyParty.id).where(
+            CompanyParty.party_id == party_id,
+            CompanyParty.company == target,
+            CompanyParty.is_active.is_(True),
+        )
+    ).first()
+    if link is None:
+        raise ValueError(_("El tercero no está habilitado para la compañía seleccionada."))
+    return target
+
+
+def create_party_contact(party_id: str, values: Mapping[str, str | None], company: str | None = None) -> Contact:
+    """Crea un contacto y lo vincula al tercero en una compañía explícita."""
+    target_company = _contact_company_for_party(party_id, company)
     contact = Contact(
         first_name=(values.get("first_name") or "").strip(),
         last_name=(values.get("last_name") or "").strip() or None,
-        email=(values.get("email") or "").strip() or None,
+        email=_validated_contact_email(values.get("email")),
         phone=(values.get("phone") or "").strip() or None,
         mobile=(values.get("mobile") or "").strip() or None,
         is_active=True,
@@ -240,13 +464,36 @@ def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Con
         raise ValueError(_("El nombre del contacto es obligatorio."))
     database.session.add(contact)
     database.session.flush()
-    database.session.add(PartyContact(party_id=party_id, contact_id=contact.id, role=(values.get("role") or "") or None))
+    database.session.add(
+        PartyContact(
+            party_id=party_id,
+            contact_id=contact.id,
+            company=target_company,
+            role=(values.get("role") or "") or None,
+        )
+    )
     return contact
 
 
-def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str | None]) -> Contact:
-    """Actualiza un contacto vinculado al tercero."""
+def _assert_contact_not_shared(link: PartyContact) -> None:
+    """Impide editar un contacto compartido entre compañías (#1777)."""
+    other = database.session.execute(
+        select(PartyContact.id).where(
+            PartyContact.contact_id == link.contact_id,
+            PartyContact.id != link.id,
+        )
+    ).first()
+    if other is not None:
+        raise ValueError(_("El contacto está compartido con otra compañía; registre uno propio."))
+
+
+def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str | None], company: str | None = None) -> Contact:
+    """Actualiza un contacto vinculado al tercero dentro de su compañía."""
     link = _party_contact_link(party_id, link_id)
+    target_company = _contact_company_for_party(party_id, company)
+    if link.company != target_company:
+        raise ValueError(_("El contacto no pertenece a la compañía seleccionada."))
+    _assert_contact_not_shared(link)
     contact = database.session.get(Contact, link.contact_id)
     if not contact:
         raise ValueError(_("Contacto no encontrado."))
@@ -255,7 +502,7 @@ def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str |
         raise ValueError(_("El nombre del contacto es obligatorio."))
     contact.first_name = first_name
     contact.last_name = (values.get("last_name") or "").strip() or None
-    contact.email = (values.get("email") or "").strip() or None
+    contact.email = _validated_contact_email(values.get("email"))
     contact.phone = (values.get("phone") or "").strip() or None
     contact.mobile = (values.get("mobile") or "").strip() or None
     link.role = (values.get("role") or "").strip() or None
@@ -324,16 +571,6 @@ def deactivate_party_address(party_id: str, link_id: str) -> None:
         address.is_active = False
 
 
-def party_account_labels(party_id: str, company: str) -> tuple[str, str]:
-    """Devuelve las etiquetas de cuentas AR/AP configuradas para un tercero."""
-    record = database.session.execute(select(PartyAccount).filter_by(party_id=party_id, company=company)).scalar_one_or_none()
-    if not record:
-        return "", ""
-    receivable = database.session.get(Accounts, record.receivable_account_id) if record.receivable_account_id else None
-    payable = database.session.get(Accounts, record.payable_account_id) if record.payable_account_id else None
-    return account_label(receivable), account_label(payable)
-
-
 def _party_contact_link(party_id: str, link_id: str) -> PartyContact:
     link = database.session.get(PartyContact, link_id)
     if not link or link.party_id != party_id:
@@ -355,13 +592,40 @@ def generate_party_code(party_id: str, company: str | None, role: str) -> str:
     return generate_entity_code(entity_type=role, entity_id=party_id, company=company)
 
 
-def build_party_code(party_id: str, company: str | None, role: str) -> str:
-    """Obtiene o genera el codigo para un tercero."""
-    return generate_party_code(party_id, company, role)
-
-
 class PartyRoleToggleError(ValueError):
     """Error al togglear rol de tercero."""
+
+
+def _toggle_party_role(party: Party, field: str, enable: bool, user_id: str | None, label: str) -> Party:
+    """Persist the party role with its actor and audit evidence."""
+    from cacao_accounting.audit_trail_service import log_update
+    from cacao_accounting.database import User
+    from cacao_accounting.internal_control_service import audit_actor
+
+    before = {
+        "is_supplier": bool(party.is_supplier),
+        "is_customer": bool(party.is_customer),
+        "modified_by": party.modified_by,
+    }
+    setattr(party, field, bool(enable))
+    party.modified_by = user_id
+    database.session.add(party)
+    database.session.flush()
+    after = {
+        "is_supplier": bool(party.is_supplier),
+        "is_customer": bool(party.is_customer),
+        "modified_by": party.modified_by,
+    }
+    actor = database.session.get(User, user_id) if user_id else None
+    actor_name = getattr(actor, "name", None) or user_id or "system"
+    with audit_actor(user_id, str(actor_name)):
+        log_update(
+            party,
+            before=before,
+            after=after,
+            comment=_("Cambio de rol de %(role)s.") % {"role": label},
+        )
+    return party
 
 
 def toggle_party_supplier_role(party_id: str, enable: bool, user_id: str | None = None) -> Party:
@@ -388,14 +652,7 @@ def toggle_party_supplier_role(party_id: str, enable: bool, user_id: str | None 
     if not enable and not party.is_supplier:
         raise PartyRoleToggleError(_("El tercero no es proveedor."))
 
-    if enable:
-        party.is_supplier = True
-    else:
-        party.is_supplier = False
-
-    database.session.add(party)
-    database.session.flush()
-    return party
+    return _toggle_party_role(party, "is_supplier", enable, user_id, "proveedor")
 
 
 def toggle_party_customer_role(party_id: str, enable: bool, user_id: str | None = None) -> Party:
@@ -422,11 +679,4 @@ def toggle_party_customer_role(party_id: str, enable: bool, user_id: str | None 
     if not enable and not party.is_customer:
         raise PartyRoleToggleError(_("El tercero no es cliente."))
 
-    if enable:
-        party.is_customer = True
-    else:
-        party.is_customer = False
-
-    database.session.add(party)
-    database.session.flush()
-    return party
+    return _toggle_party_role(party, "is_customer", enable, user_id, "cliente")

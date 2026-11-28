@@ -29,10 +29,6 @@ from cacao_accounting.logs import log
 MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales", "imports"]
 
 
-class RegistroPermisosRol:
-    """Administracion de Permisos por rol."""
-
-
 class Permisos:
     """
     Administración de Permisos.
@@ -73,9 +69,13 @@ class Permisos:
         "editar": "edit",
         "eliminar": "delete",
         "importar": "import_",
+        "listar": "view",
         "reportes": "report",
         "solicitar": "request",
         "validar": "validate",
+        # El modelo solo tiene el campo `validate`; el diagnóstico documenta
+        # ambos nombres y deben reflejar el mismo permiso (#1576).
+        "validar_solicitud": "validate",
     }
 
     access: bool
@@ -91,9 +91,11 @@ class Permisos:
     editar: bool
     eliminar: bool
     importar: bool
+    listar: bool
     reportes: bool
     solicitar: bool
     validar: bool
+    validar_solicitud: bool
 
     def __init__(
         self,
@@ -107,7 +109,7 @@ class Permisos:
         self.libro = libro
         self.__init_valido = bool(self.valida_modulo(modulo) and usuario)
         self.usuario_model = database.session.get(User, usuario) if usuario else None
-        if self.usuario_model is None or self.usuario_model.active is False:
+        if self.usuario_model is None or self.usuario_model.active is not True:
             self.__init_valido = False
         self.roles: list[str] = []
         self.permisos_usuario: list[RolesAccess] = []
@@ -158,7 +160,7 @@ class Permisos:
 
     def obtener_roles_de_usuario(self) -> list[str]:
         """Devuelve una lista con los roles del usuario."""
-        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_not(False))]
+        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_(True))]
 
     def obtener_id_rol_administrador(self) -> str | None:
         """Devuelve el UUID asignado al rol administrador."""
@@ -174,9 +176,7 @@ class Permisos:
         if not admin_role_id or not self.usuario:
             return False
         return (
-            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario)
-            .filter(RolesUser.active.is_not(False))
-            .first()
+            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario).filter(RolesUser.active.is_(True)).first()
             is not None
         )
 
@@ -199,13 +199,20 @@ class Permisos:
         return False
 
     def tiene_acceso_compania(self, company: str | None) -> bool:
-        """Indica si el usuario puede operar dentro de una compañía."""
+        """Indica si el usuario puede operar dentro de una compañía.
+
+        #1828: en Cloud la clasificación admin no concede compañías por sí
+        sola; el acceso debe estar en ``UserCompanyAccess``. Desktop conserva
+        el bypass de administrador porque opera con una sola compañía.
+        """
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
         if not company or not self.usuario:
             return False
         entity = database.session.execute(select(Entity).where(Entity.code == company)).scalar_one_or_none()
         if entity is None or not entity.enabled:
             return False
-        if self.administrador:
+        if self.administrador and is_desktop_mode():
             return True
         return (
             database.session.execute(
@@ -222,10 +229,15 @@ class Permisos:
 
     def obtener_companias_autorizadas(self) -> list[str]:
         """Retorna los códigos de compañía asignados al usuario actual."""
-        if self.administrador:
-            return list(
-                database.session.execute(select(Entity.code).where(Entity.enabled.is_(True)).order_by(Entity.code)).scalars()
-            )
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
+        if self.administrador and is_desktop_mode():
+            # Desktop opera con una sola compañía por diseño: la asignada al
+            # usuario. Enumerar las entidades habilitadas hacía que
+            # `get_active_company()` eligiera la primera por orden alfabético,
+            # que puede ser otra compañía presente en la base.
+            company = str(getattr(self.usuario_model, "company", "") or "")
+            return [company] if company else []
         if not self.usuario:
             return []
         return list(
@@ -614,11 +626,19 @@ def cargar_permisos_predeterminados() -> None:
         CONTROLLER,
         BI,
     ]
+    existentes = {
+        (fila.rol_id, fila.module_id)
+        for fila in database.session.execute(select(RolesAccess.rol_id, RolesAccess.module_id)).all()
+    }
+    pendientes: list[RolesAccess] = []
     for permisos in PERMISOS_PREDETERMINADOS:
-        if isinstance(permisos, list):
-            for MODULO in permisos:
-                database.session.add(MODULO)
-                database.session.commit()
-        else:
-            database.session.add(permisos)
-            database.session.commit()
+        candidatos = permisos if isinstance(permisos, list) else [permisos]
+        for permiso in candidatos:
+            clave = (permiso.rol_id, permiso.module_id)
+            if clave in existentes:
+                continue
+            existentes.add(clave)
+            pendientes.append(permiso)
+    if pendientes:
+        database.session.add_all(pendientes)
+        database.session.commit()

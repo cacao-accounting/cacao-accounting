@@ -5,28 +5,37 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 
 from cacao_accounting.database import (
     AccountingPeriod,
     BankAccount,
     BankTransaction,
+    ComprobanteContable,
     DocumentRelation,
     DocumentTransition,
+    GLEntry,
+    ImportLandedCost,
     LandedCostAllocation,
     PaymentEntry,
     PaymentReference,
+    PurchaseCreditNoteAllocation,
     PurchaseInvoice,
+    PurchaseInvoiceItem,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
     ReconciliationItem,
     StockValuationLayer,
     User,
-    WithholdingCertificate,
     database,
 )
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, parse_posting_date
 
 
@@ -137,8 +146,8 @@ def _resolve_effective_dates(request: CancellationRequest, document: Any) -> tup
         effective_date = parse_posting_date(request.effective_date) if request.effective_date is not None else original_date
     except IdentifierConfigurationError as exc:
         raise CancellationPolicyError(str(exc)) from exc
-    if effective_date < original_date:
-        raise CancellationPolicyError(_("La fecha de anulación no puede ser anterior a la fecha original."))
+    if effective_date != original_date:
+        raise CancellationPolicyError(_("La fecha de anulación debe coincidir con la fecha de contabilización del documento."))
     return original_date, effective_date
 
 
@@ -169,15 +178,26 @@ def _validate_dependencies(document: Any, source_type: str, source_id: str) -> N
 
 def _ensure_no_previous_cancellation(source_type: str, source_id: str) -> None:
     """Enforce cancellation idempotency before writing the transition."""
-    existing = database.session.execute(
-        select(DocumentTransition.id).where(
+    transitions = database.session.execute(
+        select(DocumentTransition).where(
             DocumentTransition.source_type == source_type,
             DocumentTransition.source_id == source_id,
-            DocumentTransition.transition_type.in_(("cancellation", "reversal")),
         )
-    ).scalar_one_or_none()
-    if existing is not None:
-        raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
+    ).scalars()
+    for transition in transitions:
+        if transition.transition_type == "cancellation":
+            raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
+        if transition.transition_type != "reversal" and not transition.transition_type.startswith(
+            JOURNAL_REVERSAL_RETRY_PREFIX
+        ):
+            continue
+        if transition.target_type != "journal_entry" or not transition.target_id:
+            raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == transition.target_id)
+        ).scalar_one_or_none()
+        if target_status != "rejected":
+            raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
 
 
 def active_cancellation_dependencies(document: Any, source_type: str, source_id: str) -> list[CancellationDependency]:
@@ -228,33 +248,66 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
             CancellationDependency("conciliacion bancaria", str(row.id), "reconciliation_item") for row in reconciliation_rows
         )
 
-    if isinstance(document, PaymentEntry):
-        # Las referencias del pago son efectos internos reversibles. El hook de
-        # cancelación revierte sus relaciones y refresca los saldos afectados;
-        # bloquearlas aquí haría imposible cancelar cualquier pago aplicado.
-        certificates = database.session.execute(
-            select(WithholdingCertificate).where(
-                WithholdingCertificate.payment_id == source_id,
-                WithholdingCertificate.status != "cancelled",
-            )
-        ).scalars()
-        dependencies.extend(
-            CancellationDependency("certificado de retencion", str(row.id), "withholding_certificate") for row in certificates
+    # #1316: una partida bancaria puede conciliarse contra una línea GL del
+    # documento. Anular el documento dejaría esa partida apuntando a una línea
+    # cancelada y el movimiento bancario seguiría consumido.
+    gl_documents = select(GLEntry.id).where(
+        GLEntry.voucher_id == source_id,
+        GLEntry.is_cancelled.is_(False),
+    )
+    company = getattr(document, "company", None) or getattr(document, "entity", None)
+    if company:
+        gl_documents = gl_documents.where(GLEntry.company == company)
+    reconciliation_gl_rows = database.session.execute(
+        select(ReconciliationItem).where(
+            ReconciliationItem.target_type == "gl_entry",
+            ReconciliationItem.target_id.in_(gl_documents),
+            ReconciliationItem.status.not_in(("cancelled", "reverted", "closed")),
         )
+    ).scalars()
+    dependencies.extend(
+        CancellationDependency("conciliacion bancaria", str(row.id), "reconciliation_item") for row in reconciliation_gl_rows
+    )
 
-    if isinstance(document, PurchaseInvoice):
-        allocations = database.session.execute(
-            select(LandedCostAllocation.id).where(
-                LandedCostAllocation.document_type.in_(source_types),
-                LandedCostAllocation.document_id == source_id,
-            )
-        ).scalars()
-        dependencies.extend(
-            CancellationDependency("costo capitalizable", str(row), "landed_cost_allocation") for row in allocations
-        )
+    if isinstance(document, ImportLandedCost):
+        dependencies.extend(_landed_cost_consumption_dependencies(document, source_types, source_id))
+
+    if isinstance(document, PurchaseReceipt) and document.is_return:
+        dependencies.extend(_physical_return_credit_note_dependencies(document, source_id))
 
     dependencies.extend(_consumed_stock_dependencies(document, source_type, source_id))
     return dependencies
+
+
+def _physical_return_credit_note_dependencies(document: PurchaseReceipt, source_id: str) -> list[CancellationDependency]:
+    """Block return cancellation while an active physical credit note uses it."""
+    note_rows = database.session.execute(
+        select(PurchaseInvoice.id, PurchaseInvoice.document_no)
+        .join(PurchaseInvoiceItem, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
+        .join(
+            PurchaseCreditNoteAllocation,
+            PurchaseCreditNoteAllocation.credit_note_item_id == PurchaseInvoiceItem.id,
+        )
+        .join(PurchaseReceiptItem, PurchaseReceiptItem.id == PurchaseCreditNoteAllocation.return_receipt_item_id)
+        .where(
+            PurchaseReceiptItem.purchase_receipt_id == source_id,
+            PurchaseCreditNoteAllocation.company == document.company,
+            PurchaseCreditNoteAllocation.allocation_type == "physical_return",
+            PurchaseCreditNoteAllocation.status == "active",
+            PurchaseInvoice.document_type == "purchase_credit_note",
+            PurchaseInvoice.credit_note_type == "physical_return",
+            PurchaseInvoice.docstatus == 1,
+        )
+        .distinct()
+    ).all()
+    return [
+        CancellationDependency(
+            "nota de crédito física activa",
+            str(note_no or note_id),
+            _("nota de crédito física activa"),
+        )
+        for note_id, note_no in note_rows
+    ]
 
 
 def _relation_dependencies(relations: Any) -> list[CancellationDependency]:
@@ -299,13 +352,14 @@ def _period_for_date(company: str, posting_date: date) -> AccountingPeriod:
 
 
 def _consumed_stock_dependencies(document: Any, source_type: str, source_id: str) -> list[CancellationDependency]:
-    """Detecta consumo posterior de capas generadas por el documento."""
+    """Detecta consumo posterior de capas o lotes generados por el documento."""
     if not hasattr(document, "__tablename__") or str(document.__tablename__) not in {
         "stock_entry",
         "purchase_receipt",
         "delivery_note",
     }:
         return []
+
     layer_ids = (
         database.session.execute(
             select(StockValuationLayer.id).where(
@@ -317,13 +371,174 @@ def _consumed_stock_dependencies(document: Any, source_type: str, source_id: str
         .scalars()
         .all()
     )
-    if not layer_ids:
-        return []
-    consumed = database.session.execute(
-        select(StockValuationLayer).where(
-            StockValuationLayer.source_layer_id.in_(layer_ids),
-            StockValuationLayer.qty < 0,
-            StockValuationLayer.voucher_id != source_id,
+    dependencies: list[CancellationDependency] = []
+    seen: set[tuple[str, str]] = set()
+    if layer_ids:
+        consumed = database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.source_layer_id.in_(layer_ids),
+                StockValuationLayer.qty < 0,
+                StockValuationLayer.voucher_id != source_id,
+            )
+        ).scalars()
+        for row in consumed:
+            key = (str(row.voucher_type), str(row.voucher_id))
+            if key in seen or not _stock_consumption_is_active(row.voucher_type, row.voucher_id):
+                continue
+            seen.add(key)
+            dependencies.append(CancellationDependency("consumo de inventario", key[1], key[0]))
+
+    from cacao_accounting.database import StockLedgerEntry
+
+    inbound_batches = database.session.execute(
+        select(
+            StockLedgerEntry.company,
+            StockLedgerEntry.item_code,
+            StockLedgerEntry.warehouse,
+            StockLedgerEntry.batch_id,
+        )
+        .where(
+            StockLedgerEntry.voucher_type == source_type,
+            StockLedgerEntry.voucher_id == source_id,
+            StockLedgerEntry.is_cancelled.is_(False),
+            StockLedgerEntry.qty_change > 0,
+            StockLedgerEntry.batch_id.is_not(None),
+        )
+        .distinct()
+    ).all()
+    dependencies.extend(_batch_consumption_dependencies(inbound_batches, source_id, seen))
+
+    return dependencies
+
+
+def _batch_consumption_dependencies(
+    inbound_batches: Any, source_id: str, seen: set[tuple[str, str]]
+) -> list[CancellationDependency]:
+    """Detecta dependencias reales por lote usando el saldo diario sin el documento.
+
+    #2343: una salida anterior al ingreso no depende de él solo por compartir
+    lote. Se reconstruye el saldo diario del lote excluyendo el documento: si el
+    acumulado nunca es negativo, la cancelación no crea stock negativo y no hay
+    dependencia real. Los movimientos del mismo día se netean porque su orden
+    intra-día no es auditable.
+    """
+    from cacao_accounting.database import StockLedgerEntry
+
+    dependencies: list[CancellationDependency] = []
+    for company, item_code, warehouse, batch_id in inbound_batches:
+        lot_rows = database.session.execute(
+            select(
+                StockLedgerEntry.voucher_type,
+                StockLedgerEntry.voucher_id,
+                StockLedgerEntry.qty_change,
+                StockLedgerEntry.posting_date,
+            ).where(
+                StockLedgerEntry.company == company,
+                StockLedgerEntry.item_code == item_code,
+                StockLedgerEntry.warehouse == warehouse,
+                StockLedgerEntry.batch_id == batch_id,
+                StockLedgerEntry.is_cancelled.is_(False),
+                StockLedgerEntry.voucher_id != source_id,
+            )
+        ).all()
+        if _daily_lot_balance_is_non_negative(lot_rows):
+            continue
+        for voucher_type, voucher_id, qty_change, _posting_date in lot_rows:
+            if Decimal(str(qty_change)) >= 0:
+                continue
+            key = (str(voucher_type), str(voucher_id))
+            if key in seen or not _stock_consumption_is_active(key[0], key[1]):
+                continue
+            seen.add(key)
+            dependencies.append(CancellationDependency("consumo de inventario por lote", key[1], key[0]))
+    return dependencies
+
+
+def _daily_lot_balance_is_non_negative(lot_rows: Any) -> bool:
+    """Suma por fecha los movimientos del lote y descarta saldos negativos."""
+    daily: dict[date, Decimal] = {}
+    for _voucher_type, _voucher_id, qty_change, posting_date in lot_rows:
+        daily[posting_date] = daily.get(posting_date, Decimal("0")) + Decimal(str(qty_change))
+    saldo = Decimal("0")
+    for dia in sorted(daily):
+        saldo += daily[dia]
+        if saldo < 0:
+            return False
+    return True
+
+
+def _stock_consumption_is_active(voucher_type: str, voucher_id: str) -> bool:
+    """Fail closed when the consumer cannot be resolved; ignore drafts/cancelled vouchers."""
+    from cacao_accounting.document_flow.registry import get_document_type
+
+    try:
+        document_type = get_document_type(voucher_type)
+    except ValueError:
+        return True
+    consumer = database.session.get(document_type.header_model, voucher_id)
+    if consumer is None:
+        return True
+    return getattr(consumer, "docstatus", None) not in (0, 2)
+
+
+def _landed_cost_consumption_dependencies(
+    document: ImportLandedCost,
+    source_types: set[str],
+    source_id: str,
+) -> list[CancellationDependency]:
+    """Block landed-cost cancellation when later active outflows consumed stock."""
+    allocations = database.session.execute(
+        select(LandedCostAllocation).where(
+            LandedCostAllocation.company == _document_company(document),
+            LandedCostAllocation.document_type.in_(source_types),
+            LandedCostAllocation.document_id == source_id,
         )
     ).scalars()
-    return [CancellationDependency("consumo de inventario", str(row.voucher_id), str(row.voucher_type)) for row in consumed]
+    dependencies: list[CancellationDependency] = []
+    seen: set[tuple[str, str]] = set()
+    for allocation in allocations:
+        allocated_layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
+        if allocated_layer is None:
+            continue
+        later_consumption = database.session.execute(
+            select(StockValuationLayer)
+            .where(
+                StockValuationLayer.company == allocation.company,
+                StockValuationLayer.item_code == allocation.item_code,
+                StockValuationLayer.warehouse == allocation.warehouse,
+                StockValuationLayer.qty < 0,
+                or_(
+                    StockValuationLayer.posting_date > allocated_layer.posting_date,
+                    and_(
+                        StockValuationLayer.posting_date == allocated_layer.posting_date,
+                        StockValuationLayer.id > allocated_layer.id,
+                    ),
+                ),
+            )
+            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+        ).scalars()
+        for layer in later_consumption:
+            key = (str(layer.voucher_type), str(layer.voucher_id))
+            if key in seen or not _stock_consumption_is_active(*key):
+                continue
+            if _landed_cost_movement_is_attributed(layer):
+                # La salida registró su share del costo capitalizado; la
+                # reversión puede separar inventario remanente de costo consumido.
+                continue
+            seen.add(key)
+            dependencies.append(CancellationDependency("consumo de inventario", key[1], key[0]))
+    return dependencies
+
+
+def _landed_cost_movement_is_attributed(layer: StockValuationLayer) -> bool:
+    """Indica si una salida publicó evidencia de atribución del costo capitalizado."""
+    raw = getattr(layer, "consumed_layers", None)
+    if not raw:
+        return False
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(payload, list) or not payload:
+        return False
+    return all(isinstance(entry, dict) and entry.get("landed_attributed") for entry in payload)

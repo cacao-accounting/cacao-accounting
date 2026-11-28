@@ -55,11 +55,13 @@ class PrintTemplate(database.Model):  # type: ignore[name-defined]
     )
 
     __table_args__ = (
-        database.UniqueConstraint(
-            "company_code",
+        database.Index(
+            "uq_print_template_company_document_code",
+            database.func.coalesce(database.literal_column("company_code IS NOT NULL"), database.false()),
+            database.func.coalesce(database.literal_column("company_code"), ""),
             "document_type",
             "code",
-            name="uq_print_template_company_document_code",
+            unique=True,
         ),
     )
 
@@ -126,6 +128,10 @@ class PublicDocumentValidation(database.Model):  # type: ignore[name-defined]
     """Modelo para la validación pública de documentos mediante QR."""
 
     __tablename__ = "public_document_validations"
+
+    # #2131: un documento tiene una sola fila de validación. Sin constraint, dos
+    # posteos concurrentes duplicaban la fila y el QR resolvía con .first().
+    __table_args__ = (database.UniqueConstraint("document_type", "document_id", name="uq_public_validation_document"),)
 
     id = database.Column(database.Integer, primary_key=True)
 

@@ -27,14 +27,19 @@
     <input type="hidden" id="{{ field_id or name }}" name="{{ name }}" x-model="selectedValue">
     <div class="ca-smart-select-input-wrap">
       <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus"
-        @blur="closeSoon" :placeholder="messages.placeholder">
+        @blur="closeSoon" :placeholder="messages.placeholder" role="combobox" aria-autocomplete="list"
+        :aria-expanded="open" :aria-controls="name + '-listbox'"
+        :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null">
       <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
         :title="messages.clear">×</button>
     </div>
-    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
       <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-      <template x-for="option in options" :key="option.value">
-        <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+      <template x-for="(option, index) in options" :key="option.value">
+        <button class="ca-smart-select-option" type="button" role="option"
+          :id="name + '-option-' + index" :aria-selected="index === highlightedIndex"
+          :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+          @click="selectOption(option)" @blur="closeSoon">
           <span x-text="option.display_name"></span>
         </button>
       </template>

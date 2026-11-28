@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div
@@ -9,7 +9,7 @@
 </div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -55,17 +55,11 @@
   {{ tf_macros.logistics_section(terms_field="sales_terms") }}
 
     {% if from_quotation_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=sales_quotation&target_type=sales_order&source_id=" ~ from_quotation_id ~ "&company=" ~ cotizacion_origen.company,
-         source_label="Cotización",
-         warehouses_disponibles=bodegas_disponibles) }}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=sales_quotation&target_type=sales_order&source_id=" ~ from_quotation_id ~ "&company=" ~ cotizacion_origen.company) }}
     {% elif from_request_id %}
-    {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-      source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_order&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company,
-      source_label="Pedido de Venta",
-      warehouses_disponibles=bodegas_disponibles) }}
+    {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_order&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company) }}
   {% else %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, warehouses_disponibles=bodegas_disponibles) }}
+  {{ tf_macros.transaction_grid() }}
   {% endif %}
 </form>
 

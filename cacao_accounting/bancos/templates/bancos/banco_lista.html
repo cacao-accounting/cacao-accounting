@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/banco_lista.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
@@ -37,6 +37,12 @@
         <td><a class="fw-bold" href="{{ url_for('bancos.bancos_banco', bank_id=item.id) }}">{{ item.name }}</a></td>
         <td>{{ item.swift_code or "" }}</td>
         <td>{{ _('Sí') if item.is_active else _('No') }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="3" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron bancos para los filtros seleccionados.') }}
+        </td>
       </tr>
       {%- endfor %}
     </tbody>

@@ -4,7 +4,6 @@
 """Controlador de rutas para el Pronóstico de Flujo de Caja."""
 
 from datetime import date
-from decimal import Decimal
 from urllib.parse import unquote, urlsplit
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -24,9 +23,13 @@ from cacao_accounting.contabilidad.auxiliares import (
 )
 from cacao_accounting.bancos.cash_forecast_service import (
     CashForecastConversionError,
+    _resolve_company_currency,
     get_cash_forecast_matrix,
     get_forecast_comparison,
+    out_of_range_forecast_entries,
+    validate_forecast_entry_date,
 )
+from cacao_accounting.numbers import coerce_decimal
 
 from cacao_accounting.i18n import _, _l
 
@@ -81,7 +84,7 @@ def cash_forecast_list():
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
     if company in (None, "") and companies:
-        for code, name in companies:
+        for code, _name in companies:
             if code:
                 company = code
                 break
@@ -109,7 +112,7 @@ def cash_forecast_new():
     companies = obtener_lista_entidades_por_id_razonsocial()
     company = request.args.get("company") or request.form.get("company")
     if company in (None, "") and companies:
-        for code, name in companies:
+        for code, _name in companies:
             if code:
                 company = code
                 break
@@ -127,6 +130,7 @@ def cash_forecast_new():
         companies=companies,
         selected_company=company,
         fiscal_years=fiscal_years,
+        submitted=request.form if request.method == "POST" else None,
         titulo=_("Nuevo Pronóstico de Flujo de Caja"),
     )
 
@@ -141,6 +145,12 @@ def _handle_cash_forecast_new_post(company: str):
 
     if not version or not fiscal_year_id or not periodicity:
         flash(_("Todos los campos obligatorios deben ser completados."), "danger")
+        return None
+
+    from cacao_accounting.bancos.cash_forecast_service import CASH_FORECAST_PERIODICITIES
+
+    if periodicity not in CASH_FORECAST_PERIODICITIES:
+        flash(_("La periodicidad debe ser semanal o mensual."), "danger")
         return None
 
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
@@ -208,6 +218,7 @@ def cash_forecast_detail(forecast_id):
         currencies=currencies,
         matrix=matrix,
         entries=entries,
+        out_of_range_entries=out_of_range_forecast_entries(forecast),
         titulo=_("Pronóstico de Flujo de Caja:") + " " + forecast.version,
     )
 
@@ -323,13 +334,14 @@ def cash_forecast_entry_add(forecast_id):
         type_ = _normalize_cash_forecast_entry_type(request.form.get("type"))
         concept = request.form.get("concept", "").strip()
         currency = request.form.get("currency")
-        amount = Decimal(request.form.get("amount", "0"))
+        amount = coerce_decimal(request.form.get("amount", "0"), "monto", positive=True)
         estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
         notes = request.form.get("notes", "").strip()
 
-        if not concept or not currency or amount <= 0 or not estimated_date:
+        if not concept or not currency or not estimated_date:
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
+            validate_forecast_entry_date(forecast, estimated_date)
             entry = CashForecastEntry(
                 forecast_id=forecast.id,
                 type=type_,
@@ -452,6 +464,7 @@ def cash_forecast_compare():
         base_forecast=base_forecast,
         compare_forecast=compare_forecast,
         comparison=comparison,
+        currency=_resolve_company_currency(str(company or "")),
         titulo=_("Comparación de Escenarios de Flujo de Caja"),
     )
 
@@ -467,7 +480,7 @@ def cash_forecast_manual_entries():
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
     if company in (None, "") and companies:
-        for code, name in companies:
+        for code, _name in companies:
             if code:
                 company = code
                 break
@@ -532,13 +545,14 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         type_ = _normalize_cash_forecast_entry_type(request.form.get("type"))
         concept = request.form.get("concept", "").strip()
         currency = request.form.get("currency")
-        amount = Decimal(request.form.get("amount", "0"))
+        amount = coerce_decimal(request.form.get("amount", "0"), "monto", positive=True)
         estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
         notes = request.form.get("notes", "").strip()
 
-        if not concept or not currency or amount <= 0 or not estimated_date:
+        if not concept or not currency or not estimated_date:
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
+            validate_forecast_entry_date(forecast, estimated_date)
             entry.type = type_
             entry.concept = concept
             entry.currency = currency

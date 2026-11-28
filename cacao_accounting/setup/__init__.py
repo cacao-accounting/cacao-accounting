@@ -11,7 +11,9 @@
 # ---------------------------------------------------------------------------------------
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import login_required
+from sqlalchemy.exc import SQLAlchemyError
 
+from cacao_accounting.database import database
 from cacao_accounting.setup.forms import (
     SetupCompanyForm,
     SetupLanguageForm,
@@ -23,8 +25,10 @@ from cacao_accounting.setup.catalogs import (
 )
 from cacao_accounting.setup.service import (
     available_currencies,
+    SetupAlreadyComplete,
     finalize_setup,
     get_setup_configuration,
+    is_setup_complete,
     save_language,
     save_regional_settings,
 )
@@ -43,8 +47,19 @@ SETUP_ROUTE = "setup.setup"
 @setup_.route("/", methods=["GET", "POST"])
 @login_required
 def setup():
-    """Configuración inicial."""
-    step = int(session.get("setup_step", 1))
+    """Configuración inicial.
+
+    El asistente pertenece a la primera instalación: solo la administración
+    del sistema puede ejecutarlo y queda sellado una vez marcado
+    ``SETUP_COMPLETE``, dejando la creación de compañías en el módulo
+    de administración.
+    """
+    if is_setup_complete():
+        return redirect(url_for("cacao_app.pagina_inicio"))
+    from cacao_accounting.admin.services import _require_system_admin  # noqa: PLC0415
+
+    _require_system_admin()
+    step = _current_setup_step()
     setup_data = get_setup_configuration()
     language = setup_data.get("idioma", "es")
 
@@ -64,6 +79,16 @@ def setup():
         currencies=available_currencies(),
         **template_context,
     )
+
+
+def _current_setup_step() -> int:
+    """Devuelve el paso vigente del asistente, tolerando una sesión corrupta."""
+    raw_step = session.get("setup_step", 1)
+    try:
+        step = int(raw_step)
+    except (TypeError, ValueError):
+        return 1
+    return step if step in {1, 2, 3} else 1
 
 
 def _handle_setup_post(step: int, setup_data: dict[str, str]) -> object | None:
@@ -120,7 +145,8 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
     texts = setup_texts(setup_data.get("idioma"))
     form = SetupCompanyForm(language=setup_data.get("idioma"))
     if not form.validate_on_submit():
-        flash(texts["invalid_company"], "danger")
+        first_error = next((error for field in form for error in field.errors), None)
+        flash(first_error or texts["invalid_company"], "danger")
         return None
 
     company_data = _build_company_data(form, setup_data)
@@ -130,15 +156,34 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
         flash(texts["catalog_required"], "danger")
         return None
 
-    finalize_setup(
-        company_data,
-        catalogo_tipo,
-        setup_data.get("pais", "NI"),
-        setup_data.get("idioma", "es"),
-        catalogo_archivo,
-    )
+    petty_cash_ready = True
+    try:
+        petty_cash_ready = finalize_setup(
+            company_data,
+            catalogo_tipo,
+            setup_data.get("pais", "NI"),
+            setup_data.get("idioma", "es"),
+            catalogo_archivo,
+        )
+    except SetupAlreadyComplete:
+        database.session.rollback()
+        session.pop("setup_step", None)
+        flash(texts["setup_complete"], "success")
+        return redirect(url_for("cacao_app.pagina_inicio"))
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc) or texts["invalid_company"], "danger")
+        return None
+    except SQLAlchemyError:
+        database.session.rollback()
+        flash(texts["invalid_company"], "danger")
+        return None
     session.pop("setup_step", None)
     flash(texts["setup_complete"], "success")
+    # #1265: informar cuando el fondo predeterminado no se pudo crear por falta
+    # de una cuenta de caja chica utilizable.
+    if not petty_cash_ready:
+        flash(texts["petty_cash_not_created"], "warning")
     return redirect(url_for("cacao_app.pagina_inicio"))
 
 
@@ -151,6 +196,7 @@ def _build_company_data(form: SetupCompanyForm, setup_data: dict[str, str]) -> d
         "id_fiscal": form.id_fiscal.data,
         "tipo_entidad": form.tipo_entidad.data,
         "moneda": setup_data.get("moneda"),
+        "pais": setup_data.get("pais"),
         "inicio_anio_fiscal": form.inicio_anio_fiscal.data,
         "fin_anio_fiscal": form.fin_anio_fiscal.data,
     }

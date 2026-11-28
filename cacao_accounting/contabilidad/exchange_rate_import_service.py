@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import Currency, ExchangeRate, database
+from cacao_accounting.imports.readers.ods_reader import ods_rows_from_table
 
 
 from cacao_accounting.i18n import _
@@ -231,7 +232,11 @@ class ExchangeRateImportService:
 
     def _parse_csv(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo CSV."""
-        text = io.StringIO(file_content.decode("utf-8-sig"))
+        try:
+            decoded_content = file_content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ExchangeRateImportError(_("El archivo CSV debe estar codificado en UTF-8.")) from exc
+        text = io.StringIO(decoded_content)
         reader = csv.DictReader(text)
         return [row for row in reader if self._row_has_content(row)]
 
@@ -253,29 +258,16 @@ class ExchangeRateImportService:
         return self._matrix_to_dicts(values)
 
     def _parse_ods(self, file_content: bytes) -> List[Dict[str, str]]:
-        """Parsea un archivo ODS."""
+        """Parsea un archivo ODS respetando filas y columnas repetidas."""
         from odf.opendocument import load
-        from odf.table import Table, TableRow, TableCell
+        from odf.table import Table, TableCell, TableRow
         from odf.teletype import extractText
 
         doc = load(io.BytesIO(file_content))
         tables = doc.getElementsByType(Table)
         if not tables:
             return []
-        rows = []
-        for row in tables[0].getElementsByType(TableRow):
-            row_values: list[str] = []
-            for cell in row.getElementsByType(TableCell):
-                repeat_attr = cell.getAttributeNS("urn:oasis:names:tc:opendocument:xmlns:table:1.0", "number-columns-repeated")
-                if not repeat_attr:
-                    repeat_attr = cell.getAttribute("numbercolumnsrepeated")
-                try:
-                    repeat = int(repeat_attr) if repeat_attr else 1
-                except (ValueError, TypeError):
-                    repeat = 1
-                text = extractText(cell)
-                row_values.extend([text] * repeat)
-            rows.append(row_values)
+        rows = ods_rows_from_table(tables[0], TableRow, TableCell, extractText)
         return self._matrix_to_dicts(rows)
 
     def _matrix_to_dicts(self, values_iter) -> List[Dict[str, Any]]:

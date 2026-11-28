@@ -10,7 +10,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
-from sqlalchemy import case, extract, func
+from sqlalchemy import case, extract, func, or_
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     AccountingPeriod,
     BankAccount,
     BankTransaction,
+    Book,
     CompanyParty,
     Entity,
     GLEntry,
@@ -34,6 +35,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.status import calculate_document_status
 from cacao_accounting.i18n import _
 from cacao_accounting.modulos import (
     MODULE_ACCOUNTING,
@@ -47,6 +49,7 @@ from cacao_accounting.ledger_queries import (
     exclude_cancelled_stock_entries,
     primary_ledger_id,
 )
+from cacao_accounting.reportes.services import COST_ACCOUNT_TYPES, normalize_account_classification
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -105,7 +108,7 @@ def user_can_access_company(user: Any, company: Entity | None) -> bool:
     for module_name in (MODULE_ACCOUNTING, MODULE_BANKS, MODULE_PURCHASES, MODULE_INVENTORY, MODULE_SALES):
         module_id = obtener_id_modulo_por_nombre(module_name)
         permissions = Permisos(modulo=module_id, usuario=user.id)
-        if permissions.administrador or (permissions.autorizado and permissions.tiene_acceso_compania(company_code)):
+        if permissions.administrador or (permissions.consultar and permissions.tiene_acceso_compania(company_code)):
             return True
     return False
 
@@ -143,7 +146,13 @@ def _dashboard_sections(
             company_code,
             _("Contabilidad"),
             _("Resumen financiero del periodo seleccionado."),
-            lambda: get_accounting_data(company_code, currency, start_date, end_date),
+            lambda: get_accounting_data(
+                company_code,
+                currency,
+                start_date,
+                end_date,
+                include_pending_vouchers=_has_module_access(MODULE_BANKS, company_code),
+            ),
         ),
         "banks": _section_or_hidden(
             MODULE_BANKS,
@@ -198,11 +207,11 @@ def _has_module_access(module_name: str, company: str | None = None) -> bool:
     """Indica si el usuario actual puede consultar un módulo."""
     module_id = obtener_id_modulo_por_nombre(module_name)
     permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    if not permissions.autorizado:
+    if not permissions.consultar:
         return False
     if permissions.administrador:
         return True
-    return permissions.autorizado and permissions.tiene_acceso_compania(company)
+    return permissions.consultar and permissions.tiene_acceso_compania(company)
 
 
 def _hidden_section(title: str, subtitle: str) -> dict[str, Any]:
@@ -225,24 +234,27 @@ def get_accounting_data(
     currency: str,
     start_date: date | None,
     end_date: date | None,
+    *,
+    include_pending_vouchers: bool = True,
 ) -> dict[str, Any]:
     """Obtiene métricas contables desde el GL."""
     balances = _income_expense_balances(company, start_date, end_date)
     income = balances["income"]
     expenses = balances["expenses"]
     profit = income - expenses
-    pending_vouchers = _count_model(PaymentEntry, company, docstatus=0)
     journal_entries = (
         _gl_query(company, start_date, end_date).with_entities(GLEntry.voucher_type, GLEntry.voucher_id).distinct().count()
     )
+    kpis: dict[str, Any] = {
+        "income": _money_kpi(_("Ingresos"), income, currency),
+        "expenses": _money_kpi(_("Gastos"), expenses, currency),
+        "profit": _money_kpi(_("Utilidad"), profit, currency),
+    }
+    if include_pending_vouchers:
+        kpis["pending_vouchers"] = _count_kpi(_("Pendientes"), _count_model(PaymentEntry, company, docstatus=0))
 
     return {
-        "kpis": {
-            "income": _money_kpi(_("Ingresos"), income, currency),
-            "expenses": _money_kpi(_("Gastos"), expenses, currency),
-            "profit": _money_kpi(_("Utilidad"), profit, currency),
-            "pending_vouchers": _count_kpi(_("Pendientes"), pending_vouchers),
-        },
+        "kpis": kpis,
         "charts": {"monthly_result": _accounting_monthly_result(company, start_date, end_date)},
         "tables": {
             "summary": [
@@ -262,6 +274,17 @@ def get_accounting_data(
     }
 
 
+def _open_purchase_orders(company: str) -> int:
+    """Cuenta órdenes aprobadas cuyo flujo documental sigue abierto."""
+    orders = database.session.query(PurchaseOrder).filter_by(company=company, docstatus=1).all()
+    return sum(
+        1
+        for order in orders
+        if str(getattr(order, "status", "") or "").lower() not in {"closed", "cancelled"}
+        and calculate_document_status("purchase_order", order).code != "completed"
+    )
+
+
 def get_banks_data(
     company: str,
     currency: str,
@@ -270,15 +293,15 @@ def get_banks_data(
 ) -> dict[str, Any]:
     """Obtiene saldos bancarios, conciliaciones y pagos pendientes."""
     accounts = database.session.query(BankAccount).filter_by(company=company, is_active=True).all()
-    balances = _bank_balances(company, accounts)
+    base_balances, bank_balances, base_currency = _bank_balances(company, accounts, currency)
     account_ids = [account.id for account in accounts]
     unreconciled = _bank_transactions_query(account_ids, start_date, end_date).filter_by(is_reconciled=False).count()
     pending_payments = _document_query(PaymentEntry, company, start_date, end_date).filter_by(docstatus=0).count()
-    total_balance = sum(balances.values())
+    total_balance = sum(base_balances.values())
 
     return {
         "kpis": {
-            "balance": _money_kpi(_("Saldo bancario"), total_balance, currency),
+            "balance": _money_kpi(_("Saldo bancario"), total_balance, base_currency),
             "accounts": _count_kpi(_("Cuentas activas"), len(accounts)),
             "unreconciled": _count_kpi(_("Sin conciliar"), unreconciled),
             "pending_payments": _count_kpi(_("Pagos pendientes"), pending_payments),
@@ -289,7 +312,7 @@ def get_banks_data(
                 {
                     "name": account.account_name,
                     "account_no": account.account_no,
-                    "balance": balances.get(account.gl_account_id, 0),
+                    "balance": _bank_account_balance(account, bank_balances),
                     "currency": account.currency or currency,
                 }
                 for account in accounts
@@ -321,7 +344,7 @@ def get_purchases_data(
         "outstanding_amount",
         include_returns=False,
     )
-    open_orders = database.session.query(PurchaseOrder).filter_by(company=company, docstatus=1).count()
+    open_orders = _open_purchase_orders(company)
     suppliers = _active_parties(company, "supplier")
 
     return {
@@ -355,7 +378,9 @@ def get_inventory_data(
     bins = database.session.query(StockBin).filter_by(company=company)
     inventory_value = Decimal(str(bins.with_entities(func.sum(StockBin.stock_value)).scalar() or 0))
     active_warehouses = database.session.query(Warehouse).filter_by(company=company, is_active=True).count()
-    stocked_items = bins.filter(StockBin.actual_qty != 0).count()
+    stocked_items = (
+        bins.filter(StockBin.actual_qty != 0).with_entities(database.func.count(StockBin.item_code.distinct())).scalar() or 0
+    )
     movements = _stock_movements_query(company, start_date, end_date).count()
 
     return {
@@ -447,10 +472,19 @@ def _income_expense_balances(
 ) -> dict[str, Decimal]:
     """Calcula ingresos y gastos por clasificación de cuenta."""
     query = (
-        database.session.query(Accounts.classification, func.sum(GLEntry.debit - GLEntry.credit).label("balance"))
+        database.session.query(
+            Accounts.classification,
+            Accounts.account_type,
+            func.sum(GLEntry.debit - GLEntry.credit).label("balance"),
+        )
         .join(GLEntry, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(
+            or_(
+                func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS),
+                func.lower(Accounts.account_type).in_(COST_ACCOUNT_TYPES),
+            )
+        )
     )
     query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
@@ -458,15 +492,15 @@ def _income_expense_balances(
         query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
-    results = query.group_by(Accounts.classification).all()
+    results = query.group_by(Accounts.classification, Accounts.account_type).all()
     income = Decimal("0")
     expenses = Decimal("0")
     for result in results:
         balance = Decimal(result.balance or 0)
-        classification = (result.classification or "").lower()
-        if classification in INCOME_CLASSIFICATIONS:
+        classification = normalize_account_classification(result.classification, result.account_type)
+        if classification in {"income", "ingreso"}:
             income += -balance
-        elif classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in {"cost", "costo", "expense", "gasto"}:
             expenses += balance
     return {"income": income, "expenses": expenses}
 
@@ -481,11 +515,17 @@ def _accounting_monthly_result(
         database.session.query(
             extract("month", GLEntry.posting_date).label("month"),
             Accounts.classification,
+            Accounts.account_type,
             func.sum(GLEntry.debit - GLEntry.credit).label("balance"),
         )
         .join(Accounts, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(
+            or_(
+                func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS),
+                func.lower(Accounts.account_type).in_(COST_ACCOUNT_TYPES),
+            )
+        )
     )
     query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
@@ -493,7 +533,7 @@ def _accounting_monthly_result(
         query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
-    rows = query.group_by("month", Accounts.classification).order_by("month").all()
+    rows = query.group_by("month", Accounts.classification, Accounts.account_type).order_by("month").all()
     months: dict[int, dict[str, str | int]] = {}
     for row in rows:
         if row.month is None:
@@ -504,30 +544,144 @@ def _accounting_monthly_result(
             continue
         payload = months.setdefault(month, {"month": month, "income": "0", "expenses": "0"})
         balance = Decimal(str(row.balance or 0))
-        classification = (row.classification or "").lower()
-        if classification in INCOME_CLASSIFICATIONS:
+        classification = normalize_account_classification(row.classification, row.account_type)
+        if classification in {"income", "ingreso"}:
             payload["income"] = _numeric(Decimal(str(payload["income"])) - balance)
-        elif classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in {"cost", "costo", "expense", "gasto"}:
             payload["expenses"] = _numeric(Decimal(str(payload["expenses"])) + balance)
     return list(months.values())
 
 
-def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None, Decimal]:
-    """Obtiene saldos de GL por cuenta bancaria."""
+def _bank_balances(
+    company: str, accounts: list[BankAccount], default_currency: str
+) -> tuple[dict[str | None, Decimal], dict[str, Decimal], str]:
+    """Obtiene el saldo de GL y el saldo atribuido a cada cuenta bancaria.
+
+    Las partidas con ``GLEntry.bank_account_id`` se atribuyen por identidad,
+    por lo que dos cuentas que comparten cuenta GL y moneda no duplican el
+    saldo. Las partidas legacy sin esa referencia se suman a la identidad
+    cuando la pareja (cuenta GL, moneda) pertenece a una única cuenta bancaria;
+    si es compartida, el importe queda sin atribuir y solo suma en el total.
+    """
     gl_account_ids = [account.gl_account_id for account in accounts if account.gl_account_id]
     if not gl_account_ids:
-        return {}
-    results = (
+        return {}, {}, default_currency
+    bank_account_ids = [account.id for account in accounts if account.gl_account_id]
+    pair_usage = _bank_account_pair_usage(company, default_currency)
+
+    ledger_id = primary_ledger_id(company)
+    base_currency = default_currency
+    if ledger_id:
+        book = database.session.get(Book, ledger_id)
+        if book is not None and book.currency:
+            base_currency = book.currency
+
+    base_query = (
         database.session.query(GLEntry.account_id, func.sum(GLEntry.debit - GLEntry.credit))
         .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
         .group_by(GLEntry.account_id)
     )
-    results = exclude_cancelled_gl_entries(results)
-    ledger_id = primary_ledger_id(company)
+    base_query = _scope_bank_balance_query(base_query, ledger_id)
+    entry_currency = case(
+        (
+            GLEntry.debit_in_account_currency.is_not(None) & (GLEntry.debit > 0),
+            GLEntry.account_currency,
+        ),
+        (
+            GLEntry.credit_in_account_currency.is_not(None) & (GLEntry.credit > 0),
+            GLEntry.account_currency,
+        ),
+        else_=GLEntry.company_currency,
+    )
+    amount = func.sum(
+        func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
+        - func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
+    )
+    direct_query = (
+        database.session.query(
+            GLEntry.bank_account_id,
+            entry_currency.label("balance_currency"),
+            amount,
+        )
+        .filter(
+            GLEntry.bank_account_id.in_(bank_account_ids),
+            GLEntry.account_id.in_(gl_account_ids),
+            GLEntry.company == company,
+        )
+        .group_by(GLEntry.bank_account_id, entry_currency)
+    )
+    direct_query = _scope_bank_balance_query(direct_query, ledger_id)
+    legacy_query = (
+        database.session.query(
+            GLEntry.account_id,
+            entry_currency.label("balance_currency"),
+            amount,
+        )
+        .filter(
+            GLEntry.bank_account_id.is_(None),
+            GLEntry.account_id.in_(gl_account_ids),
+            GLEntry.company == company,
+        )
+        .group_by(GLEntry.account_id, entry_currency)
+    )
+    legacy_query = _scope_bank_balance_query(legacy_query, ledger_id)
+
+    direct = {(row[0], row[1]): Decimal(str(row[2] or 0)) for row in direct_query.all()}
+    legacy = {(row[0], row[1]): Decimal(str(row[2] or 0)) for row in legacy_query.all()}
+    bank_balances = {
+        account.id: _resolve_bank_balance(account, direct, legacy, pair_usage, default_currency) for account in accounts
+    }
+    return (
+        {row[0]: Decimal(str(row[1] or 0)) for row in base_query.all()},
+        bank_balances,
+        base_currency,
+    )
+
+
+def _bank_account_pair_usage(company: str, default_currency: str) -> dict[tuple[str, str], int]:
+    """Count every company bank account when deciding whether legacy GL is ambiguous."""
+    pair_usage: dict[tuple[str, str], int] = {}
+    company_accounts = database.session.query(BankAccount.gl_account_id, BankAccount.currency).filter_by(company=company).all()
+    for gl_account_id, account_currency in company_accounts:
+        if gl_account_id:
+            pair = (gl_account_id, account_currency or default_currency)
+            pair_usage[pair] = pair_usage.get(pair, 0) + 1
+    return pair_usage
+
+
+def _resolve_bank_balance(
+    account: BankAccount,
+    direct: dict[tuple[str | None, str | None], Decimal],
+    legacy: dict[tuple[str | None, str | None], Decimal],
+    pair_usage: dict[tuple[str, str], int],
+    default_currency: str,
+) -> Decimal:
+    """Resuelve el saldo de una cuenta sin atribuir partidas ambiguas."""
+    if not account.gl_account_id:
+        return Decimal("0")
+    currency = account.currency or default_currency
+    direct_value = direct.get((account.id, currency))
+    if pair_usage.get((account.gl_account_id, currency), 0) != 1:
+        return direct_value if direct_value is not None else Decimal("0")
+    # A legacy row with no currency remains in the GL total, but cannot be
+    # assigned safely to a currency-specific bank row.
+    legacy_value = legacy.get((account.gl_account_id, currency))
+    if direct_value is None and legacy_value is None:
+        return Decimal("0")
+    return (direct_value or Decimal("0")) + (legacy_value or Decimal("0"))
+
+
+def _bank_account_balance(account: BankAccount, balances: dict[str, Decimal]) -> Decimal:
+    """Devuelve el saldo atribuido a la cuenta, nunca el de otra pierna."""
+    return balances.get(account.id, Decimal("0"))
+
+
+def _scope_bank_balance_query(query, ledger_id: str | None):
+    """Aplica cancelación y libro primario a una consulta de saldos bancarios."""
+    query = exclude_cancelled_gl_entries(query)
     if ledger_id:
-        results = results.filter(GLEntry.ledger_id == ledger_id)
-    results = results.all()
-    return {row[0]: Decimal(str(row[1] or 0)) for row in results}
+        query = query.filter(GLEntry.ledger_id == ledger_id)
+    return query
 
 
 def _bank_transactions_query(
@@ -693,14 +847,26 @@ def _top_customers(
         _document_query(SalesInvoice, company, start_date, end_date)
         .filter_by(docstatus=1)
         .with_entities(
-            SalesInvoice.customer_name,
+            func.max(SalesInvoice.customer_id).label("customer_id"),
+            func.max(SalesInvoice.customer_name).label("customer_name"),
             func.sum(_signed_document_expression(SalesInvoice)).label("total"),
         )
-        .group_by(SalesInvoice.customer_name)
-        .order_by(func.sum(_signed_document_expression(SalesInvoice)).desc())
+        .group_by(func.coalesce(SalesInvoice.customer_id, SalesInvoice.customer_name))
+        .order_by(
+            func.sum(_signed_document_expression(SalesInvoice)).desc(),
+            func.coalesce(SalesInvoice.customer_id, SalesInvoice.customer_name).asc(),
+        )
         .limit(5)
     )
-    return [{"name": row.customer_name or _("Cliente"), "total": _numeric(row.total), "currency": currency} for row in query]
+    return [
+        {
+            "customer_id": row.customer_id,
+            "name": row.customer_name or _("Cliente"),
+            "total": _numeric(row.total),
+            "currency": currency,
+        }
+        for row in query
+    ]
 
 
 def _recent_sales_invoices(
@@ -771,11 +937,6 @@ def _sum_document_field(
             amount = Decimal(str(getattr(row, base_field, None) or getattr(row, fallback_field, None) or 0))
         total += -amount if row.is_return else amount
     return total
-
-
-def _sum_query(query: Any, expression: Any) -> str:
-    """Suma una expresión sobre un query existente."""
-    return _numeric(query.with_entities(func.sum(expression)).scalar())
 
 
 def _signed_document_expression(model: Any, base_field: str | None = None, fallback_field: str | None = None) -> Any:

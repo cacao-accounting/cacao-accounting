@@ -5,23 +5,28 @@
 
 from __future__ import annotations
 
+from csv import DictReader, Error as CSVError
 from os import listdir
 from os.path import isfile, join
 from typing import Any
 
 from cacao_accounting.contabilidad.default_accounts import (
+    DEFAULT_ACCOUNT_DEFINITION_BY_FIELD,
     DefaultAccountError,
     apply_catalog_default_mapping,
     catalog_has_default_mapping,
+    load_catalog_default_mapping,
 )
 from cacao_accounting.bancos.services import create_default_petty_cash
 from cacao_accounting.contabilidad.ctas import (
     CatalogoCtas,
     DIRECTORIO_CTAS,
-    base as catalogo_base,
+    HEADER_ALIASES,
+    _is_group,
     cargar_catalogos,
 )
-from cacao_accounting.database import Entity, database
+from cacao_accounting.database import CacaoConfig, Entity, database
+from cacao_accounting.default_scope import lock_default_scope
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.setup.catalogs import normalize_language
@@ -71,16 +76,53 @@ def available_catalog_files() -> list[tuple[str, str]]:
 
 
 def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = None) -> Any | None:
-    """Selecciona el catálogo contable adecuado según país, idioma y nombre de archivo."""
-    if catalog_name:
-        catalog_file = join(DIRECTORIO_CTAS, catalog_name)
-        if isfile(catalog_file) and catalog_has_default_mapping(catalog_file):
-            return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma)
+    """Resuelve el catálogo seleccionado explícitamente, sin fallback regional."""
+    idioma_normalizado = normalize_language(idioma).upper()
+    if not catalog_name or catalog_name not in {name for name, _ in available_catalog_files()}:
         return None
+    catalog_file = join(DIRECTORIO_CTAS, catalog_name)
+    if not _valid_catalog_file(catalog_file):
+        return None
+    return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma_normalizado)
 
-    if catalogo_base.pais == country and catalogo_base.idioma == idioma:
-        return catalogo_base
-    return catalogo_base
+
+def _valid_catalog_file(catalog_file: str) -> bool:
+    """Verifica formato y referencias del mapping antes de crear la compañía."""
+    try:
+        mapping = load_catalog_default_mapping(catalog_file)
+        with open(catalog_file, encoding="utf-8", newline="") as catalog:
+            reader = DictReader(catalog)
+            headers = set(reader.fieldnames or ())
+            if any(not headers.intersection(HEADER_ALIASES[field]) for field in ("code", "name", "classification")):
+                return False
+            fields = {
+                field: next(header for header in HEADER_ALIASES[field] if header in headers)
+                for field in ("code", "name", "classification")
+            }
+            account_types: dict[str, str] = {}
+            group_codes: set[str] = set()
+            type_field = next((header for header in HEADER_ALIASES["account_type"] if header in headers), None)
+            group_field = next((header for header in HEADER_ALIASES["group"] if header in headers), None)
+            for row in reader:
+                if None in row or any(not str(row.get(column) or "").strip() for column in fields.values()):
+                    return False
+                code = str(row[fields["code"]]).strip()
+                if code in account_types:
+                    return False
+                account_types[code] = str(row.get(type_field) or "").strip() if type_field else ""
+                if group_field and _is_group(str(row.get(group_field) or "")):
+                    group_codes.add(code)
+        return bool(account_types) and all(
+            code in account_types
+            and code not in group_codes
+            and (
+                not account_types[code]
+                or account_types[code] in DEFAULT_ACCOUNT_DEFINITION_BY_FIELD[field].allowed_account_types
+            )
+            for field, code in mapping.items()
+        )
+    except (OSError, UnicodeError, CSVError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def create_company(
@@ -97,6 +139,14 @@ def create_company(
     if force_single_entity() and company_count >= 1:
         raise ValueError(_("Esta instalación solo permite una compañía."))
 
+    catalogo = None
+    if catalogo_tipo == "preexistente":
+        if country is None or idioma is None:
+            raise ValueError(_("No se puede cargar el catálogo sin país e idioma."))
+        catalogo = choose_catalog_file(country, idioma, catalogo_archivo)
+        if catalogo is None:
+            raise ValueError(_("El catálogo seleccionado no está disponible o no tiene mapping JSON de cuentas por defecto."))
+
     entity = create_default_entity(company_data, status=status, default=default)
     create_default_book(entity)
     create_default_cost_center(entity)
@@ -112,17 +162,14 @@ def create_company(
     ensure_global_naming_series()
 
     if catalogo_tipo == "preexistente":
-        if country is None or idioma is None:
-            raise ValueError(_("No se puede cargar el catálogo sin país e idioma."))
-        catalogo = choose_catalog_file(country, idioma, catalogo_archivo)
-        if catalogo is None:
-            raise ValueError(_("El catálogo seleccionado no está disponible o no tiene mapping JSON de cuentas por defecto."))
         cargar_catalogos(catalogo, entity)
         try:
             apply_catalog_default_mapping(entity.code, catalogo.file)
         except DefaultAccountError as exc:
             raise ValueError(str(exc)) from exc
-        create_default_petty_cash(entity.code)
+        # #1265: informar cuando no se pudo crear el fondo predeterminado por no
+        # haber una cuenta de caja chica utilizable.
+        entity._petty_cash_created = create_default_petty_cash(entity.code) is not None
 
     return entity
 
@@ -173,6 +220,11 @@ def get_setup_configuration() -> dict[str, Any]:
     }
 
 
+def is_setup_complete() -> bool:
+    """Indica si el asistente de configuración ya finalizó con éxito."""
+    return (get_setup_value(SETUP_COMPLETED, "") or "") == "True"
+
+
 def available_currencies() -> list[tuple[str, str]]:
     """Devuelve las monedas disponibles para el formulario de configuración."""
     from cacao_accounting.database import Currency
@@ -190,7 +242,8 @@ def _activate_and_set_default_currency(currency_code: str) -> None:
     if not currency_code:
         return
 
-    currencies = list(database.session.execute(database.select(Currency)).scalars().all())
+    lock_default_scope("currency_default")
+    currencies = list(database.session.execute(database.select(Currency).with_for_update()).scalars().all())
     selected_currency = next((currency for currency in currencies if currency.code == currency_code), None)
     if selected_currency is None:
         selected_currency = Currency(code=currency_code, name=currency_code, decimals=2, active=True, default=True)
@@ -204,26 +257,114 @@ def _activate_and_set_default_currency(currency_code: str) -> None:
         currency.default = is_selected
 
 
+def _grant_initial_company_access(company_code: str, *, is_initial_entity: bool) -> None:
+    """Asegura que la primera compañía quede usable por el admin que la crea."""
+    from cacao_accounting.database import Entity, Roles, RolesUser, User, UserCompanyAccess, database
+
+    company = database.session.execute(database.select(Entity.code).filter_by(code=company_code)).scalar_one_or_none()
+    if not company:
+        return
+
+    admin_role = database.session.execute(database.select(Roles.id).filter_by(name="admin")).scalar_one_or_none()
+    role_user_ids = set()
+    if admin_role:
+        role_user_ids = set(
+            database.session.execute(
+                database.select(RolesUser.user_id).where(RolesUser.role_id == admin_role, RolesUser.active.is_(True))
+            ).scalars()
+        )
+
+    user_query = database.select(User).where(User.active.is_(True))
+    admin_users = [
+        user
+        for user in database.session.execute(user_query).scalars()
+        if user.classification == "admin" or user.id in role_user_ids
+    ]
+    if not admin_users:
+        return
+
+    # First setup/initial entity: grant access to active admins so the
+    # creating admin can actually use the company in cloud and desktop.
+    existing = {
+        (row.user_id, row.company_code)
+        for row in database.session.execute(
+            database.select(UserCompanyAccess.user_id, UserCompanyAccess.company_code).where(
+                UserCompanyAccess.company_code == company_code
+            )
+        ).all()
+    }
+    for user in admin_users:
+        key = (user.id, company_code)
+        if key not in existing:
+            database.session.add(UserCompanyAccess(user_id=user.id, company_code=company_code))
+            existing.add(key)
+
+
+class SetupAlreadyComplete(RuntimeError):
+    """La instalación ya completó el asistente inicial."""
+
+
+def claim_setup_completion() -> None:
+    """Reclama de forma atómica la finalización única del asistente (#1021).
+
+    La clave ``SETUP_COMPLETE`` es única. El proceso toma el bloqueo de alcance
+    y relee la fila: si el valor ya es ``True``, la instalación se considera
+    completada; si existe en ``False``, la marca como completada. Así un segundo
+    proceso concurrente no duplica la compañía ni sus libros.
+    """
+    from sqlalchemy.exc import IntegrityError
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("setup_completion")
+    row = database.session.execute(
+        database.select(CacaoConfig).filter_by(key=SETUP_COMPLETED).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if row is not None:
+        if row.value == "True":
+            raise SetupAlreadyComplete(_("La configuración inicial ya fue completada."))
+        row.value = "True"
+        database.session.flush()
+        return
+
+    database.session.add(CacaoConfig(key=SETUP_COMPLETED, value="True"))
+    try:
+        database.session.flush()
+    except IntegrityError as exc:
+        database.session.rollback()
+        raise SetupAlreadyComplete(_("La configuración inicial ya fue completada.")) from exc
+
+
 def finalize_setup(
     company_data: dict,
     catalogo_tipo: str,
     country: str,
     idioma: str,
     catalogo_archivo: str | None = None,
-) -> None:
-    """Completa el proceso de configuración inicial y crea la entidad por defecto."""
-    is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
-    create_company(
-        company_data,
-        catalogo_tipo=catalogo_tipo,
-        country=country,
-        idioma=idioma,
-        catalogo_archivo=catalogo_archivo,
-        status="default" if is_initial_entity else "activo",
-        default=is_initial_entity,
-    )
-    _activate_and_set_default_currency(company_data.get("moneda", ""))
-    create_default_party_groups(idioma)
-    save_company_details(company_data)
-    mark_setup_complete()
-    database.session.commit()
+) -> bool:
+    """Completa la configuración inicial y crea la entidad por defecto.
+
+    Devuelve ``False`` cuando no se creó el fondo de caja chica predeterminado
+    por falta de una cuenta utilizable, para que el asistente pueda informarlo
+    (#1265).
+    """
+    claim_setup_completion()
+    try:
+        is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
+        entity = create_company(
+            company_data,
+            catalogo_tipo=catalogo_tipo,
+            country=country,
+            idioma=idioma,
+            catalogo_archivo=catalogo_archivo,
+            status="default" if is_initial_entity else "activo",
+            default=is_initial_entity,
+        )
+        _activate_and_set_default_currency(company_data.get("moneda", ""))
+        create_default_party_groups(idioma)
+        save_company_details(company_data)
+        _grant_initial_company_access(entity.code, is_initial_entity=is_initial_entity)
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
+    return bool(getattr(entity, "_petty_cash_created", True))

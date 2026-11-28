@@ -12,10 +12,11 @@ from typing import Any
 
 from sqlalchemy import case, select
 
-from cacao_accounting.database import ItemPrice, PriceList, Tax, TaxTemplate, TaxTemplateItem, database
+from cacao_accounting.database import ItemPrice, Tax, TaxTemplate, TaxTemplateItem, database
 
 
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
 
 
 class TaxPricingError(ValueError):
@@ -57,27 +58,6 @@ class _TaxTotals:
     inclusive_total: Decimal = Decimal("0")
 
 
-@dataclass(frozen=True)
-class PriceSuggestion:
-    """Precio sugerido para un item."""
-
-    item_code: str
-    price_list_id: str
-    price: Decimal
-    currency: str | None
-    uom: str | None
-
-
-@dataclass(frozen=True)
-class PriceToleranceResult:
-    """Resultado de validacion de tolerancia de precio."""
-
-    allowed: bool
-    suggested_price: Decimal | None
-    variance_percentage: Decimal
-    message: str | None = None
-
-
 def _decimal_value(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
@@ -107,12 +87,23 @@ def _finite_tax_rate(tax: Tax) -> Decimal:
     return rate
 
 
+def validate_tax_template_applicability(template_type: str, tax_applies_to: str) -> None:
+    """Reject tax/template combinations outside the supported business flows."""
+    allowed_applicability = {
+        "buying": {"purchase", "both"},
+        "selling": {"sales", "both"},
+    }
+    if tax_applies_to not in allowed_applicability.get(template_type, set()):
+        raise TaxPricingError(_("El impuesto no es aplicable al tipo de plantilla."))
+
+
 def _calculate_template_item_tax(
     template_item,
     base_amount,
     running_total,
     inclusive_rate_total=Decimal("0"),
     inclusive_fixed_total=Decimal("0"),
+    sequential_inclusive_amount=None,
 ):
     """Calculate one template tax, extracting percentage taxes included in price."""
     tax = database.session.get(Tax, template_item.tax_id)
@@ -121,7 +112,9 @@ def _calculate_template_item_tax(
     calculation_base = template_item.calculation_base or "net_document"
     taxable_base = running_total if calculation_base == "previous_total" else base_amount
     rate = _finite_tax_rate(tax)
-    if tax.tax_type == "fixed":
+    if sequential_inclusive_amount is not None:
+        amount = sequential_inclusive_amount
+    elif tax.tax_type == "fixed":
         amount = rate
     elif template_item.is_inclusive:
         # ``taxable_base`` is the price displayed to the user, which already
@@ -131,6 +124,9 @@ def _calculate_template_item_tax(
         # price are first removed because they are not part of the percentage
         # tax base (e.g. 125 = 100 + fixed 10 + IVA 15).
         amount = (taxable_base - inclusive_fixed_total) * rate / (Decimal("100") + inclusive_rate_total)
+    elif calculation_base == "net_document" and (inclusive_rate_total or inclusive_fixed_total):
+        net_base = (taxable_base - inclusive_fixed_total) / (Decimal("1") + inclusive_rate_total / Decimal("100"))
+        amount = net_base * rate / Decimal("100")
     else:
         amount = taxable_base * rate / Decimal("100")
     amount = amount.quantize(Decimal("0.0001"))
@@ -165,6 +161,34 @@ def _inclusive_tax_bases(items: list[TaxTemplateItem]) -> tuple[dict[str, Decima
     return inclusive_rates_by_base, inclusive_fixed_by_base
 
 
+def _previous_total_inclusive_amounts(items: list[TaxTemplateItem], displayed_total: Decimal) -> dict[str, Decimal]:
+    """Reconstruct sequential inclusive taxes from the displayed total backwards."""
+    included: list[tuple[TaxTemplateItem, Tax]] = []
+    for template_item in items:
+        if not template_item.is_inclusive or (template_item.calculation_base or "net_document") != "previous_total":
+            continue
+        tax = database.session.get(Tax, template_item.tax_id)
+        if tax and tax.is_active:
+            included.append((template_item, tax))
+
+    remaining_total = displayed_total
+    amounts: dict[str, Decimal] = {}
+    for template_item, tax in reversed(included):
+        rate = _finite_tax_rate(tax)
+        if tax.tax_type == "fixed":
+            amount = rate
+            remaining_total -= amount
+        else:
+            factor = Decimal("1") + rate / Decimal("100")
+            if factor <= 0:
+                raise TaxPricingError(_("La tasa inclusiva configurada produce una base nula o negativa."))
+            previous_total = remaining_total / factor
+            amount = previous_total * rate / Decimal("100")
+            remaining_total = previous_total
+        amounts[str(template_item.id)] = amount.quantize(Decimal("0.0001"))
+    return amounts
+
+
 def _apply_tax_result(result: TaxLineResult, totals: _TaxTotals) -> None:
     """Accumulate a calculated tax and update the running document total."""
     if result.is_inclusive:
@@ -196,7 +220,12 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         .scalars()
         .all()
     )
+    for template_item in items:
+        tax = database.session.get(Tax, template_item.tax_id)
+        if tax and tax.is_active:
+            validate_tax_template_applicability(template.template_type, tax.applies_to)
     inclusive_rates_by_base, inclusive_fixed_by_base = _inclusive_tax_bases(items)
+    sequential_inclusive_amounts = _previous_total_inclusive_amounts(items, base_amount)
     for template_item in items:
         calculation_base = template_item.calculation_base or "net_document"
         result = _calculate_template_item_tax(
@@ -205,6 +234,7 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
             totals.running_total,
             inclusive_rates_by_base.get(calculation_base, Decimal("0")),
             inclusive_fixed_by_base.get(calculation_base, Decimal("0")),
+            sequential_inclusive_amounts.get(str(template_item.id)),
         )
         if not result:
             continue
@@ -235,54 +265,38 @@ def resolve_item_price_record(
         .where((ItemPrice.valid_upto.is_(None)) | (ItemPrice.valid_upto >= posting_date))
         .where((ItemPrice.min_qty.is_(None)) | (ItemPrice.min_qty <= qty))
         .order_by(
+            case((ItemPrice.uom == uom, 0), else_=1),
             ItemPrice.min_qty.desc().nullslast(),
             ItemPrice.valid_from.desc().nullslast(),
-            case((ItemPrice.uom == uom, 0), else_=1),
         )
     )
     if uom:
         query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
-    price = database.session.execute(query).scalars().first()
-    if price is not None and not _decimal_value(price.price).is_finite():
+    candidates = [price for price in database.session.execute(query).scalars().all() if _is_valid_item_price(price)]
+    if not candidates:
         return None
-    return price
+    return min(candidates, key=lambda price: _item_price_sort_key(price, uom))
 
 
-def get_item_price(
-    item_code: str,
-    price_list_id: str,
-    qty: Decimal,
-    uom: str | None,
-    posting_date: date,
-) -> PriceSuggestion:
-    """Obtiene el precio vigente mas especifico de una lista de precios."""
-    price_list = database.session.get(PriceList, price_list_id)
-    if not price_list or not price_list.is_active:
-        raise TaxPricingError(_("La lista de precios no existe o esta inactiva."))
-
-    price = resolve_item_price_record(item_code, price_list_id, qty, uom, posting_date)
-    if not price:
-        raise TaxPricingError(_("No existe precio vigente para el item en la lista indicada."))
-    return PriceSuggestion(
-        item_code=item_code,
-        price_list_id=price_list_id,
-        price=_decimal_value(price.price),
-        currency=price_list.currency,
-        uom=price.uom,
-    )
+def _is_valid_item_price(price: ItemPrice) -> bool:
+    """Valida que el precio almacenado sea utilizable por el resolutor."""
+    try:
+        coerce_decimal(price.price, "precio", non_negative=True, max_fractional_digits=4)
+    except ValueError:
+        return False
+    return True
 
 
-def validate_price_tolerance(document_type: str, line: Any, user_id: str | None = None) -> PriceToleranceResult:
-    """Valida tolerancia de precio con politica conservadora del 10%."""
-    del user_id
-    suggested = getattr(line, "suggested_rate", None)
-    if suggested is None:
-        return PriceToleranceResult(True, None, Decimal("0"), None)
-    suggested_price = _decimal_value(suggested)
-    actual = _decimal_value(getattr(line, "rate", None))
-    if suggested_price <= 0:
-        return PriceToleranceResult(True, suggested_price, Decimal("0"), None)
-    variance = abs(actual - suggested_price) / suggested_price * Decimal("100")
-    allowed = variance <= Decimal("10")
-    message = None if allowed else f"El precio excede la tolerancia permitida para {document_type}."
-    return PriceToleranceResult(allowed, suggested_price, variance, message)
+def _item_price_sort_key(price: ItemPrice, requested_uom: str | None = None) -> tuple:
+    """Orden determinista para empates de criterios efectivos.
+
+    La UOM específica solicitada siempre prevalece sobre una tarifa genérica,
+    igual que en el ``ORDER BY`` SQL. Sin este primer criterio el ``min`` de
+    Python podía elegir la tarifa genérica aunque existiera una exacta.
+    """
+    uom_missing = not (requested_uom and price.uom == requested_uom)
+    min_qty_missing = price.min_qty is None
+    min_qty = -Decimal(str(price.min_qty or 0))
+    valid_from_missing = price.valid_from is None
+    valid_from = -(price.valid_from.toordinal() if price.valid_from else 0)
+    return (uom_missing, min_qty_missing, min_qty, valid_from_missing, valid_from, str(price.id or ""))

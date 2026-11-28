@@ -47,6 +47,7 @@
 </script>
 
 <script src="{{ url_for('static', filename='js/smart-select.js') }}?v=20260506-2" defer></script>
+<script src="{{ url_for('static', filename='js/hierarchy-parent-select.js') }}" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="{{ url_for('static', filename='js/transaction-form.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/document-flow-tree.js') }}" defer></script>
@@ -90,9 +91,12 @@
     <a class="ca-nav-btn" href="{{ url_for('login.profile') }}" title="{{ _('Mi perfil') }}">
       <i class="bi bi-person-circle"></i>
     </a>
-    <a class="ca-nav-btn" href="{{ url_for('login.cerrar_sesion') }}" title="{{ _('Cerrar sesión') }}">
-      <i class="bi bi-box-arrow-right"></i>
-    </a>
+    <form method="post" action="{{ url_for('login.cerrar_sesion') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="ca-nav-btn border-0 bg-transparent" type="submit" title="{{ _('Cerrar sesión') }}">
+        <i class="bi bi-box-arrow-right"></i>
+      </button>
+    </form>
   </div>
 </header>
 <script>
@@ -191,16 +195,19 @@
     </li>
     {%- endif %}
     <li class="nav-item d-md-none">
-      <a href="{{ url_for('login.cerrar_sesion') }}" class="nav-link">
-        <i class="bi bi-box-arrow-right"></i> {{ _('Cerrar Sesión') }}
-      </a>
+      <form method="post" action="{{ url_for('login.cerrar_sesion') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="nav-link btn btn-link">
+          <i class="bi bi-box-arrow-right"></i> {{ _('Cerrar Sesión') }}
+        </button>
+      </form>
     </li>
   </ul>
 </nav>
 {%- endmacro %}
 
 
-{% macro list_filters(show_status=False, placeholder=None, extra_params=None) %}
+{% macro list_filters(show_status=False, placeholder=None, extra_params=None, status_choices=None) %}
 <div class="p-3 border-bottom">
   <form method="get" action="{{ url_for(request.endpoint) }}" class="row g-2 align-items-end">
     <div class="{% if show_status %}col-md-5{% else %}col-md-8{% endif %}">
@@ -217,11 +224,12 @@
     {% if show_status %}
     <div class="col-md-3">
       <label class="form-label small text-muted mb-1" for="list-status">{{ _('Estado') }}</label>
+      {% set opciones_estado = status_choices or [("draft", _("Borrador")), ("submitted", _("Contabilizado")), ("cancelled", _("Cancelado"))] %}
       <select id="list-status" name="status" class="form-select form-select-sm">
         <option value="">{{ _('Todos') }}</option>
-        <option value="draft" {% if request.args.get('status') == 'draft' %}selected{% endif %}>{{ _('Borrador') }}</option>
-        <option value="submitted" {% if request.args.get('status') == 'submitted' %}selected{% endif %}>{{ _('Contabilizado') }}</option>
-        <option value="cancelled" {% if request.args.get('status') == 'cancelled' %}selected{% endif %}>{{ _('Cancelado') }}</option>
+        {% for estado, etiqueta in opciones_estado %}
+        <option value="{{ estado }}" {% if request.args.get('status') == estado %}selected{% endif %}>{{ etiqueta }}</option>
+        {% endfor %}
       </select>
     </div>
     {% endif %}
@@ -242,6 +250,8 @@
 {% set endpoint = url_for(request.endpoint) %}
 {% if consulta.periods %}
 <form method="get" action="{{ endpoint }}" class="p-3 border-bottom d-flex flex-wrap gap-2 align-items-end">
+  <input type="hidden" name="search" value="{{ request.args.get('search', '') }}">
+  <input type="hidden" name="status" value="{{ request.args.get('status', '') }}">
   <div>
     <label class="form-label small text-muted mb-1">{{ _('Compañía') }}</label>
     {{ smart_select_field(_("Compañía"), "company", "company", consulta.selected_company or '', "list-company", 1, None, [], []) }}
@@ -262,6 +272,7 @@
 
 {% macro rendizar_paginacion(consulta=None, vista=None, extra_params=None) %}
 <p class="ca-pagination">{{ consulta.total }} {{ _('items encontrados') }}.
+  {% if consulta.total %}
   <br>
   {% if consulta.has_prev %}
   <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}"><i class="bi bi-arrow-left-short"></i> {{ _('Anterior') }}</a>
@@ -269,6 +280,7 @@
   {{ _('Página') }} {{ consulta.page }} {{ _('de') }} {{ consulta.pages }}
   {% if consulta.has_next %}
   <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}">{{ _('Siguiente') }} <i class="bi bi-arrow-right-short"></i></a>
+  {% endif %}
   {% endif %}
 </p>
 {% endmacro %}
@@ -330,7 +342,7 @@
     <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
       role="button"><i class="bi bi-book-fill" aria-hidden="true"></i> {{ _('Manual de Usuario') }}</a>
 
-    <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
+    <a class="btn btn-secondary btn-sm" href="https://gitter.im/cacao-accounting/community"
       role="button"><i class="bi bi-chat-left-dots" aria-hidden="true"></i> {{ _('Sala de Chat') }}</a>
 
   </div>
@@ -369,7 +381,7 @@
 {% macro document_collaboration_panel(document_type, document) %}
 {% if is_cloud_mode() %}
 {% set tasks = document_collaboration_tasks(document_type, document.id) %}
-{% set users = collaboration_active_users() %}
+{% set users = collaboration_active_users(document_type, document.company) %}
 <div class="ca-card mt-3" x-data="{ open: false, collaborationSection: 'comment' }">
   <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
     <h6 class="ca-card-title mb-0"><i class="bi bi-cloud-check me-1"></i>{{ _('Colaboracion') }}</h6>
@@ -448,6 +460,8 @@
     </section>
     <h6 class="small fw-semibold text-muted text-uppercase">{{ _('Tareas del documento') }}</h6>
     {% if tasks %}
+    {% set task_priority_labels = {'low': _('baja'), 'normal': _('normal'), 'high': _('alta')} %}
+    {% set task_status_labels = {'open': _('abierta'), 'in_progress': _('en curso'), 'completed': _('completada'), 'cancelled': _('anulada')} %}
     <div class="table-responsive">
       <p class="text-muted small mb-2">{{ _('Detalle de tareas vinculadas al documento, con prioridad, estado y vencimiento.') }}</p>
       <table class="table table-sm align-middle mb-0">
@@ -455,7 +469,7 @@
         <thead><tr><th>{{ _('Titulo') }}</th><th>{{ _('Prioridad') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Vencimiento') }}</th></tr></thead>
         <tbody>
           {% for task in tasks %}
-          <tr><td>{{ task.title }}</td><td>{{ task.priority }}</td><td>{{ task.status }}</td><td>{{ task.due_date or '-' }}</td></tr>
+          <tr><td>{{ task.title }}</td><td>{{ task_priority_labels.get(task.priority, task.priority) }}</td><td>{{ task_status_labels.get(task.status, task.status) }}</td><td>{{ task.due_date or '-' }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -471,7 +485,7 @@
 {# ─── Document / Master Record Attachments Panel ───────────────── #}
 {% macro document_attachments_panel(reference_type, reference_id, can_modify=None) %}
 {% set attachments = get_document_attachments(reference_type, reference_id) %}
-{% if can_modify is none %}{% set can_modify = attachments_editable(reference_type, reference_id) %}{% endif %}
+{% if can_modify is none %}{% set can_modify = attachments_editable(reference_type, reference_id) %}{% else %}{% set can_modify = can_modify and attachments_editable(reference_type, reference_id) %}{% endif %}
 <div class="ca-card mt-3" x-data="{ open: false }">
   <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
     <div class="d-flex align-items-center gap-2">
@@ -535,7 +549,7 @@
                 <i class="bi bi-download"></i>
               </a>
               {% if is_cloud_mode() and can_modify %}
-              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit="return confirm('{{ _("¿Eliminar este archivo adjunto?") }}');">
+              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit='return confirm({{ _("¿Eliminar este archivo adjunto?")|tojson }});'>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
                 <input type="hidden" name="reference_type" value="{{ reference_type }}">
@@ -688,7 +702,7 @@
               </div>
             </template>
 
-            <template x-if="meta && meta.node_count >= meta.max_nodes">
+            <template x-if="meta && meta.max_nodes_reached">
               <div class="text-muted small mt-2">
                 <i class="bi bi-three-dots me-1"></i>
                 {{ _('El flujo contiene más documentos. Use búsqueda o filtros.') }}
@@ -735,16 +749,28 @@
              this.infoLoaded = true;
              if (data.enabled) {
                this.recipients = data.default_recipient || '';
-               this.subject = data.subject || '{{ _("Notificación de documento") }}';
+               this.subject = data.subject || {{ _("Notificación de documento")|tojson }};
                this.body = data.body || '';
              }
            })
            .catch(() => { this.loading = false; });
        },
+       partialMessage(body) {
+         const sent = Array.isArray(body.recipients) ? body.recipients : [];
+         const errors = Array.isArray(body.errors) ? body.errors : [];
+         let message = body.message || {{ _("El correo se envió parcialmente.")|tojson }};
+         if (sent.length) {
+           message += ' ' + {{ _("Enviados:")|tojson }} + ' ' + sent.join(', ');
+         }
+         if (errors.length) {
+           message += '. ' + {{ _("Errores:")|tojson }} + ' ' + errors.join('; ');
+         }
+         return message;
+       },
        sendEmail() {
          if (!this.recipients.trim()) {
            this.alertType = 'danger';
-           this.alertMessage = '{{ _("Ingrese al menos un correo de destinatario.") }}';
+           this.alertMessage = {{ _("Ingrese al menos un correo de destinatario.")|tojson }};
            return;
          }
          this.loading = true;
@@ -765,24 +791,28 @@
          .then(r => r.json().then(d => ({ status: r.status, body: d })))
          .then(res => {
            this.loading = false;
-           if (res.status === 200 && res.body.success) {
+           const body = res.body || {};
+           if (res.status === 200 && body.success) {
              this.alertType = 'success';
-             this.alertMessage = res.body.message || '{{ _("Correo enviado exitosamente.") }}';
+             this.alertMessage = body.message || {{ _("Correo enviado exitosamente.")|tojson }};
              setTimeout(() => {
                var modalEl = document.getElementById('emailNotificationModal');
                var modal = bootstrap.Modal.getInstance(modalEl);
                if (modal) modal.hide();
                window.location.reload();
              }, 1500);
+           } else if (body.partial || res.status === 207) {
+             this.alertType = 'warning';
+             this.alertMessage = this.partialMessage(body);
            } else {
              this.alertType = 'danger';
-             this.alertMessage = res.body.error || '{{ _("Error al enviar el correo.") }}';
+             this.alertMessage = body.error || {{ _("Error al enviar el correo.")|tojson }};
            }
          })
          .catch(() => {
            this.loading = false;
            this.alertType = 'danger';
-           this.alertMessage = '{{ _("Error de conexión al enviar el correo.") }}';
+           this.alertMessage = {{ _("Error de conexión al enviar el correo.")|tojson }};
          });
        }
      }"
@@ -861,13 +891,13 @@
         <i class="bi bi-check-circle me-1"></i>{{ submit_label }}
       </button>
     </form>
-  {% elif docstatus == 1 %}
+  {% elif docstatus == 1 and cancel_url %}
     <form method="post" action="{{ cancel_url }}" class="d-inline"
-          onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
+          onsubmit='var r=prompt({{ _("Indique el motivo de la anulación:")|tojson }}); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();'>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="reason" value="">
       <button type="submit" class="btn btn-sm btn-outline-danger"
-              onclick="return confirm('{{ _("¿Cancelar este documento?") }}')">
+              onclick='return confirm({{ _("¿Cancelar este documento?")|tojson }})'>
         <i class="bi bi-arrow-counterclockwise me-1"></i>{{ cancel_label }}
       </button>
     </form>
@@ -884,14 +914,14 @@
 {% endmacro %}
 
 {# ─── Document Print Shortcut ────────────────────────────────── #}
-{% macro document_print_button(document_type, document_id) %}
+{% macro document_print_button(document_type, document_id, company=None) %}
 <div class="btn-group btn-group-sm d-inline-flex" role="group" aria-label="{{ _('Imprimir') }}">
-  <a href="{{ url_for('printing_public.preview_document', document_type=document_type, document_id=document_id, return_url=request.full_path) }}"
+  <a href="{{ url_for('printing_public.preview_document', document_type=document_type, document_id=document_id, company=company, return_url=request.full_path) }}"
      target="_blank" class="btn btn-sm btn-outline-secondary" title="{{ _('Imprimir / Vista previa') }}">
     <i class="bi bi-printer me-1"></i>{{ _('Imprimir') }}
   </a>
   {% if not is_desktop_mode() %}
-    <a href="{{ url_for('printing_public.document_pdf', document_type=document_type, document_id=document_id) }}"
+    <a href="{{ url_for('printing_public.document_pdf', document_type=document_type, document_id=document_id, company=company) }}"
        target="_blank" class="btn btn-sm btn-outline-secondary" title="{{ _('Descargar PDF') }}">
       <i class="bi bi-file-earmark-pdf me-1"></i>{{ _('PDF') }}
     </a>
@@ -982,7 +1012,7 @@
       {% if source_api_url %}
       <button type="button" class="btn btn-sm btn-outline-secondary"
               data-bs-toggle="modal" data-bs-target="#modalAutofill"
-              @click="fetchSource('{{ source_api_url }}')">
+              @click='fetchSource({{ (source_api_url or "") | tojson }})'>
         <i class="bi bi-arrow-repeat me-1"></i>{{ _('Actualizar Elementos') }}
       </button>
       {% endif %}
@@ -1254,10 +1284,22 @@
                 data-label-show="{{ _('Ver') }} {{ older | length }} {{ _('eventos anteriores') }} ▸"
                 data-label-hide="{{ _('Ocultar eventos anteriores') }} ▴"
                 aria-expanded="false"
-                aria-controls="{{ collapse_id }}"
-                onclick="var b=this; b.textContent = b.getAttribute('aria-expanded')==='true' ? b.dataset.labelHide : b.dataset.labelShow;">
+                aria-controls="{{ collapse_id }}">
             {{ _('Ver') }} {{ older | length }} {{ _('eventos anteriores') }} ▸
         </button>
+        <script>
+          (function () {
+            var panel = document.getElementById("{{ collapse_id }}");
+            var toggle = document.querySelector('[data-bs-target="#{{ collapse_id }}"]');
+            if (!panel || !toggle) return;
+            panel.addEventListener('shown.bs.collapse', function () {
+              toggle.textContent = toggle.dataset.labelHide;
+            });
+            panel.addEventListener('hidden.bs.collapse', function () {
+              toggle.textContent = toggle.dataset.labelShow;
+            });
+          })();
+        </script>
         {% endif %}
         <ul class="list-group list-group-flush">
             {% for row in recent %}

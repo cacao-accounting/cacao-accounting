@@ -22,7 +22,9 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.payment import compute_payment_unallocated_amount
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
+from cacao_accounting.query_tools.document_acl import allowed_doctypes, can_read_relation_amount
 from cacao_accounting.query_tools.permissions import validate_permission
 
 
@@ -32,7 +34,7 @@ _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 
 def _parse_date(value: str | None) -> date | None:
-    return date.fromisoformat(value) if value else None
+    return parse_iso_date(value)
 
 
 def _decimal(value: Any) -> str:
@@ -296,8 +298,13 @@ def search_document_relations(
     page_size: int = 100,
 ) -> dict[str, Any]:
     validate_permission(context, "documents.reports.read", None, company_id)
+    readable_types = allowed_doctypes(context, company_id)
     current_page, size = paginate(page, page_size)
-    query = database.select(DocumentRelation).where(DocumentRelation.company == company_id)
+    query = database.select(DocumentRelation).where(
+        DocumentRelation.company == company_id,
+        DocumentRelation.source_type.in_(readable_types),
+        DocumentRelation.target_type.in_(readable_types),
+    )
     if document_id:
         query = query.where((DocumentRelation.source_id == document_id) | (DocumentRelation.target_id == document_id))
     if relation_type:
@@ -308,6 +315,10 @@ def search_document_relations(
         .scalars()
         .all()
     )
+    amount_access = {
+        doctype: can_read_relation_amount(context, company_id, doctype)
+        for doctype in {doc for row in rows for doc in (row.source_type, row.target_type)}
+    }
     items = [
         {
             "id": row.id,
@@ -320,7 +331,11 @@ def search_document_relations(
             "target_item_id": row.target_item_id,
             "relation_type": row.relation_type,
             "qty": _decimal(row.qty),
-            "amount": _decimal(row.amount),
+            "amount": (
+                _decimal(row.amount)
+                if row.amount is not None and amount_access[row.source_type] and amount_access[row.target_type]
+                else None
+            ),
         }
         for row in rows
     ]

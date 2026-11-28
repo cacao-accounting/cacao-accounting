@@ -51,7 +51,6 @@ class FormularioProveedor(FlaskForm):
     payable_account_id = StringField(_l("Cuenta por pagar"))
     tax_template_id = StringField(_l("Plantilla de impuestos"))
     default_tax_rule_id = StringField(_l("Regla fiscal predeterminada"))
-    default_price_list_id = StringField(_l("Lista de precio predeterminada"))
     legal_representative_name = StringField(_l("Representante legal"))
     legal_representative_id = StringField(_l("Documento del representante"))
     legal_representative_position = StringField(_l("Cargo del representante"))

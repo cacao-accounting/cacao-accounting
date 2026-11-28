@@ -137,7 +137,7 @@
     return {
       header: {
         payment_type: config.initial.payment_type || 'receive',
-        posting_date: config.initial.posting_date || new Date().toISOString().slice(0, 10),
+        posting_date: config.initial.posting_date || globalThis.cacaoLocalIsoDate(new Date()),
         mode_of_payment: config.initial.mode_of_payment || 'transfer',
         company: config.initial.company || '',
         company_locked: Boolean(config.initial.flow_locked),
@@ -237,12 +237,82 @@
 
       toCurrencyString: function (value) {
         if (value === null || value === undefined || value === '') return '0';
-        const str = typeof value === 'string' ? value.trim() : String(value);
+        let str = typeof value === 'string' ? value.trim() : String(value);
         if (!str) return '0';
-        const num = Number(str);
-        if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
-        const formatted = num.toFixed(9).replace(/0{1,9}$/, '').replace(/\.$/, '') || '0';
-        return formatted === '-0' ? '0' : formatted;
+        // Normalizar notacion exponencial de JS sin pasar por Number para preservar decimales.
+        const expMatch = str.match(/^([-+]?)(\d+)(?:\.(\d+))?[eE]([-+]?\d+)$/);
+        if (expMatch) {
+          const sign = expMatch[1] || '';
+          const digits = (expMatch[2] + (expMatch[3] || '')).replace(/^0+/, '') || '0';
+          const exp = parseInt(expMatch[4], 10) - (expMatch[3] || '').length;
+          if (exp >= 0) str = sign + digits + '0'.repeat(exp);
+          else {
+            const pos = digits.length + exp;
+            str = sign + (pos > 0 ? digits.slice(0, pos) + '.' + digits.slice(pos) : '0.' + '0'.repeat(-pos) + digits);
+          }
+        }
+        if (!/^[-+]?\d+(?:\.\d+)?$/.test(str)) return '0';
+        const sign = str.startsWith('-') ? '-' : '';
+        const unsigned = str.replace(/^[-+]/, '');
+        const [intPartRaw, fracRaw = ''] = unsigned.split('.');
+        const intPart = intPartRaw.replace(/^0+(?=\d)/, '') || '0';
+        const frac = fracRaw.slice(0, 9).replace(/0+$/, '');
+        const formatted = frac ? intPart + '.' + frac : intPart;
+        return sign && formatted !== '0' ? sign + formatted : formatted;
+      },
+
+      decimalParts: function (value) {
+        const str = this.toCurrencyString(value);
+        const negative = str.startsWith('-');
+        const unsigned = str.replace(/^-/, '');
+        const [intPart, fracPart = ''] = unsigned.split('.');
+        return { negative, digits: BigInt(intPart + fracPart), scale: fracPart.length };
+      },
+
+      decimalFromParts: function (negative, digits, scale) {
+        let text = digits.toString();
+        if (scale > 0) {
+          text = text.padStart(scale + 1, '0');
+          text = text.slice(0, -scale) + '.' + text.slice(-scale);
+          text = text.replace(/0+$/, '').replace(/\.$/, '');
+        }
+        text = text || '0';
+        return negative && text !== '0' ? '-' + text : text;
+      },
+
+      decimalAdd: function (left, right) {
+        const a = this.decimalParts(left);
+        const b = this.decimalParts(right);
+        const scale = Math.max(a.scale, b.scale);
+        const av = (a.negative ? -a.digits : a.digits) * (10n ** BigInt(scale - a.scale));
+        const bv = (b.negative ? -b.digits : b.digits) * (10n ** BigInt(scale - b.scale));
+        const total = av + bv;
+        return this.decimalFromParts(total < 0n, total < 0n ? -total : total, scale);
+      },
+
+      decimalSubtract: function (left, right) {
+        return this.decimalAdd(left, this.toCurrencyString(right).startsWith('-')
+          ? this.toCurrencyString(right).slice(1)
+          : '-' + this.toCurrencyString(right));
+      },
+
+      decimalMultiply: function (left, right) {
+        const a = this.decimalParts(left);
+        const b = this.decimalParts(right);
+        return this.decimalFromParts(a.negative !== b.negative, a.digits * b.digits, a.scale + b.scale);
+      },
+
+      decimalCompare: function (left, right) {
+        const a = this.decimalParts(left);
+        const b = this.decimalParts(right);
+        const scale = Math.max(a.scale, b.scale);
+        const av = (a.negative ? -a.digits : a.digits) * (10n ** BigInt(scale - a.scale));
+        const bv = (b.negative ? -b.digits : b.digits) * (10n ** BigInt(scale - b.scale));
+        return av < bv ? -1 : av > bv ? 1 : 0;
+      },
+
+      decimalMax: function (left, right) {
+        return this.decimalCompare(left, right) >= 0 ? this.toCurrencyString(left) : this.toCurrencyString(right);
       },
 
       formatCurrency: function (val) {
@@ -251,22 +321,24 @@
 
       normalizeReferenceAllocation: function (line) {
         if (!line) return null;
-        const allocated = this.parseNumber(line.allocated_amount || 0);
-        const outstanding = this.parseNumber(line.outstanding_amount || 0);
-        if (allocated < 0) {
-          line.allocated_amount = 0;
-        } else if (outstanding > 0 && allocated > outstanding) {
-          line.allocated_amount = outstanding;
-        } else {
-          line.allocated_amount = allocated;
+        let allocated = this.toCurrencyString(line.allocated_amount || 0);
+        const outstanding = this.toCurrencyString(line.outstanding_amount || 0);
+        if (this.decimalCompare(allocated, 0) < 0) {
+          allocated = '0';
+        } else if (this.decimalCompare(outstanding, 0) > 0 && this.decimalCompare(allocated, outstanding) > 0) {
+          allocated = outstanding;
         }
+        line.allocated_amount = allocated;
         const documentCurrency = line.currency || this.header.currency;
         const paymentCurrency = this.header.currency;
-        let crossRate = this.parseNumber(line.payment_exchange_rate || 0);
-        if (!crossRate && documentCurrency === paymentCurrency) crossRate = 1;
-        line.payment_exchange_rate = crossRate || line.payment_exchange_rate || 0;
-        const cashDocumentAmount = Math.max(allocated - this.parseNumber(line.discount_amount || 0) - this.parseNumber(line.gain_loss_amount || 0), 0);
-        line.payment_amount = cashDocumentAmount * this.parseNumber(line.payment_exchange_rate || 0);
+        let crossRate = this.toCurrencyString(line.payment_exchange_rate || 0);
+        if (this.decimalCompare(crossRate, 0) === 0 && documentCurrency === paymentCurrency) crossRate = '1';
+        line.payment_exchange_rate = crossRate;
+        const cashDocumentAmount = this.decimalMax(
+          this.decimalSubtract(this.decimalSubtract(allocated, line.discount_amount || 0), line.gain_loss_amount || 0),
+          0
+        );
+        line.payment_amount = this.decimalMultiply(cashDocumentAmount, line.payment_exchange_rate || 0);
         return line;
       },
 
@@ -276,19 +348,19 @@
       },
 
       totalApplied: function () {
-        return this.lines.reduce((sum, line) => sum + this.parseNumber(line.payment_amount || 0), 0);
+        return this.lines.reduce((sum, line) => this.decimalAdd(sum, line.payment_amount || 0), '0');
       },
 
       withholdingTotal: function () {
         return (this.taxCharges.lines || []).reduce((sum, line) => {
-          return line.type === 'withholding' ? sum + this.parseNumber(line.amount || 0) : sum;
-        }, 0);
+          return line.type === 'withholding' ? this.decimalAdd(sum, line.amount || 0) : sum;
+        }, '0');
       },
 
       unallocatedAmount: function () {
-        const headerTotal = this.parseNumber(this.header.paid_amount || 0);
-        const delta = headerTotal - this.totalApplied();
-        return Math.max(delta, 0);
+        const headerTotal = this.toCurrencyString(this.header.paid_amount || 0);
+        const delta = this.decimalSubtract(headerTotal, this.totalApplied());
+        return this.decimalMax(delta, 0);
       },
 
       removeReferenceLine: function (index) {
@@ -487,12 +559,12 @@
       },
 
       calculateTaxLine: function (line) {
-        line.base_amount = this.parseNumber(line.base_amount || this.totalApplied() || 0);
-        line.rate = this.parseNumber(line.rate || 0);
+        line.base_amount = this.toCurrencyString(line.base_amount || this.totalApplied() || 0);
+        line.rate = this.toCurrencyString(line.rate || 0);
         if (line.calculation_method === 'percentage') {
-          line.amount = line.base_amount * line.rate / 100;
+          line.amount = this.decimalMultiply(this.decimalMultiply(line.base_amount, line.rate), '0.01');
         } else {
-          line.amount = this.parseNumber(line.amount || 0);
+          line.amount = this.toCurrencyString(line.amount || 0);
         }
       },
 
@@ -500,20 +572,20 @@
         const lines = this.taxCharges.lines || [];
         const documentTaxTotal = lines.reduce((total, line) => {
           if (line.type === 'withholding' || line.included_in_price || line.affects_document_total === false) return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const capitalizableTaxTotal = lines.reduce((total, line) => {
           if (line.accounting_treatment !== 'capitalizable_inventory_cost') return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const separateTaxTotal = lines.reduce((total, line) => {
           if (line.accounting_treatment !== 'separate_tax_account') return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const withholdingTotal = lines.reduce((total, line) => {
           if (line.type !== 'withholding') return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const subtotal = this.totalApplied();
         this.taxCharges.summary = {
           subtotal: this.toCurrencyString(subtotal),
@@ -521,12 +593,12 @@
           capitalizable_tax_total: this.toCurrencyString(capitalizableTaxTotal),
           separate_tax_total: this.toCurrencyString(separateTaxTotal),
           withholding_total: this.toCurrencyString(withholdingTotal),
-          grand_total: this.toCurrencyString(subtotal + documentTaxTotal)
+          grand_total: this.toCurrencyString(this.decimalAdd(subtotal, documentTaxTotal))
         };
       },
 
       prepareSubmit: function (event) {
-        if (!this.header.company || !this.header.bank_account_id || this.header.paid_amount < 0) {
+        if (!this.header.company || !this.header.bank_account_id || this.decimalCompare(this.header.paid_amount || 0, 0) < 0) {
           event.preventDefault();
           alert("{{ _('Por favor complete los campos obligatorios.') }}");
           return;
@@ -534,7 +606,8 @@
         for (const line of this.lines) {
           this.normalizeReferenceAllocation(line);
         }
-        if (this.totalApplied() > this.parseNumber(this.header.paid_amount || 0) + this.withholdingTotal() + 0.01) {
+        const available = this.decimalAdd(this.decimalAdd(this.header.paid_amount || 0, this.withholdingTotal()), '0.01');
+        if (this.decimalCompare(this.totalApplied(), available) > 0) {
           event.preventDefault();
           alert("{{ _('El total aplicado no puede ser mayor al monto total del pago.') }}");
           return;
@@ -586,7 +659,7 @@
     <div class="row g-3">
       <div class="col-md-3">
           <label class="form-label text-muted small mb-1">{{ _('Tipo de pago') }} <span class="text-danger">*</span></label>
-          <select class="form-select bg-light" x-model="header.payment_type">
+          <select id="payment_type" class="form-select bg-light" x-model="header.payment_type">
               <option value="receive">{{ _('Recibir/Recibido') }}</option>
               <option value="pay">{{ _('Pagar/Pagado') }}</option>
           </select>
@@ -610,7 +683,7 @@
           <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required :readonly="header.company_locked">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -632,7 +705,7 @@
           <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -652,7 +725,7 @@
           <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Forma de pago...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -662,8 +735,11 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
-            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
-            filterSources: ["#company_val"],
+            filters: {
+              company: { selector: "#company_val" },
+              entity_type: function() { return header.payment_type === 'pay' ? 'bank_payment' : 'bank_receipt' }
+            },
+            filterSources: ["#company_val", "#payment_type"],
             requiredFilters: ["company"],
             preload: true,
             loadOnFilterChange: true,
@@ -674,7 +750,7 @@
           <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
-              <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+              <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
             </template>
           </div>
         </div>
@@ -702,13 +778,17 @@
               onSelect: function(opt) {
                 header.external_counter_id = opt.value;
                 header.external_number = opt.next_suggested_formatted || "";
+              },
+              onClear: function() {
+                header.external_counter_id = "";
+                header.external_number = "";
               }
             })'>
             <input type="hidden" x-model="selectedValue">
             <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar chequera...') }}">
             <div class="ca-smart-select-menu" x-show="open" x-cloak>
               <template x-for="opt in options" :key="opt.value">
-                <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
               </template>
             </div>
           </div>
@@ -742,7 +822,7 @@
                 <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Tipo de tercero...') }}" required>
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
                   <template x-for="opt in options" :key="opt.value">
-                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                    <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                   </template>
                 </div>
               </div>
@@ -757,13 +837,14 @@
                   requiredFilters: ["party_type"],
                   initialValue: "{{ initial_payment.party_id if initial_payment else "" }}",
                   preloadOnFocus: true,
-                  onSelect: function(opt) { header.party_id = opt.value; header.party_name = opt.display_name; }
+                  onSelect: function(opt) { header.party_id = opt.value; header.party_name = opt.display_name; },
+                  onClear: function() { header.party_id = ""; header.party_name = ""; }
                 })'>
                 <input type="hidden" x-model="selectedValue">
                 <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar tercero...') }}">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
                   <template x-for="opt in options" :key="opt.value">
-                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                    <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                   </template>
                 </div>
               </div>
@@ -967,7 +1048,7 @@
               <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Centro de costo...') }}">
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>
@@ -984,7 +1065,7 @@
               <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Unidad...') }}">
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>
@@ -1001,7 +1082,7 @@
               <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Proyecto...') }}">
               <div class="ca-smart-select-menu" x-show="open" x-cloak>
                 <template x-for="opt in options" :key="opt.value">
-                  <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                  <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                 </template>
               </div>
             </div>
@@ -1116,15 +1197,15 @@
                           </div>
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Base') }}</label>
-                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.base_amount" :readonly="!taxCharges.modalLine.manual">
+                              <input class="form-control text-end" type="number" step="0.0001" x-model="taxCharges.modalLine.base_amount" :readonly="!taxCharges.modalLine.manual">
                           </div>
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Tasa') }}</label>
-                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.rate" :readonly="!taxCharges.modalLine.manual">
+                              <input class="form-control text-end" type="number" step="0.0001" x-model="taxCharges.modalLine.rate" :readonly="!taxCharges.modalLine.manual">
                           </div>
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Monto') }}</label>
-                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.amount" :readonly="!taxCharges.modalLine.manual || taxCharges.modalLine.calculation_method === 'percentage'">
+                              <input class="form-control text-end" type="number" step="0.0001" x-model="taxCharges.modalLine.amount" :readonly="!taxCharges.modalLine.manual || taxCharges.modalLine.calculation_method === 'percentage'">
                           </div>
                           <div class="col-md-6">
                               <label class="form-label text-muted small mb-1">{{ _('Método de cálculo') }}</label>
@@ -1175,7 +1256,7 @@
                                 <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}">
                                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
                                   <template x-for="opt in options" :key="opt.value">
-                                    <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>
+                                    <button class="ca-smart-select-option" type="button" @click="selectOption(opt)" @blur="closeSoon" x-text="opt.display_name"></button>
                                   </template>
                                 </div>
                               </div>

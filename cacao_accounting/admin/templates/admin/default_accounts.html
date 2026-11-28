@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
@@ -110,7 +110,7 @@
             <span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span>
           </div>
           <template x-for="option in options" :key="option.id">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon">
               <span x-text="option.display_name"></span>
             </button>
           </template>
@@ -139,11 +139,6 @@
     <button class="btn btn-primary" type="submit" name="action" value="save">
       <i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}
     </button>
-    {% if config %}
-    <button class="btn btn-outline-danger" type="submit" name="action" value="delete">
-      <i class="bi bi-trash me-1"></i>{{ _("Eliminar configuración") }}
-    </button>
-    {% endif %}
   </div>
 </form>
 
@@ -165,7 +160,7 @@
         {% for cfg in configs %}
         <tr>
           <td><a href="{{ url_for('admin.cuentas_predeterminadas', company=cfg.company) }}">{{ cfg.company }}</a></td>
-          <td>{{ definitions | length }}</td>
+          <td>{{ configured_counts.get(cfg.company, 0) }}</td>
         </tr>
         {% endfor %}
       </tbody>

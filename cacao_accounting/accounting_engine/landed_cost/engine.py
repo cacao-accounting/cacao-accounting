@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 from typing import List, Dict, Any, Optional
 from cacao_accounting.accounting_engine.common.context import (
     LandedCostResult,
@@ -190,6 +190,36 @@ class LandedCostEngine:
         )
         self._distribute_rule_amount(rule, shares, rule_amount, state)
 
+    def _rounded_rule_allocations(
+        self,
+        shares: Dict[str, Decimal],
+        rule_amount: Decimal,
+        state: _AllocationState,
+    ) -> Dict[str, Decimal]:
+        """Distribute the rounded total by largest remainder without negative costs."""
+        inventory_policy = state.rounding_manager.policy.get("overrides", {}).get("inventory", {})
+        precision = int(inventory_policy.get("precision", state.rounding_manager.default_precision))
+        quantum = Decimal("1").scaleb(-precision)
+        target = state.rounding_manager.round(rule_amount, context_key="inventory")
+        target_units = int((target / quantum).to_integral_value(rounding=ROUND_FLOOR))
+        total_share = sum(shares.values(), Decimal("0"))
+        if total_share <= 0:
+            return {item_id: Decimal("0") for item_id in shares}
+
+        raw_units = {item_id: Decimal(target_units) * share / total_share for item_id, share in shares.items()}
+        allocated_units = {item_id: int(value.to_integral_value(rounding=ROUND_FLOOR)) for item_id, value in raw_units.items()}
+        remaining_units = target_units - sum(allocated_units.values())
+        remainder_order = sorted(
+            shares,
+            key=lambda item_id: (-(raw_units[item_id] - allocated_units[item_id]), str(item_id)),
+        )
+        for item_id in remainder_order:
+            if remaining_units <= 0:
+                break
+            allocated_units[item_id] += 1
+            remaining_units -= 1
+        return {item_id: Decimal(units) * quantum for item_id, units in allocated_units.items()}
+
     def _distribute_rule_amount(
         self,
         rule: Dict[str, Any],
@@ -197,14 +227,9 @@ class LandedCostEngine:
         rule_amount: Decimal,
         state: _AllocationState,
     ) -> None:
-        """Assign a rule amount to every item, absorbing the residual in the last one."""
-        total_allocated_for_rule = Decimal("0")
-        item_list = list(shares.keys())
-        for index, item_id in enumerate(item_list):
-            allocated_amount = state.rounding_manager.round(rule_amount * shares[item_id], context_key="inventory")
-            if index == len(item_list) - 1:
-                allocated_amount = rule_amount - total_allocated_for_rule
-            total_allocated_for_rule += allocated_amount
+        """Assign a rule amount to every item while preserving a non-negative total."""
+        allocations = self._rounded_rule_allocations(shares, rule_amount, state)
+        for item_id, allocated_amount in allocations.items():
             state.item_allocations[item_id].append(
                 {
                     "concept": rule["concept"],

@@ -21,6 +21,7 @@ from wtforms.validators import DataRequired, InputRequired, Length, NumberRange,
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Entity
+from cacao_accounting.fiscal_calendar import validate_fiscal_year_range
 from cacao_accounting.setup.forms import CATALOG_CHOICES, COUNTRY_CHOICES, LANGUAGE_CHOICES
 
 PADDING_DIGITOS = _l("Padding (digitos)")
@@ -43,6 +44,7 @@ ACCOUNT_TYPE_CHOICES = [
     ("payable", _l("Cuentas por Pagar")),
     ("inventory", _l("Inventario")),
     ("cost_of_goods_sold", _l("Costo de ventas")),
+    ("cost_of_service", _l("Costo de servicios")),
     ("inventory_adjustment", _l("Ajuste de inventario")),
     ("bridge", _l("Cuenta puente")),
     ("customer_advance", _l("Anticipo de clientes")),
@@ -58,6 +60,7 @@ ACCOUNT_TYPE_CHOICES = [
     ("deferred_expense", _l("Gasto diferido")),
     ("payment_discount", _l("Descuento de pago")),
     ("period_profit_loss", _l("Resultado del período")),
+    ("purchase_settlement_variance", _l("Variación de liquidación de compras")),
     ("retained_earnings", _l("Utilidades retenidas")),
 ]
 
@@ -130,16 +133,6 @@ class FormularioLibro(FlaskForm):
         default="activo",
         validators=[DataRequired()],
     )
-
-
-# <------------------------------------------------------------------------------------------------------------------------> #
-# Comprobantes Contables
-class ComprobanteContable(FlaskForm):
-    """Comprobante contable manual."""
-
-
-class ComprobanteContableDetalle(FlaskForm):
-    """Detalle de comprobante contable manual."""
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
@@ -329,6 +322,18 @@ class FormularioFiscalYear(FlaskForm):
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
     cerrado = BooleanField(_l("Cerrado"), default=False)
 
+    def validate(self, extra_validators=None):
+        """Rechaza rangos fiscales invertidos o de más de doce meses."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if self.inicio.data and self.fin.data:
+            try:
+                validate_fiscal_year_range(self.inicio.data, self.fin.data)
+            except ValueError as error:
+                self.fin.errors.append(str(error))
+                return False
+        return True
+
 
 class FormularioAccountingPeriod(FlaskForm):
     """Formulario para crear y editar periodos contables."""
@@ -341,15 +346,14 @@ class FormularioAccountingPeriod(FlaskForm):
     inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
 
-
-class FormularioSecuencia(FlaskForm):
-    """Formulario para crear y editar secuencias fisicas (Sequence)."""
-
-    nombre = StringField(_l("Nombre"), validators=[DataRequired()])
-    current_value = IntegerField(_l("Valor Actual"), default=0, validators=[NumberRange(min=0)])
-    increment = IntegerField(_l("Incremento"), default=1, validators=[NumberRange(min=1)])
-    padding = IntegerField(PADDING_DIGITOS, default=5, validators=[NumberRange(min=1, max=20)])
-    reset_policy = SelectField(_l("Politica de Reinicio"), choices=RESET_POLICY_CHOICES)
+    def validate(self, extra_validators=None):
+        """Rechaza un período contable invertido antes de persistir."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if self.inicio.data and self.fin.data and self.inicio.data > self.fin.data:
+            self.fin.errors.append(_l("La fecha final no puede ser anterior a la fecha de inicio."))
+            return False
+        return True
 
 
 class FormularioExternalCounter(FlaskForm):
@@ -387,8 +391,6 @@ class FormularioRecurringJournalTemplate(FlaskForm):
         _l("Frecuencia"),
         choices=[
             ("monthly", _l("Mensual")),
-            ("weekly", _l("Semanal")),
-            ("daily", _l("Diario")),
         ],
         default="monthly",
         validators=[DataRequired()],

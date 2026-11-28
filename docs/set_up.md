@@ -69,29 +69,19 @@ ENV CACAO_KEY=SECRETKEY
 
 ### Postgresql :simple-postgresql::
 
-#### pg8000
+#### psycopg (v3)
 
-pg8000 is a pure Python Postgresql driver, it is the default option because not requieres a compilation process.
+psycopg 3 is the default Postgresql driver. It is a compiled driver: the OCI image compiles its C extension
+against `libpq` during the build, so `pg_config` (from `libpq-devel`) is required at build time and `libpq` at
+runtime.
 
-Examples:
-
-```
-postgresql+pg8000://usuario:contraseña@servidor:puerto/database
-
-postgresql+pg8000://cacao:cacao@localhost:5432/cacao
-```
-
-#### psycopg2
-
-psycopg2 is a compiled Python Postgresql driver, it is recommend to compile the driver with the same version of
-Postgresql you will using in production. The OCI image includes a compiled version of psycopg2 by default.
-
-Examples:
+A plain URL without an explicit driver (`postgresql://` or `postgres://`) is resolved to this driver
+automatically:
 
 ```
-postgresql+psycopg2://usuario:contraseña@servidor:puerto/database
+postgresql://usuario:contraseña@servidor:puerto/database
 
-postgresql+psycopg2://cacao:cacao@localhost:5432/cacao
+postgresql+psycopg://cacao:cacao@localhost:5432/cacao
 ```
 
 ### MySQL :simple-mysql::

@@ -32,8 +32,8 @@ def apply_list_filters(
         query = query.filter(or_(*(field.ilike(pattern) for field in search_fields)))
 
     status = (request.args.get("status") or "").strip()
-    if include_status and status in DOCSTATUS_FILTERS:
-        if hasattr(model, "docstatus"):
+    if include_status and status:
+        if hasattr(model, "docstatus") and status in DOCSTATUS_FILTERS:
             query = query.filter(model.docstatus == DOCSTATUS_FILTERS[status])
         elif hasattr(model, "status"):
             query = query.filter(model.status == status)
@@ -182,11 +182,17 @@ def company_choices_for_module(module: str, *, current_user: Any) -> list[tuple[
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.database import Entity, database
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+    from cacao_accounting.runtime_mode import is_desktop_mode
 
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
-    if permissions.administrador:
+    if permissions.administrador and is_desktop_mode():
+        # Desktop opera con una sola compañía: el administrador conserva el
+        # bypass de alcance y ve las entidades habilitadas de la base.
         codes = [row[0] for row in database.session.execute(database.select(Entity.code)).all()]
     elif permissions.consultar:
+        # Cloud —incluido el administrador— y usuarios comunes: solo las
+        # compañías con concesión explícita, alineado con el alcance de la
+        # consulta (#1828, #2142).
         codes = list(permissions.obtener_companias_autorizadas())
     else:
         codes = []
@@ -203,18 +209,39 @@ def pick_company_period(company: str | None, companies: list[str]) -> str | None
     return company or (companies[0] if len(companies) == 1 else None)
 
 
-def attach_period_picker(paginated: Any, model: type[Any], module: str, *, current_user: Any) -> None:
+def company_choices_for_modules(modules: tuple[str, ...], *, current_user: Any) -> list[tuple[str, str]]:
+    """Devuelve la unión de compañías autorizadas para varios módulos."""
+    from flask_babel import gettext as _babel_gettext
+
+    choices: dict[str, str] = {}
+    for module in modules:
+        for code, name in company_choices_for_module(module, current_user=current_user):
+            if code:
+                choices.setdefault(code, name)
+    if not choices:
+        return [("", "")]
+    ordered = sorted(choices.items(), key=lambda item: item[1])
+    return [("", _babel_gettext("Todas"))] + ordered
+
+
+def attach_period_picker(
+    paginated: Any,
+    model: type[Any],
+    module: str | tuple[str, ...],
+    *,
+    current_user: Any,
+) -> None:
     """Adjunta al objeto de paginación el contexto del selector de período.
 
-    Solo se aplica a modelos con ``posting_date`` (documentos transaccionales).
-    Expone ``company_choices``, ``selected_company``, ``periods``,
-    ``period_from``, ``period_to`` y ``period_extra_params`` para que las
-    plantillas de listado rendericen el selector sin duplicar lógica por ruta.
+    ``module`` puede ser una tupla para listados que autorizan varias fuentes
+    (por ejemplo Compras + Inventario); en ese caso el selector muestra la
+    unión de compañías autorizadas.
     """
     if not hasattr(model, "posting_date"):
         paginated.period_extra_params = {}
         return
-    choices = company_choices_for_module(module, current_user=current_user)
+    modules = (module,) if isinstance(module, str) else tuple(module)
+    choices = company_choices_for_modules(modules, current_user=current_user)
     selected = request.args.get("company") or (choices[1][0] if len(choices) > 1 else None)
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")

@@ -31,6 +31,8 @@ def create_withholding_certificate(payment: PaymentEntry, settlement: Any) -> Wi
         return None
     existing = database.session.execute(select(WithholdingCertificate).filter_by(payment_id=payment.id)).scalar_one_or_none()
     if existing is not None:
+        if existing.status != "issued" or existing.docstatus != 1:
+            raise ValueError(_("El certificado de retención del pago está cancelado y no puede reemitirse."))
         return existing
     supplier = database.session.get(Party, payment.party_id)
     if supplier is None:

@@ -5,7 +5,7 @@
 {% if TESTING %}<div
   data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/compras/templates/compras/cotizacion_proveedor.html">
 </div>{% endif %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -40,7 +40,7 @@
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_cotizacion_proveedor_lista'),
             url_for('compras.compras_cotizacion_proveedor_nueva')) }}
-{{ macros.document_print_button("supplier_quotation", registro.id) }}
+{{ macros.document_print_button("supplier_quotation", registro.id, company=registro.company) }}
 {{ macros.document_create_actions("supplier_quotation", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

@@ -47,7 +47,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -80,7 +80,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="account_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -108,7 +108,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="currency" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -122,7 +122,7 @@
         name: "custodian_id",
         minChars: 1,
         preload: true,
-        initialValue: "{{ registro.custodian_id if registro else form.custodian_id.data or '' }}",
+        initialValue: {{ (registro.custodian_id if registro else form.custodian_id.data or '')|tojson|forceescape }},
         initialLabel: "",
         messages: {
           placeholder: {{ _('Buscar responsable')|tojson }},
@@ -138,7 +138,7 @@
         <input class="form-control form-control-sm ca-smart-select-input" id="custodian_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
         <div class="ca-smart-select-menu" x-show="open" x-cloak>
           <template x-for="option in options" :key="option.value">
-            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+            <button class="ca-smart-select-option" type="button" @click="selectOption(option)" @blur="closeSoon"><span x-text="option.display_name"></span></button>
           </template>
           <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
           <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>

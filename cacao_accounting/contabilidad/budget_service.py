@@ -3,9 +3,13 @@
 
 """Servicio para la gestión de presupuestos."""
 
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+import sqlite3
 from typing import Any, Dict, Optional
+
+from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from cacao_accounting.database import (
     AccountingPeriod,
@@ -32,6 +36,34 @@ class BudgetError(Exception):
 
 
 _MAX_BUDGET_AMOUNT = Decimal("9999999999999999.9999")
+
+
+def _lock_budget_for_line_write(budget_id: str) -> Budget | None:
+    """Serialize line writers on the budget aggregate across supported engines."""
+    session = database.session
+    if session.get_bind().dialect.name == "sqlite":
+        connection = session.connection()
+        raw_connection = connection.connection.driver_connection
+        if raw_connection is not None and not raw_connection.in_transaction:
+            original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+            connection.exec_driver_sql("PRAGMA busy_timeout=5000")
+            busy_error: OperationalError | None = None
+            try:
+                connection.exec_driver_sql("BEGIN IMMEDIATE")
+            except OperationalError as exc:
+                error_code = getattr(exc.orig, "sqlite_errorcode", None)
+                if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                    raise
+                busy_error = exc
+            finally:
+                connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+            if busy_error is not None:
+                session.rollback()
+                raise BudgetError(_("Otro usuario está modificando este presupuesto. Intente nuevamente.")) from busy_error
+
+    return session.execute(
+        select(Budget).where(Budget.id == budget_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
 
 
 def _parse_budget_amount(value: Any, *, dialect_name: str | None = None) -> Decimal:
@@ -113,7 +145,7 @@ class BudgetService:
 
     def add_budget_line(self, budget_id: str, data: Dict[str, Any], user_id: str) -> BudgetLine:
         """Agrega una línea a un presupuesto en borrador."""
-        budget = database.session.get(Budget, budget_id)
+        budget = _lock_budget_for_line_write(budget_id)
         if not budget or budget.status != "draft":
             raise BudgetError(_("El presupuesto no existe o no está en borrador."))
 
@@ -141,7 +173,12 @@ class BudgetService:
         if not line:
             raise BudgetError(_("Línea de presupuesto no encontrada."))
 
-        budget = database.session.get(Budget, line.budget_id)
+        budget = _lock_budget_for_line_write(line.budget_id)
+        line = database.session.execute(
+            select(BudgetLine).where(BudgetLine.id == line_id).with_for_update().execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if not line:
+            raise BudgetError(_("Línea de presupuesto no encontrada."))
         if not budget or budget.status != "draft":
             raise BudgetError(_("Solo se pueden editar líneas de presupuestos en borrador."))
 
@@ -277,7 +314,7 @@ class BudgetService:
         business_unit_id = data.get("business_unit_id")
         project_id = data.get("project_id")
 
-        query = database.session.query(BudgetLine).filter(
+        query = select(BudgetLine).where(
             BudgetLine.budget_id == budget.id,
             BudgetLine.account_id == data["account_id"],
             BudgetLine.cost_center_id == data["cost_center_id"],
@@ -290,9 +327,12 @@ class BudgetService:
             BudgetLine.project_id.is_(None) if project_id is None else BudgetLine.project_id == project_id,
         )
         if exclude_line_id:
-            query = query.filter(BudgetLine.id != exclude_line_id)
+            query = query.where(BudgetLine.id != exclude_line_id)
 
-        if query.first():
+        existing = (
+            database.session.execute(query.with_for_update().execution_options(populate_existing=True)).scalars().first()
+        )
+        if existing:
             raise BudgetError(_("Ya existe una línea para esta combinación de dimensiones y período."))
 
     def get_budget_totals(self, budget_id: str) -> Dict[str, Decimal]:
@@ -340,11 +380,12 @@ class BudgetService:
                 cc = database.session.query(CostCenter).filter_by(code=cp.default_cost_center, entity=company).first()
                 if cc:
                     return cc
-        cc = database.session.query(CostCenter).filter_by(entity=company, default=True).first()
-        if cc:
-            return cc
-        cc = database.session.query(CostCenter).filter_by(entity=company, code="MAIN").first()
-        return cc
+        consulta = database.session.query(CostCenter).filter_by(entity=company, group=False, active=True, enabled=True)
+        canonical = consulta.filter_by(code="MAIN").first()
+        if canonical:
+            return canonical
+        # Compatibilidad con bases que aún conservan otro default posteable.
+        return consulta.filter_by(default=True).order_by(CostCenter.code).first()
 
     @staticmethod
     def _no_budget_result(amount: Decimal) -> Dict[str, Any]:
@@ -443,16 +484,20 @@ class BudgetService:
     ) -> Decimal:
         """Calcula el monto comprometido a partir de asientos contables reales."""
         from cacao_accounting.database import Accounts, GLEntry
+        from cacao_accounting.cancellation_scope import effective_gl_scope
+        from cacao_accounting.reportes.services import (
+            account_classification_is_debit_positive,
+            normalize_account_classification,
+        )
 
         gl_query = (
-            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification)
+            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification, Accounts.account_type)
             .join(Accounts, GLEntry.account_id == Accounts.id)
             .filter(
                 GLEntry.company == company,
                 GLEntry.accounting_period_id == period_id,
                 GLEntry.account_id == resolved_account_id,
-                GLEntry.is_cancelled.is_(False),
-                GLEntry.is_reversal.is_(False),
+                *effective_gl_scope(),
                 GLEntry.is_fiscal_year_closing.is_(False),
             )
         )
@@ -467,8 +512,8 @@ class BudgetService:
 
         committed = Decimal("0")
         for entry in gl_query.all():
-            classif = (entry.classification or "").lower()
-            if classif in ("gastos", "activo", "expense", "asset"):
+            classification = normalize_account_classification(entry.classification, entry.account_type)
+            if account_classification_is_debit_positive(classification):
                 committed += entry.debit - entry.credit
             else:
                 committed += entry.credit - entry.debit

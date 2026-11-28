@@ -15,9 +15,18 @@ from typing import Any, Iterable
 
 from cacao_accounting.database import DocumentRelation, database
 from cacao_accounting.document_flow import DocumentFlowError
+from cacao_accounting.numbers import coerce_decimal
 
 
 from cacao_accounting.i18n import _
+
+SALES_INVOICE_DOCUMENT_TYPES = frozenset({"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"})
+
+
+def validate_sales_invoice_document_type(document_type: Any) -> None:
+    """Exige que una factura de venta use uno de sus subtipos registrados."""
+    if not isinstance(document_type, str) or document_type not in SALES_INVOICE_DOCUMENT_TYPES:
+        raise ValueError(_("El tipo de documento de venta no es válido."))
 
 
 def _collect_currency_sources(registro: Any) -> list[Any]:
@@ -160,7 +169,8 @@ def _validate_item_quantities(items):
 def _validate_item_rates(items):
     """Valida que todas las tarifas sean mayores a cero."""
     for item in items:
-        if getattr(item, "rate", 0) <= 0:
+        rate = coerce_decimal(getattr(item, "rate", 0), "tarifa")
+        if rate <= 0:
             raise ValueError(_("Todas las tarifas deben ser mayores a cero."))
 
 
@@ -171,19 +181,37 @@ def _validate_item_amounts(items):
             raise ValueError(_("Los montos no pueden ser cero."))
 
 
-def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
-    """Valida que las lineas tengan almacen asignado."""
+def _stock_entry_required_warehouses(purpose: str | None) -> tuple[bool, bool]:
+    """Devuelve (requiere_origen, requiere_destino) para StockEntry."""
+    if purpose in {"material_receipt", "adjustment_positive"}:
+        return False, True
+    if purpose in {"material_issue", "adjustment_negative"}:
+        return True, False
+    if purpose == "material_transfer":
+        return True, True
+    # stock_reconciliation y propósitos desconocidos: fallback genérico.
+    return False, False
+
+
+def _validate_warehouse_assignments(items, warehouse_for_stock_items_only, purpose: str | None = None):
+    """Valida que las lineas tengan almacen asignado según propósito."""
+    requires_source, requires_target = _stock_entry_required_warehouses(purpose)
     for item in items:
         is_stock_item = getattr(item, "is_stock_item", True)
         if warehouse_for_stock_items_only and not is_stock_item:
             continue
-        wh = (
-            getattr(item, "warehouse", None)
-            or getattr(item, "source_warehouse", None)
-            or getattr(item, "target_warehouse", None)
-        )
-        if not wh:
-            item_code = getattr(item, "item_code", "desconocido")
+        item_code = getattr(item, "item_code", "desconocido")
+        source_wh = getattr(item, "source_warehouse", None) or getattr(item, "warehouse", None)
+        target_wh = getattr(item, "target_warehouse", None) or getattr(item, "warehouse", None)
+        if requires_source and not source_wh:
+            raise ValueError(_("La linea del artículo %(item)s requiere una bodega de origen asignada.") % {"item": item_code})
+        if requires_target and not target_wh:
+            raise ValueError(
+                _("La linea del artículo %(item)s requiere una bodega de destino asignada.") % {"item": item_code}
+            )
+        if purpose == "material_transfer" and source_wh and target_wh and source_wh == target_wh:
+            raise ValueError(_("La transferencia de material requiere bodegas de origen y destino distintas."))
+        if not requires_source and not requires_target and not (source_wh or target_wh):
             raise ValueError(_("La linea del artículo %(item)s requiere un almacen asignado.") % {"item": item_code})
 
 
@@ -240,6 +268,10 @@ def validate_submit_prerequisites(
     Raises:
         ValueError: Si alguna validacion falla.
     """
+    from cacao_accounting.database import SalesInvoice
+
+    if isinstance(registro, SalesInvoice):
+        validate_sales_invoice_document_type(registro.document_type)
     _validate_basic_document_fields(registro)
     if require_party:
         _validate_party(registro)
@@ -253,4 +285,5 @@ def validate_submit_prerequisites(
         if require_amount_nonzero:
             _validate_item_amounts(items)
     if require_warehouse and items:
-        _validate_warehouse_assignments(items, warehouse_for_stock_items_only)
+        purpose = getattr(registro, "purpose", None)
+        _validate_warehouse_assignments(items, warehouse_for_stock_items_only, purpose=purpose)

@@ -13,28 +13,74 @@ from flask import current_app, has_app_context
 from sqlalchemy import and_, event, inspect, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, object_session
+from sqlalchemy.sql.elements import BinaryExpression
 from sqlalchemy.sql.dml import Delete, Insert, Update
+from sqlalchemy.sql import operators
 
 from cacao_accounting.audit_trail_service import _current_actor, _json_default
-from cacao_accounting.database import AuditTrail, DocBase, database, obtiene_texto_unico
+from cacao_accounting.database import AuditTrail, DocBase, UserCompanyAccess, database, obtiene_texto_unico
 from cacao_accounting.internal_control_sql import raw_sql_mutates_protected_table
 from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
+_USER_COMPANY_ACCESS_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
+    "icfr_user_company_access_transition", default=frozenset()
+)
 _APPROVAL_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_approval_transition", default=frozenset())
 _FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition", default=frozenset())
+_PETTY_CASH_REPLENISHMENT_ASSOCIATION: ContextVar[frozenset[int]] = ContextVar(
+    "icfr_petty_cash_replenishment_association", default=frozenset()
+)
 _BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
     "icfr_bank_reconciliation_transition", default=frozenset()
 )
+_CONFIG_VALUE_TRANSITION: ContextVar[frozenset[str]] = ContextVar("icfr_config_value_transition", default=frozenset())
 _AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_insert_active", default=False)
+_SUPPRESSED_CREATED_EVENTS: ContextVar[frozenset[int]] = ContextVar("icfr_suppressed_created_events", default=frozenset())
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
+_LEDGER_CANCELLATION_ACTIVE: ContextVar[tuple[str, str] | None] = ContextVar("icfr_ledger_cancellation_active", default=None)
+_BALANCE_CONFIRMATION_RESPONSE_TRANSITION: ContextVar[frozenset[str]] = ContextVar(
+    "icfr_balance_confirmation_response_transition", default=frozenset()
+)
+_POSTING_AUTHORIZATION: ContextVar[bool] = ContextVar("icfr_posting_authorization", default=False)
+_STOCK_VALUATION_BALANCE_TRANSITION: ContextVar[frozenset[str]] = ContextVar(
+    "icfr_stock_valuation_balance_transition", default=frozenset()
+)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
-EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
+BALANCE_CONFIRMATION_SNAPSHOT_FIELDS = frozenset(
+    {
+        "id",
+        "created",
+        "created_by",
+        "company",
+        "document_no",
+        "document_type",
+        "party_type",
+        "party_id",
+        "cutoff_date",
+        "snapshot_json",
+        "snapshot_hash",
+    }
+)
+BALANCE_CONFIRMATION_RESPONSE_FIELDS = frozenset(
+    {
+        "responded_at",
+        "response_type",
+        "response_comment",
+        "respondent_first_name",
+        "respondent_last_name",
+        "respondent_email",
+        "respondent_ip",
+        "respondent_user_agent",
+    }
+)
+EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log", "external_counter_audit_log"})
 LEDGER_TABLES = frozenset(
     {
         "gl_entry",
         "stock_ledger_entry",
+        "stock_ledger_book_entry",
         "ar_ap_ledger_entry",
         "ar_ap_ledger_book_entry",
         "purchase_economic_event",
@@ -42,6 +88,12 @@ LEDGER_TABLES = frozenset(
         "exchange_revaluation_item",
     }
 )
+# Stock valuation layers combine immutable historical evidence (quantity, rate,
+# cost, document and source-layer traceability) with derived running balances.
+# The historical columns never change; only the running balances may be
+# refreshed, and only inside an authorized valuation service scope.
+STOCK_VALUATION_TABLES = frozenset({"stock_valuation_layer"})
+STOCK_VALUATION_BALANCE_FIELDS = frozenset({"remaining_qty", "remaining_stock_value"})
 # Inter-voucher flow evidence: the link, consumed quantities and matching
 # results that downstream reports reconcile against the financial ledger.
 FLOW_EVIDENCE_TABLES = frozenset(
@@ -52,6 +104,7 @@ FLOW_EVIDENCE_TABLES = frozenset(
         "purchase_invoice_receipt_allocation",
         "purchase_receipt_return_allocation",
         "purchase_credit_note_allocation",
+        "petty_cash_replenishment_expense",
     }
 )
 # Workflow transitions allowed on flow evidence rows; anything else is the
@@ -65,8 +118,13 @@ FLOW_EVIDENCE_TRANSITIONS = {
     "purchase_invoice_receipt_allocation": frozenset({"status"}),
     "purchase_receipt_return_allocation": frozenset({"status"}),
     "purchase_credit_note_allocation": frozenset({"status"}),
+    "petty_cash_replenishment_expense": frozenset(),
 }
 FLOW_PROVIDER_STAMPS = frozenset({"modified", "modified_by"})
+# Structural, mode-agnostic evidence: audit writes, ledger lines and the
+# documentary flow links that downstream reports reconcile against never
+# accept UPDATE/DELETE from application code, whatever the runtime mode
+# (Desktop assumes the same guarantees as Cloud).
 SENSITIVE_MODELS = (
     "User",
     "Roles",
@@ -102,8 +160,10 @@ MUTABLE_STATE = frozenset(
         "cancelled_at",
         "cancelled_by",
         "cancel_reason",
-        "canceled",
-        "canceled_by",
+        "voided_at",
+        "voided_by",
+        "void_reason",
+        "reversal_journal_id",
         "is_cancelled",
         "outstanding_amount",
         "base_outstanding_amount",
@@ -129,6 +189,27 @@ def audit_actor(user_id: str | None, name: str) -> Iterator[None]:
         _ACTOR.reset(token)
 
 
+def _ledger_cancellation_is_authorized(target: Any) -> bool:
+    """Check whether the private cancellation scope matches this exact ledger row."""
+    return _LEDGER_CANCELLATION_ACTIVE.get() == (
+        str(getattr(target, "voucher_type", "")),
+        str(getattr(target, "voucher_id", "")),
+    )
+
+
+@contextmanager
+def user_company_access_transition(*assignments: UserCompanyAccess) -> Iterator[None]:
+    """Authorize deletion of specific company-access rows during an audited replacement."""
+    if not assignments or any(not isinstance(row, UserCompanyAccess) or not inspect(row).persistent for row in assignments):
+        raise ValueError("A company-access transition requires persisted UserCompanyAccess rows")
+    allowed = _USER_COMPANY_ACCESS_TRANSITION.get().union(id(row) for row in assignments)
+    token = _USER_COMPANY_ACCESS_TRANSITION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _USER_COMPANY_ACCESS_TRANSITION.reset(token)
+
+
 def current_audit_actor() -> tuple[str | None, str | None]:
     """Resolve an explicit actor, authenticated user, or named system process."""
     explicit = _ACTOR.get()
@@ -136,6 +217,17 @@ def current_audit_actor() -> tuple[str | None, str | None]:
         return explicit
     authenticated = _current_actor()
     return authenticated if authenticated[0] else (None, "system")
+
+
+@contextmanager
+def config_value_transition(*keys: str) -> Iterator[None]:
+    """Authorize the audited key/value writer for the supplied configuration keys."""
+    normalized = frozenset(str(key) for key in keys if str(key))
+    token = _CONFIG_VALUE_TRANSITION.set(_CONFIG_VALUE_TRANSITION.get().union(normalized))
+    try:
+        yield
+    finally:
+        _CONFIG_VALUE_TRANSITION.reset(token)
 
 
 @contextmanager
@@ -161,6 +253,17 @@ def flow_evidence_transition(*rows: Any) -> Iterator[None]:
 
 
 @contextmanager
+def petty_cash_replenishment_association(*rows: Any) -> Iterator[None]:
+    """Authorize the service to append petty-cash expense association evidence."""
+    allowed = _PETTY_CASH_REPLENISHMENT_ASSOCIATION.get().union(id(row) for row in rows)
+    token = _PETTY_CASH_REPLENISHMENT_ASSOCIATION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _PETTY_CASH_REPLENISHMENT_ASSOCIATION.reset(token)
+
+
+@contextmanager
 def bank_reconciliation_transition(*rows: Any) -> Iterator[None]:
     """Authorize reconciliation-link state changes for the supplied bank rows."""
     allowed = _BANK_RECONCILIATION_TRANSITION.get().union(id(row) for row in rows)
@@ -169,6 +272,49 @@ def bank_reconciliation_transition(*rows: Any) -> Iterator[None]:
         yield
     finally:
         _BANK_RECONCILIATION_TRANSITION.reset(token)
+
+
+@contextmanager
+def stock_valuation_balance_transition(*layers: Any) -> Iterator[None]:
+    """Authorize derived-balance updates for the supplied valuation layers only."""
+    layer_ids = {str(getattr(layer, "id", "") or "") for layer in layers}
+    layer_ids.discard("")
+    if not layer_ids:
+        raise ValueError(_("La transición de saldos de valoración requiere capas persistidas."))
+    token = _STOCK_VALUATION_BALANCE_TRANSITION.set(_STOCK_VALUATION_BALANCE_TRANSITION.get().union(layer_ids))
+    try:
+        yield
+    finally:
+        _STOCK_VALUATION_BALANCE_TRANSITION.reset(token)
+
+
+@contextmanager
+def suppress_created_event(*documents: Any) -> Iterator[None]:
+    """Suppress the automatic created audit event for the supplied new rows.
+
+    Callers that emit a canonical ``log_create()`` event with additional context
+    must wrap only the insert/flush of the row, so a single creation produces a
+    single meaningful audit entry in both Desktop and Cloud.
+    """
+    suppressed = _SUPPRESSED_CREATED_EVENTS.get().union(id(document) for document in documents)
+    token = _SUPPRESSED_CREATED_EVENTS.set(suppressed)
+    try:
+        yield
+    finally:
+        _SUPPRESSED_CREATED_EVENTS.reset(token)
+
+
+@contextmanager
+def balance_confirmation_response_transition(confirmation_id: str) -> Iterator[None]:
+    """Authorize the first external response for one balance confirmation."""
+    if not confirmation_id:
+        raise ValueError("A balance confirmation response requires a document ID")
+    allowed = _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.get().union({str(confirmation_id)})
+    token = _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.reset(token)
 
 
 def _enabled() -> bool:
@@ -185,6 +331,24 @@ def _enabled() -> bool:
     if override is not None:
         return bool(override)
     return is_cloud_mode() and not current_app.config.get("TESTING", False)
+
+
+def _structural_enabled() -> bool:
+    """Return whether structural evidence guards are active for the app.
+
+    La evidencia contable (ledgers, vínculos documentales y bitácoras de
+    auditoría) es inmutable en ambos modos de operación: proteger solo Cloud
+    dejaría expuesta la misma evidencia por la ruta Desktop. Se exceptúan las
+    corridas fuera de la aplicación (sin contexto Flask) y las suites de
+    prueba genéricas (``TESTING`` sin ``INTERNAL_CONTROLS_ENFORCE`` explícito),
+    que necesitarían bloquear la siembra y limpieza de sus fixtures; las
+    suites ICFR dedicadas optan explícitamente por esa configuración.
+    """
+    if not has_app_context():
+        return False
+    if current_app.config.get("TESTING", False) and current_app.config.get("INTERNAL_CONTROLS_ENFORCE") is None:
+        return False
+    return True
 
 
 def _sensitive(target: Any) -> bool:
@@ -258,7 +422,13 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
         return
     before = _snapshot(target, previous=True) if action != "created" else None
     after = _snapshot(target) if action != "deleted" else None
-    if before == after:
+    try:
+        unchanged = before == after
+    except TypeError:
+        unchanged = json.dumps(before, default=_json_default, sort_keys=True, ensure_ascii=False) == json.dumps(
+            after, default=_json_default, sort_keys=True, ensure_ascii=False
+        )
+    if unchanged:
         return
     actor_id, actor_name = current_audit_actor()
     company = getattr(target, "company", None) or getattr(target, "entity", None) or getattr(target, "company_code", None)
@@ -301,7 +471,9 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
 
 
 def _audit_insert(mapper: Any, connection: Any, target: Any) -> None:
-    """Record a newly persisted sensitive object."""
+    """Record a newly persisted sensitive object unless the caller logs it explicitly."""
+    if id(target) in _SUPPRESSED_CREATED_EVENTS.get():
+        return
     _write_event(mapper, connection, target, "created")
 
 
@@ -364,10 +536,46 @@ def _guard_lifecycle(target: Any) -> None:
         raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
+def _guard_evidence_flush(session: Session) -> None:
+    """Reject ORM rewrites and deletes of structural evidence in both modes.
+
+    Los mapper-level guards ya protegen los modelos del ledger sin importar el
+    modo; aquí se cubren las bitácoras de auditoría y los vínculos del flujo
+    documental, que solo tenían la capa Cloud de ``_guard_flush``.
+    """
+    if not _structural_enabled():
+        return
+    for target in session.new:
+        if (
+            target.__table__.name == "petty_cash_replenishment_expense"
+            and id(target) not in _PETTY_CASH_REPLENISHMENT_ASSOCIATION.get()
+        ):
+            raise ValueError(_("La relación de reposición requiere el servicio autorizado."))
+    for target in set(session.dirty).union(session.deleted):
+        table = target.__table__.name
+        if table == "balance_confirmation":
+            changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
+            _guard_balance_confirmation_flush(session, target, changed, target in session.deleted)
+            continue
+        if _enabled():
+            continue
+        if table not in EVIDENCE_TABLES and table not in FLOW_EVIDENCE_TABLES:
+            continue
+        changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
+        deleted = target in session.deleted
+        if table in EVIDENCE_TABLES and (deleted or changed):
+            raise ValueError(_("La evidencia de auditoría es inmutable."))
+        _guard_flow_evidence(target, table, changed, deleted)
+        _guard_authorized_transition(target, table, changed)
+
+
 def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
     """Protect existing evidence and posted document financial values."""
     del flush_context, instances
+    _guard_evidence_flush(session)
     if not _enabled():
+        if _structural_enabled():
+            _guard_desktop_financial_flush(session)
         return
     _guard_new_lines(session)
     for target in set(session.dirty).union(session.deleted):
@@ -375,12 +583,24 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
         if table in EVIDENCE_TABLES and (target in session.deleted or changed):
             raise ValueError(_("La evidencia de auditoría es inmutable."))
-        _guard_sensitive_delete(table, target in session.deleted)
+        _guard_sensitive_delete(target, target in session.deleted)
         _guard_flow_evidence(target, table, changed, target in session.deleted)
         _guard_approval_request(target, table, changed, target in session.deleted)
         _guard_authorized_transition(target, table, changed)
         _guard_lifecycle(target)
         if _posted(target) and (target in session.deleted or changed.difference(MUTABLE_STATE)):
+            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+        _guard_line(session, target, changed)
+
+
+def _guard_desktop_financial_flush(session: Session) -> None:
+    """Keep posted documents and their lines immutable in Desktop as in Cloud."""
+    _guard_new_lines(session)
+    for target in set(session.dirty).union(session.deleted):
+        changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
+        deleted = target in session.deleted
+        _guard_lifecycle(target)
+        if _posted(target) and (deleted or changed.difference(MUTABLE_STATE)):
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
         _guard_line(session, target, changed)
 
@@ -407,9 +627,32 @@ def _remember_inserted_posted_document(mapper: Any, connection: Any, target: Any
     _remember_posted_document(target)
 
 
+@contextmanager
+def authorized_posting() -> Iterator[None]:
+    """Autoriza únicamente las escrituras internas del servicio de posting.
+
+    El allowance de líneas de un documento posteado no se concede por una
+    transición ORM arbitraria: solo mientras el servicio de posting ejecuta
+    su unidad de trabajo. Fuera del alcance, cualquier draft→posted por ORM
+    queda sin permiso y las líneas siguen protegidas (#1877).
+    """
+    token = _POSTING_AUTHORIZATION.set(True)
+    try:
+        yield
+    finally:
+        _POSTING_AUTHORIZATION.reset(token)
+        # #1877: el permiso de líneas termina con el scope de posting, no con
+        # la transacción exterior; así no sobrevive a un flush externo antes
+        # del commit. Los scopes anidados no limpian el permiso del padre.
+        if not _POSTING_AUTHORIZATION.get():
+            database.session.info.pop(_POSTED_DOCUMENTS_IN_TRANSACTION, None)
+
+
 def _remember_document_posting_transition(mapper: Any, connection: Any, target: Any) -> None:
-    """Remember a draft-to-posted transition inside the active transaction."""
+    """Remember a draft-to-posted transition inside an authorized posting scope."""
     del mapper, connection
+    if not _POSTING_AUTHORIZATION.get():
+        return
     if _is_currently_posted(target) and not _posted(target):
         _remember_posted_document(target)
 
@@ -434,10 +677,13 @@ def _guard_approval_request(target: Any, table: str, changed: set[str], deleted:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
 
 
-def _guard_sensitive_delete(table: str, deleted: bool) -> None:
-    """Reject ORM deletion of sensitive records while auditing normal updates."""
-    if deleted and _is_sensitive_table(table):
-        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+def _guard_sensitive_delete(target: Any, deleted: bool) -> None:
+    """Reject sensitive ORM deletion except for an explicit company-access change."""
+    if not deleted or not _is_sensitive_table(target.__table__.name):
+        return
+    if isinstance(target, UserCompanyAccess) and id(target) in _USER_COMPANY_ACCESS_TRANSITION.get():
+        return
+    raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
 def _guard_authorized_transition(target: Any, table: str, changed: set[str]) -> None:
@@ -448,6 +694,38 @@ def _guard_authorized_transition(target: Any, table: str, changed: set[str]) -> 
     if table in FLOW_EVIDENCE_TRANSITIONS and changed.intersection(FLOW_EVIDENCE_TRANSITIONS[table]):
         if id(target) not in _FLOW_TRANSITION.get():
             raise ValueError(_("Las transiciones documentales requieren el servicio autorizado."))
+
+
+def _guard_balance_confirmation_flush(session: Session, target: Any, changed: set[str], deleted: bool) -> None:
+    """Preserve confirmation snapshots and allow a single authorized response."""
+    if deleted or changed.intersection(BALANCE_CONFIRMATION_SNAPSHOT_FIELDS):
+        raise ValueError(_("La evidencia de confirmación de saldos es inmutable."))
+    response_fields_changed = bool(changed.intersection(BALANCE_CONFIRMATION_RESPONSE_FIELDS))
+    terminal_response = "status" in changed and target.status in {"confirmed", "disputed"}
+    if not response_fields_changed and not terminal_response:
+        return
+    if str(target.id) not in _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.get():
+        raise ValueError(_("La respuesta externa requiere el servicio autorizado."))
+    if (
+        target.response_type not in {"confirmed", "disputed"}
+        or target.status != target.response_type
+        or target.responded_at is None
+    ):
+        raise ValueError(_("La respuesta externa debe registrarse completa en una sola transición."))
+    if not _balance_confirmation_response_is_new(session.connection(), str(target.id)):
+        raise ValueError(_("La respuesta externa ya está registrada y no se puede reescribir."))
+
+
+def _balance_confirmation_response_is_new(connection: Any, confirmation_id: str) -> bool:
+    """Check that no response evidence has already been stored for this row."""
+    from cacao_accounting.database import BalanceConfirmation
+
+    previous = connection.execute(
+        select(BalanceConfirmation.response_type, BalanceConfirmation.responded_at).where(
+            BalanceConfirmation.id == confirmation_id
+        )
+    ).first()
+    return previous is not None and previous.response_type is None and previous.responded_at is None
 
 
 def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bool) -> None:
@@ -463,9 +741,50 @@ def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bo
             raise ValueError(_("Una relación revertida no se reactiva; registre una relación nueva."))
 
 
+def _allow_new_line_under_posted_parent(session: Session, target: Any, parent: Any) -> bool:
+    """Allow only append-only references or same-transaction posted lines."""
+    if _is_posted_advance_reference(target, parent):
+        return True
+    if getattr(target, "is_reversal", False) and _is_valid_reversal_line(session, target, parent):
+        # Un contraasiento nuevo no reescribe evidencia: revierte una línea
+        # posteada del mismo documento y queda enlazado por `reversal_of`.
+        return True
+    return _posted_in_current_transaction(session, parent) and target.__table__.name != "payment_reference"
+
+
+def _is_valid_reversal_line(session: Session, target: Any, parent: Any) -> bool:
+    """Validate that a new reversal points to an unreversed line of this parent."""
+    reversal_id = getattr(target, "reversal_of", None)
+    if not reversal_id:
+        return False
+    original = session.get(type(target), reversal_id)
+    if original is None:
+        return False
+    parent_id = str(getattr(parent, "id", ""))
+    same_parent = any(
+        parent_class is type(parent) and str(parent_pk) == parent_id for parent_class, parent_pk in _line_parents(original)
+    )
+    if not same_parent:
+        return False
+    for pending in session.new:
+        if pending is target or type(pending) is not type(target):
+            continue
+        if str(getattr(pending, "reversal_of", "")) == str(reversal_id):
+            return False
+    existing = (
+        session.connection().execute(select(type(target).id).where(type(target).reversal_of == reversal_id).limit(1)).first()
+    )
+    return existing is None
+
+
 def _guard_new_lines(session: Session) -> None:
     """Reject additional documentary lines after their header is posted."""
     for target in session.new:
+        if (
+            target.__table__.name == "petty_cash_replenishment_expense"
+            and id(target) in _PETTY_CASH_REPLENISHMENT_ASSOCIATION.get()
+        ):
+            continue
         if _audited_document(target):
             continue
         for parent_class, parent_id in _line_parents(target):
@@ -475,9 +794,7 @@ def _guard_new_lines(session: Session) -> None:
             if not _posted(parent):
                 _stamp_line_editor(parent)
                 continue
-            if _is_posted_advance_reference(target, parent):
-                continue
-            if _posted_in_current_transaction(session, parent) and target.__table__.name != "payment_reference":
+            if _allow_new_line_under_posted_parent(session, target, parent):
                 continue
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
@@ -496,6 +813,8 @@ def _is_posted_advance_reference(target: Any, parent: Any) -> bool:
 
 def _guard_line(session: Session, target: Any, changed: set[str]) -> None:
     """Protect existing financial lines through their mapped parent foreign key."""
+    if target.__table__.name in LEDGER_TABLES and "is_cancelled" in changed and not _ledger_cancellation_is_authorized(target):
+        raise ValueError(_("La cancelación del ledger debe realizarse mediante el servicio auditado."))
     if _audited_document(target):
         return
     if changed.issubset(MUTABLE_STATE) and target not in session.deleted:
@@ -512,12 +831,27 @@ def _guard_line(session: Session, target: Any, changed: set[str]) -> None:
             raise ValueError(_("Los vínculos de conciliación bancaria requieren el servicio autorizado."))
         if target in session.deleted or _has_bank_reconciliation_evidence(session, target):
             raise ValueError(_("Los datos financieros conciliados son inmutables."))
+    _guard_line_parents(session, target)
+
+
+def _guard_line_parents(session: Session, target: Any) -> None:
+    """Rechaza mutaciones de líneas cuyo padre ya está posteado (#1877).
+
+    Las escrituras internas de la transacción de posting (p.ej. las
+    actualizaciones de snapshots de conciliación de inventario) quedan
+    permitidas mientras la transacción dura; al terminar, el permiso se
+    desactiva y las líneas se protegen contra edición externa.
+    """
     for parent_class, parent_id in _line_parents(target):
         parent = session.get(parent_class, parent_id)
-        if parent is not None and _posted(parent):
-            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
-        if parent is not None:
+        if parent is None:
+            continue
+        if not _posted(parent):
             _stamp_line_editor(parent)
+            continue
+        if _posted_in_current_transaction(session, parent):
+            continue
+        raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
 def _has_bank_reconciliation_evidence(session: Session, target: Any) -> bool:
@@ -555,6 +889,22 @@ def _stamp_line_editor(parent: Any) -> None:
 
 
 POLYMORPHIC_EVIDENCE_TABLES = frozenset({"document_tax_summary", "document_tax_line", "landed_cost_allocation"})
+
+# Structural, mode-agnostic evidence: audit writes, ledger lines and the
+# documentary flow links that downstream reports reconcile against never
+# accept UPDATE/DELETE from application code, whatever the runtime mode
+# (Desktop assumes the same guarantees as Cloud; these structural guards
+# are independent of the Cloud INTERNAL_CONTROLS process-wide workflow
+# controls, which additionally demand audited service scopes).
+STRUCTURAL_EVIDENCE_TABLES = frozenset(
+    EVIDENCE_TABLES.union(
+        LEDGER_TABLES,
+        FLOW_EVIDENCE_TABLES,
+        POLYMORPHIC_EVIDENCE_TABLES,
+        STOCK_VALUATION_TABLES,
+        {"balance_confirmation"},
+    )
+)
 
 
 def _field_values(target: Any, key: str) -> tuple[Any, ...]:
@@ -652,6 +1002,7 @@ def _raw_sql_protected_tables() -> set[str]:
         LEDGER_TABLES,
         FLOW_EVIDENCE_TABLES,
         POLYMORPHIC_EVIDENCE_TABLES,
+        STOCK_VALUATION_TABLES,
         _financial_child_tables(),
         {"approval_request", "cacao_config"},
     )
@@ -666,7 +1017,14 @@ def _raw_sql_protected_tables() -> set[str]:
 def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: Any) -> None:
     """Reject textual writes that cannot participate in mapped evidence controls."""
     del cursor, parameters, executemany
-    if not _enabled() or (context.compiled is not None and isinstance(context.compiled.statement, (Insert, Update, Delete))):
+    if context.compiled is not None and isinstance(context.compiled.statement, (Insert, Update, Delete)):
+        return
+    if raw_sql_mutates_protected_table(statement, STRUCTURAL_EVIDENCE_TABLES, connection.dialect.name):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    financial_runtime_tables = set(_document_parent_tables()).union(_financial_child_tables())
+    if raw_sql_mutates_protected_table(statement, financial_runtime_tables, connection.dialect.name):
+        raise ValueError(_("Los cambios financieros deben realizarse mediante el servicio autorizado."))
+    if not _enabled():
         return
     if raw_sql_mutates_protected_table(statement, _raw_sql_protected_tables(), connection.dialect.name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
@@ -674,22 +1032,107 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
 
 def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, execution_options: Any) -> None:
     """Reject evidence SQL mutations, including Core and ORM bulk statements."""
-    if not _enabled():
+    if not _enabled() and not _structural_enabled():
         return
     table_name = getattr(getattr(clause, "table", None), "name", None)
     if _is_orm_unit_of_work(execution_options, table_name):
         return
     if isinstance(clause, Insert):
-        _guard_bulk_insert(connection, clause, multiparams, params, table_name)
+        _guard_bulk_insert_statement(connection, clause, multiparams, params, table_name)
         return
     if not isinstance(clause, (Update, Delete)):
         return
-    _guard_bulk_update(connection, clause, multiparams, params, table_name)
+    _guard_bulk_update_statement(connection, clause, multiparams, params, table_name)
+
+
+def _guard_bulk_insert_statement(
+    connection: Any, clause: Insert, multiparams: Any, params: Any, table_name: str | None
+) -> None:
+    """Route bulk inserts through the appropriate desktop or cloud controls."""
+    if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
+        return
+    if table_name in STRUCTURAL_EVIDENCE_TABLES:
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if _enabled() or _is_financial_runtime_table(table_name):
+        _guard_bulk_insert(connection, clause, multiparams, params, table_name)
+
+
+def _guard_bulk_update_statement(connection: Any, clause: Any, multiparams: Any, params: Any, table_name: str | None) -> None:
+    """Protect evidence writes and posted documents for bulk update/delete."""
+    if table_name == "balance_confirmation":
+        _guard_balance_confirmation_statement(connection, clause, multiparams, params)
+        return
+    if table_name in STOCK_VALUATION_TABLES:
+        _guard_stock_valuation_statement(clause, multiparams, params)
+        return
+    if table_name in POLYMORPHIC_EVIDENCE_TABLES:
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if table_name in LEDGER_TABLES:
+        _guard_ledger_statement(clause, multiparams, params)
+    if table_name in FLOW_EVIDENCE_TABLES:
+        _guard_flow_evidence_statement(clause, multiparams, params)
+    if table_name in EVIDENCE_TABLES:
+        raise ValueError(_("La evidencia de auditoría es inmutable."))
+    if _enabled() or _is_financial_runtime_table(table_name):
+        _guard_bulk_update(connection, clause, multiparams, params, table_name)
+
+
+def _is_financial_runtime_table(table_name: str | None) -> bool:
+    """Return whether a table is a document header or its financial detail."""
+    return table_name in _document_parent_tables() or table_name in _financial_child_tables()
+
+
+def _guard_balance_confirmation_statement(connection: Any, clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject bulk deletion and direct rewrites of balance confirmation evidence."""
+    from cacao_accounting.database import BalanceConfirmation
+
+    if isinstance(clause, Delete):
+        raise ValueError(_("La evidencia de confirmación de saldos no se elimina."))
+    changed = _statement_changed_values(clause, multiparams, params, BalanceConfirmation.__table__)
+    if changed.keys() & BALANCE_CONFIRMATION_SNAPSHOT_FIELDS:
+        raise ValueError(_("La instantánea de confirmación de saldos es inmutable."))
+    response_fields_changed = bool(changed.keys() & BALANCE_CONFIRMATION_RESPONSE_FIELDS)
+    terminal_response = changed.get("status") in {"confirmed", "disputed"}
+    if not response_fields_changed and not terminal_response:
+        return
+    authorized_ids = _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.get()
+    authorized_id = next(
+        (
+            candidate
+            for candidate in authorized_ids
+            if _balance_confirmation_statement_targets(clause, candidate)
+            and _balance_confirmation_response_is_new(connection, candidate)
+        ),
+        None,
+    )
+    if (
+        authorized_id is None
+        or not changed.keys() <= BALANCE_CONFIRMATION_RESPONSE_FIELDS.union({"status"})
+        or changed.get("response_type") not in {"confirmed", "disputed"}
+        or changed.get("responded_at") is None
+        or changed.get("status") != changed.get("response_type")
+        or not _balance_confirmation_statement_targets(clause, authorized_id)
+        or not _balance_confirmation_response_is_new(connection, authorized_id)
+    ):
+        raise ValueError(_("La respuesta externa requiere una transición autorizada e inmutable."))
+
+
+def _balance_confirmation_statement_targets(clause: Any, confirmation_id: str) -> bool:
+    """Require the response UPDATE to target its authorized confirmation ID."""
+    return any(
+        isinstance(criterion, BinaryExpression)
+        and getattr(criterion.left, "key", None) == "id"
+        and criterion.operator is operators.eq
+        and str(getattr(criterion.right, "value", "")) == confirmation_id
+        for criterion in getattr(clause, "_where_criteria", ())
+    )
 
 
 def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params: Any, table_name: str | None) -> None:
     """Protect direct Core inserts to audit, ledger and document tables."""
     if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
+        return
+    if table_name == "cacao_config" and _config_insert_is_authorized(clause, multiparams, params):
         return
     protected_tables = EVIDENCE_TABLES.union(
         LEDGER_TABLES,
@@ -705,6 +1148,23 @@ def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params
         return
     if table_name in _raw_sql_protected_tables():
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+
+
+def _config_insert_is_authorized(clause: Any, multiparams: Any, params: Any) -> bool:
+    """Allow only config keys explicitly authorized by the audited writer."""
+    allowed = _CONFIG_VALUE_TRANSITION.get()
+    if not allowed:
+        return False
+    table = getattr(clause, "table", None)
+    if table is None or table.name != "cacao_config":
+        return False
+    keys: set[str] = set()
+    for group in _parameter_sets(multiparams, params):
+        values = _statement_values_for_parameters(clause, group, table)
+        key = values.get("key")
+        if key is not None:
+            keys.add(str(key))
+    return bool(keys) and keys.issubset(allowed)
 
 
 def _guard_bulk_update(
@@ -938,6 +1398,75 @@ def _guard_core_insert_row(connection: Any, table: Any, row: dict[str, Any], par
         raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
+def stock_valuation_layer_balance_is_authorized(layer: Any) -> bool:
+    """Return whether the active valuation scope authorizes this layer's balance."""
+    return str(getattr(layer, "id", "") or "") in _STOCK_VALUATION_BALANCE_TRANSITION.get()
+
+
+def guard_stock_valuation_layer_update(target: Any) -> None:
+    """Protect historical valuation evidence and scope derived balances."""
+    changed = {attribute.key for attribute in inspect(target).attrs if attribute.history.has_changes()}
+    if changed - STOCK_VALUATION_BALANCE_FIELDS:
+        raise ValueError(
+            _("La evidencia histórica de la capa de valoración es inmutable; registre un movimiento compensatorio.")
+        )
+    if changed and not stock_valuation_layer_balance_is_authorized(target):
+        raise ValueError(
+            _("Los saldos derivados de la capa de valoración solo se actualizan mediante el servicio autorizado.")
+        )
+
+
+def guard_stock_valuation_layer_delete(target: Any) -> None:
+    """Reject physical deletion of valuation evidence in both runtime modes."""
+    del target
+    raise ValueError(_("Las capas de valoración no se eliminan; registre un movimiento compensatorio."))
+
+
+def _guard_stock_valuation_statement(clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject bulk rewrites and deletes that bypass the valuation service scope."""
+    if isinstance(clause, Delete):
+        raise ValueError(_("Las capas de valoración no se eliminan; registre un movimiento compensatorio."))
+    changed = _statement_changed_values(clause, multiparams, params, clause.table)
+    if not changed or changed.keys() - STOCK_VALUATION_BALANCE_FIELDS:
+        raise ValueError(
+            _("La evidencia histórica de la capa de valoración es inmutable; registre un movimiento compensatorio.")
+        )
+    if not _stock_valuation_statement_targets_authorized_layer(clause, multiparams, params):
+        raise ValueError(
+            _("Los saldos derivados de la capa de valoración solo se actualizan mediante el servicio autorizado.")
+        )
+
+
+def _stock_valuation_statement_targets_authorized_layer(clause: Any, multiparams: Any, params: Any) -> bool:
+    """Require every bulk UPDATE parameter set to target an authorized layer."""
+    authorized = _STOCK_VALUATION_BALANCE_TRANSITION.get()
+    if not authorized:
+        return False
+    parameter_sets = _parameter_sets(multiparams, params)
+    if not parameter_sets:
+        return False
+    for parameter_set in parameter_sets:
+        targets = _equality_target_values(clause, "id", parameter_set)
+        if not targets or not targets.issubset(authorized):
+            return False
+    return True
+
+
+def _equality_target_values(clause: Any, key: str, parameters: dict[str, Any]) -> set[str]:
+    """Resolve the values compared with equality against ``key`` in one execution."""
+    values: set[str] = set()
+    for criterion in getattr(clause, "_where_criteria", ()):
+        if (
+            isinstance(criterion, BinaryExpression)
+            and getattr(criterion.left, "key", None) == key
+            and criterion.operator is operators.eq
+        ):
+            resolved = _bound_value(criterion.right, parameters)
+            if resolved is not None:
+                values.add(str(resolved))
+    return values
+
+
 def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
     """Mirror the existing ledger mapper rule for Core and ORM SQL statements."""
     if isinstance(clause, Delete):
@@ -947,8 +1476,9 @@ def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
     if {key for key in changed if key != "is_cancelled"}:
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
-    if not changed["is_cancelled"]:
-        raise ValueError(_("Una línea del ledger cancelada no se reactiva; registre una nueva línea."))
+    # #925: la cancelación Core/bulk no ejecuta la auditoría del mapper ni
+    # exige actor/motivo; debe pasar por el servicio auditado.
+    raise ValueError(_("La cancelación del ledger debe realizarse mediante el servicio auditado."))
 
 
 PROTECTED_REQUEST_FIELDS = frozenset(

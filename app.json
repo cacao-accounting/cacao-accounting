@@ -1,0 +1,58 @@
+{
+  "name": "Cacao Accounting",
+  "description": "Software contable para la gestión de Cuentas por Pagar, Cuentas por Cobrar, Inventario, Tesorería y Contabilidad General.",
+  "keywords": [
+    "accounting",
+    "contabilidad",
+    "flask",
+    "python",
+    "erp"
+  ],
+  "website": "https://cacao-accounting.readthedocs.io/",
+  "repository": "https://github.com/cacao-accounting/cacao-accounting",
+  "logo": "https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/docs/media/cacao_logo.svg",
+  "success_url": "/",
+  "buildpacks": [
+    {
+      "url": "heroku-community/apt"
+    },
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "env": {
+    "CACAO_USER": {
+      "description": "Usuario administrador creado en el primer arranque.",
+      "required": true
+    },
+    "CACAO_PSWD": {
+      "description": "Contraseña del usuario administrador. No se aceptan las credenciales por defecto fuera de desarrollo.",
+      "required": true
+    },
+    "SECRET_KEY": {
+      "description": "Clave de firma de sesiones y formularios. Se genera automáticamente si no se define.",
+      "generator": "secret",
+      "required": false
+    },
+    "CACAO_THREADS": {
+      "description": "Hilos del servidor WSGI (Waitress).",
+      "value": "4",
+      "required": false
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0",
+      "as": "DATABASE"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "cacaoctl db init"
+  }
+}

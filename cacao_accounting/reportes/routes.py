@@ -13,9 +13,9 @@ from datetime import date
 
 from typing import cast
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso
@@ -38,6 +38,7 @@ from cacao_accounting.reportes.services import (
     get_balance_sheet_report,
     get_gross_margin,
     get_income_statement_report,
+    _movement_group_expression,
     get_inventory_existence,
     get_inventory_valuation,
     get_monthly_withholding_report,
@@ -77,6 +78,7 @@ from cacao_accounting.reportes.helpers import (
     _operational_filters,
     _render_operational_report,
     _operational_context_summary,
+    _preferred_group_by_from_view,
 )
 
 from cacao_accounting.i18n import _
@@ -98,6 +100,10 @@ else:
 
 
 reportes = Blueprint("reportes", __name__, template_folder="templates")
+
+FINANCIAL_REPORT_CODES = frozenset(
+    {"account-summary", "account-movement", "trial-balance", "income-statement", "balance-sheet", "cash-flow"}
+)
 
 
 @reportes.route("/reports/internal-control")
@@ -154,68 +160,6 @@ def internal_control():
 
 PURCHASES_HOME_ENDPOINT = "compras.compras_"
 
-_COLUMN_LABELS = {
-    "posting_date": "Posting Date",
-    "accounting_period": "Period",
-    "document_no": "Voucher",
-    "voucher_type": "Type",
-    "account_code": "Account",
-    "account_name": "Account Name",
-    "account_type": "Account Type",
-    "classification": "Section",
-    "debit": "Debit",
-    "credit": "Credit",
-    "running_balance": "Final Balance",
-    "currency": "Currency",
-    "ledger": "Ledger",
-    "company": "Company",
-    "opening_balance": "Opening Balance",
-    "ending_balance": "Final Balance",
-    "cost_center": "Cost Center",
-    "unit": "Unit",
-    "project": "Project",
-    "party_type": "Party Type",
-    "party_id": "Party",
-    "created_by": "User",
-    "created": "Creation Date",
-    "created_at": "Creation Date",
-    "movement_count": "Movements",
-    "first_movement": "First Movement",
-    "last_movement": "Last Movement",
-    "line_comment": "Reference",
-    "reference_type": "Reference Type",
-    "is_reversal": "Is Reversal",
-    "reversal_of": "Reversal Of",
-    "status": "Status",
-    "voucher_status": "Status",
-    "is_cancelled": "Cancelled",
-    "cancellation_date": "Cancellation Date",
-    "cancellation_requested_at": "Cancellation Requested At",
-    "cancellation_executed_at": "Cancellation Executed At",
-    "cancellation_actor": "Cancellation Actor",
-    "cancellation_reason": "Cancellation Reason",
-    "section": "Section",
-    "amount": "Amount",
-    "bank_account": "Bank Account",
-    "party_name": "Party",
-    "payment_type": "Payment Type",
-    "incoming_amount": "Incoming Amount",
-    "outgoing_amount": "Outgoing Amount",
-    "receipts_amount": "Receipts",
-    "payments_amount": "Payments",
-    "account_no": "Account Number",
-    "item_name": "Item Name",
-    "balance_qty": "Balance Qty",
-    "incoming_qty": "Incoming Qty",
-    "outgoing_qty": "Outgoing Qty",
-    "value_change": "Value Change",
-    "original_amount": "Original Amount",
-    "paid_amount": "Paid Amount",
-    "outstanding_amount": "Outstanding Amount",
-    "days": "Days",
-    "bucket": "Bucket",
-    "remarks": "Remarks",
-}
 
 _MONEY_COLUMNS = {
     "debit",
@@ -311,8 +255,15 @@ def account_summary():
 def account_movement():
     """Report account movement detail."""
     filters, selected_view, saved_views = _resolve_view_context("account-movement", _financial_filters())
-    report = get_account_movement_detail(filters) if _should_run_financial_report() else _empty_financial_report()
-    if request.args.get("export") in {"csv", "xlsx"}:
+    group_by = request.args.get("group_by") or _preferred_group_by_from_view("account-movement", selected_view)
+    if group_by and _movement_group_expression(group_by) is None:
+        abort(400, description=_("La dimensión de agrupación solicitada no está disponible."))
+    report = (
+        get_account_movement_detail(filters, group_by=group_by)
+        if _should_run_financial_report()
+        else _empty_financial_report()
+    )
+    if request.args.get("export") in {"csv", "xlsx", "pdf"}:
         export_report = get_account_movement_detail(cast(FinancialReportFilters, replace(filters, export_all=True, page=1)))
         return _render_financial_report(
             "account-movement",
@@ -420,6 +371,95 @@ def cash_flow():
     )
 
 
+def _save_report_view_redirect(report_code: str) -> str:
+    """Devuelve una URL segura de retorno al reporte financiero."""
+    return_url = request.form.get("return_url") or ""
+    if return_url.startswith("/reports/"):
+        return return_url
+    return url_for(f"reportes.{report_code.replace('-', '_')}")
+
+
+@reportes.route("/reports/views/save", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def save_report_view():
+    """Guarda los filtros y preferencias actuales como una vista del usuario."""
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, create_saved_view
+
+    report_code = (request.form.get("report_code") or "").strip()
+    if report_code not in FINANCIAL_REPORT_CODES:
+        abort(400, description=_("El reporte solicitado no admite vistas guardadas."))
+    filters = _financial_filters()
+    company = (request.form.get("company") or "").strip()
+    if company and company != filters.company:
+        abort(400, description=_("La vista debe pertenecer a la compañía del reporte."))
+    display = {
+        "visible_columns": request.args.getlist("visible_columns"),
+        "group_by": request.args.get("group_by") or "",
+        "page_size": request.args.get("page_size") or filters.page_size,
+        "sort_by": request.args.get("sort_by") or filters.sort_by,
+        "sort_dir": request.args.get("sort_dir") or filters.sort_dir,
+        "show_users": request.args.get("show_users") in {"1", "true", "yes", "on"},
+        "advanced": request.args.get("advanced") in {"1", "true", "yes", "on"},
+    }
+    try:
+        create_saved_view(
+            report_code,
+            filters.company,
+            str(current_user.id),
+            request.form.get("name") or "",
+            filters,
+            display,
+        )
+        flash(_("Vista guardada correctamente."), "success")
+    except SavedReportViewError as exc:
+        flash(str(exc), "danger")
+    return redirect(_save_report_view_redirect(report_code))
+
+
+@reportes.route("/reports/views/<view_id>/delete", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def delete_report_view(view_id: str):
+    """Elimina una vista propia del usuario autenticado."""
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, delete_saved_view
+
+    report_code = (request.form.get("report_code") or "").strip()
+    if report_code not in FINANCIAL_REPORT_CODES:
+        abort(400, description=_("El reporte solicitado no admite vistas guardadas."))
+    filters = _financial_filters()
+    try:
+        delete_saved_view(view_id, report_code, filters.company, str(current_user.id))
+        flash(_("Vista eliminada correctamente."), "success")
+    except SavedReportViewError as exc:
+        flash(str(exc), "danger")
+    return redirect(_save_report_view_redirect(report_code))
+
+
+def _parse_fiscal_month(month_value: str) -> tuple[int, int]:
+    """Interpreta el filtro ``AAAA-MM`` del reporte mensual de retenciones.
+
+    Un valor no interpretable o fuera del calendario se rechaza con HTTP 400.
+    Antes la ruta sustituía el período solicitado por el mes actual, de modo
+    que un filtro inválido devolvía 200 con datos de otro período.
+    """
+    try:
+        year_text, month_text = month_value.split("-", 1)
+        year, month = int(year_text), int(month_text)
+    except (TypeError, ValueError):
+        abort(400, description=_("El período fiscal solicitado no es válido; use el formato AAAA-MM."))
+    if month < 1 or month > 12:
+        abort(400, description=_("El mes fiscal debe estar entre 1 y 12."))
+    try:
+        date(year, month, 1)
+        date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+    except ValueError:
+        abort(400, description=_("El período fiscal solicitado no es válido; use el formato AAAA-MM."))
+    return year, month
+
+
 @reportes.route("/reports/withholdings/monthly")
 @login_required
 @modulo_activo("purchases")
@@ -428,13 +468,8 @@ def monthly_withholdings():
     company = _resolve_company(request.args.get("company"), "purchases")
     exige_acceso_compania("purchases", company, "consultar")
     month_value = request.args.get("month") or date.today().strftime("%Y-%m")
-    try:
-        year, month = (int(part) for part in month_value.split("-", 1))
-        report = get_monthly_withholding_report(company, year, month)
-    except (TypeError, ValueError):
-        year, month = date.today().year, date.today().month
-        month_value = date.today().strftime("%Y-%m")
-        report = get_monthly_withholding_report(company, year, month)
+    year, month = _parse_fiscal_month(month_value)
+    report = get_monthly_withholding_report(company, year, month)
     return _render_operational_framework(
         "withholdings-monthly",
         _("Reporte fiscal mensual de retenciones aplicadas"),
@@ -581,6 +616,7 @@ def reconciliations():
     report = get_reconciliation_report(
         company=company,
         as_of_date=_resolve_as_of_date(company),
+        include_purchase_pending=True,
     )
     return _render_operational_report(_("Reconciliaciones"), report)
 

@@ -5,6 +5,7 @@
 
 from cacao_accounting.document_flow.service import (
     DocumentFlowError,
+    assert_relation_same_party,
     close_document_balances,
     close_line_balance,
     create_target_document,
@@ -13,6 +14,7 @@ from cacao_accounting.document_flow.service import (
     get_pending_lines,
     get_target_line_source,
     list_source_documents,
+    lock_document_flow_document,
     refresh_source_caches_for_target,
     revert_relations_for_target,
 )
@@ -39,6 +41,7 @@ __all__ = [
     "apply_advance_to_invoice",
     "apply_payment_reconciliation",
     "assert_currency_contract_or_raise",
+    "assert_relation_same_party",
     "calculate_document_status",
     "close_document_balances",
     "close_line_balance",
@@ -51,6 +54,7 @@ __all__ = [
     "get_pending_lines",
     "get_target_line_source",
     "list_source_documents",
+    "lock_document_flow_document",
     "payment_reference_candidates",
     "payment_reconciliation_candidates",
     "refresh_outstanding_amount_cache",

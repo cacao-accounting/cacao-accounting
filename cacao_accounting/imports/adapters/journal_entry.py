@@ -3,15 +3,15 @@
 
 """Adaptador para importación de comprobantes contables."""
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 from sqlalchemy import or_, select
 
-from cacao_accounting.database import Book, database
-from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.database import Accounts, Book, database
+from cacao_accounting.imports.adapters.base import BaseImportAdapter, normalize_header_date
 from cacao_accounting.contabilidad.journal_service import create_journal_draft
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.dates import parse_import_date
 
 
 from cacao_accounting.i18n import _
@@ -19,8 +19,6 @@ from cacao_accounting.i18n import _
 
 class JournalEntryAdapter(BaseImportAdapter):
     """Adaptador para Comprobantes Contables."""
-
-    _BALANCE_TOLERANCE = Decimal("0.0001")
 
     @staticmethod
     def _amount(value: Any) -> Decimal:
@@ -39,9 +37,24 @@ class JournalEntryAdapter(BaseImportAdapter):
         "descripcion",
         "debito",
         "credito",
+        "moneda",
+        "tipo_cambio",
         "referencia",
+        "is_advance",
     ]
     required_columns = ["document_ref", "fecha", "cuenta", "debito", "credito"]
+    column_aliases = {
+        "reference": "document_ref",
+        "document_reference": "document_ref",
+        "posting_date": "fecha",
+        "date": "fecha",
+        "account": "cuenta",
+        "account_code": "cuenta",
+        "debit": "debito",
+        "debe": "debito",
+        "credit": "credito",
+        "haber": "credito",
+    }
 
     @staticmethod
     def _value(row: Dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -53,20 +66,19 @@ class JournalEntryAdapter(BaseImportAdapter):
         return default
 
     def _validate_amounts(self, document_data: List[Dict[str, Any]]) -> List[str]:
-        """Valida importes y balance global de las líneas importadas."""
+        """Valida importes parseables; el balance por libro lo resuelve el motor."""
         errors: List[str] = []
         if len(document_data) < 2:
-            errors.append("Un comprobante contable debe tener al menos dos líneas.")
-        total_debit = Decimal("0")
-        total_credit = Decimal("0")
+            errors.append(_("Un comprobante contable debe tener al menos dos líneas."))
         for row in document_data:
             try:
-                total_debit += self._amount(self._value(row, "debito", "debit"))
-                total_credit += self._amount(self._value(row, "credito", "credit"))
+                self._amount(self._value(row, "debito", "debit"))
+                self._amount(self._value(row, "credito", "credit"))
             except (InvalidOperation, ValueError, TypeError):
-                errors.append(f"Monto inválido en referencia {self._value(row, 'document_ref', 'reference')}")
-        if document_data and abs(total_debit - total_credit) > self._BALANCE_TOLERANCE:
-            errors.append(f"El comprobante {self._value(document_data[0], 'document_ref', 'reference')} no está balanceado.")
+                errors.append(
+                    _("Monto inválido en referencia %(reference)s")
+                    % {"reference": self._value(row, "document_ref", "reference")}
+                )
         return errors
 
     def _validate_period(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
@@ -74,39 +86,61 @@ class JournalEntryAdapter(BaseImportAdapter):
         if not document_data:
             return []
         try:
-            posting_date = date.fromisoformat(str(self._value(document_data[0], "fecha", "posting_date")))
-            company_id = (context or {}).get("company_id") or ""
-            if not is_period_open(company_id, posting_date):
-                return [f"El periodo contable para la fecha {posting_date} está cerrado o no existe."]
+            posting_date = parse_import_date(self._value(document_data[0], "fecha", "posting_date"))
         except (ValueError, TypeError):
-            pass
+            return [_("La fecha debe usar un formato válido.")]
+        company_id = (context or {}).get("company_id") or ""
+        if not is_period_open(company_id, posting_date):
+            return [_("El periodo contable para la fecha %(date)s está cerrado o no existe.") % {"date": posting_date}]
         return []
 
     def _validate_accounting_lines(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
         """Aplica las mismas validaciones de líneas que el formulario de asientos."""
         try:
             from cacao_accounting.contabilidad.journal_service import (
-                _normalize_line,
+                _normalize_journal_payload,
                 _validate_ar_ap_lines,
                 _validate_balanced_lines,
                 _validate_line_books,
             )
 
-            canonical_rows = self.build_document(document_data, context or {}).get("lines", [])
-            lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
+            payload = self.build_document(document_data, context or {})
+            canonical_rows = payload.get("lines", [])
             company = str((context or {}).get("company_id") or "")
-            _validate_balanced_lines(company, lines, (context or {}).get("transaction_currency"))
-            _validate_line_books(company, (context or {}).get("books"), lines)
-            _validate_ar_ap_lines(company, lines)
-        except RuntimeError:
-            return []
+            for row in canonical_rows:
+                account = database.session.execute(
+                    select(Accounts).where(
+                        Accounts.entity == company,
+                        Accounts.code == row.get("account"),
+                    )
+                ).scalar_one_or_none()
+                if account is None:
+                    return [
+                        _("La cuenta %(account_code)s no existe en la compania %(company)s.")
+                        % {"account_code": row.get("account"), "company": company}
+                    ]
+                if not account.active or not account.enabled:
+                    return [_("La cuenta contable debe estar activa y habilitada.")]
+            data = _normalize_journal_payload(payload)
+            _validate_balanced_lines(data)
+            _validate_line_books(company, data.books, data.lines)
+            _validate_ar_ap_lines(company, data.lines)
+        except RuntimeError as exc:
+            from cacao_accounting.logs import log
+
+            log.exception("Falló la validación contable del comprobante importado: {}", exc)
+            return [_("No se pudo validar el comprobante contable. Revise el registro de errores.")]
         except (ValueError, InvalidOperation) as exc:
             return [str(exc)]
         return []
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Valida que el comprobante tenga al menos dos líneas y esté balanceado."""
-        errors = self._validate_amounts(document_data)
+        errors = self.validate_header_consistency(
+            document_data,
+            {"fecha": (("fecha", "posting_date"), normalize_header_date)},
+        )
+        errors.extend(self._validate_amounts(document_data))
         errors.extend(self._validate_period(document_data, context))
         if not errors:
             errors.extend(self._validate_accounting_lines(document_data, context))
@@ -142,7 +176,7 @@ class JournalEntryAdapter(BaseImportAdapter):
                 }
             )
 
-        posting_date = self._value(document_data[0], "fecha", "posting_date")
+        posting_date = parse_import_date(self._value(document_data[0], "fecha", "posting_date"))
         reference = self._value(document_data[0], "document_ref", "reference", default="no_ref")
         payload = {
             "company": context.get("company_id"),
@@ -152,7 +186,7 @@ class JournalEntryAdapter(BaseImportAdapter):
             "reference": reference,
             "memo": f"Importación masiva: {reference}",
             "transaction_currency": context.get("transaction_currency") or self._value(document_data[0], "moneda", "currency"),
-            "exchange_rate": context.get("exchange_rate"),
+            "exchange_rate": context.get("exchange_rate") or self._value(document_data[0], "tipo_cambio", "exchange_rate"),
             "lines": lines,
             "created_by": context.get("created_by"),
         }

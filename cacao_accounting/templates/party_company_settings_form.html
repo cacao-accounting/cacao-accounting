@@ -53,7 +53,9 @@
               <th>{{ _('Compañía') }}</th>
               <th>{{ _('Activo') }}</th>
               <th>{% if party_role == "customer" %}{{ _('Cuenta por cobrar') }}{% else %}{{ _('Cuenta por pagar') }}{% endif %}</th>
+              {% if party_role == "customer" %}
               <th>{{ _('Lista de Precio') }}</th>
+              {% endif %}
               <th>{% if party_role == "supplier" %}{{ _('Retención al pagar') }}{% else %}{{ _('Regla Fiscal') }}{% endif %}</th>
               <th>{{ _('Plantilla de impuestos') }}</th>
               {% if party_role == "supplier" %}
@@ -70,6 +72,10 @@
                   <div class="ca-smart-select" x-data='smartSelect({
                     doctype: "company",
                     name: "company",
+                    filters: {
+                      company_scope_module: {{ company_scope_module|tojson }},
+                      company_scope_action: {{ company_scope_action|tojson }}
+                    },
                     minChars: 1,
                     preload: true,
                     initialValue: row.company,
@@ -77,6 +83,10 @@
                     onSelect(option) {
                       row.company = option.value || option.id || "";
                       row.company_label = option.display_name || option.label || row.company;
+                    },
+                    onClear() {
+                      row.company = "";
+                      row.company_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar compañía')|tojson }},
@@ -88,15 +98,15 @@
                       error: {{ _('No se pudieron cargar las opciones')|tojson }}
                     }
                   })'>
-                    <input type="hidden" name="company" x-model="row.company">
+                    <input type="hidden" :id="'party-company-' + index" name="company" x-model="row.company">
                     <div x-effect="if (!selectedValue) { row.company = ''; row.company_label = ''; }"></div>
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="'party-company-' + index + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? 'party-company-' + index + '-option-' + highlightedIndex : null">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                      <template x-for="option in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-company-' + index + '-listbox'" role="listbox">
+                      <template x-for="(option, optIndex) in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" role="option" :id="'party-company-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button>
                       </template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -125,10 +135,15 @@
                       account_type: [{{ account_type|tojson }}],
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row[{{ account_field|tojson }}] = option.value || option.id || "";
                       row[{{ account_label_field|tojson }}] = option.display_name || option.label || row[{{ account_field|tojson }}];
+                    },
+                    onClear() {
+                      row[{{ account_field|tojson }}] = "";
+                      row[{{ account_label_field|tojson }}] = "";
                     },
                     messages: {
                       placeholder: {% if party_role == "customer" %}{{ _('Buscar cuenta por cobrar')|tojson }}{% else %}{{ _('Buscar cuenta por pagar')|tojson }}{% endif %},
@@ -143,18 +158,19 @@
                     <input type="hidden" name="{{ account_field }}" x-model="row[{{ account_field|tojson }}]">
                     <div x-effect="if (!selectedValue) { row[{{ account_field|tojson }}] = ''; row[{{ account_label_field|tojson }}] = ''; }"></div>
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="'party-account-' + index + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? 'party-account-' + index + '-option-' + highlightedIndex : null">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-account-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-account-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                     </div>
                   </div>
                 </td>
+                {% if party_role == "customer" %}
                 <td style="min-width: 16rem;">
                   <div class="ca-smart-select" x-data='smartSelect({
                     doctype: "price_list",
@@ -164,13 +180,18 @@
                     initialLabel: row.default_price_list_label,
                     filters: {
                       company: function () { return row.company; },
-                      {% if party_role == "customer" %}is_selling: true,{% else %}is_buying: true,{% endif %}
+                      is_selling: true,
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row.default_price_list_id = option.value || option.id || "";
                       row.default_price_list_label = option.display_name || option.label || row.default_price_list_id;
+                    },
+                    onClear() {
+                      row.default_price_list_id = "";
+                      row.default_price_list_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar lista de precio')|tojson }},
@@ -185,18 +206,19 @@
                     <input type="hidden" name="default_price_list_id" x-model="row.default_price_list_id">
                     <div x-effect="if (!selectedValue) { row.default_price_list_id = ''; row.default_price_list_label = ''; }"></div>
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="'party-price-list-' + index + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? 'party-price-list-' + index + '-option-' + highlightedIndex : null">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-price-list-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-price-list-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
                     </div>
                   </div>
                 </td>
+                {% endif %}
                 <td style="min-width: 16rem;">
                   <div class="ca-smart-select" x-data='smartSelect({
                     doctype: "tax_rule",
@@ -213,10 +235,15 @@
                       {% endif %}
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row.default_tax_rule_id = option.value || option.id || "";
                       row.default_tax_rule_label = option.display_name || option.label || row.default_tax_rule_id;
+                    },
+                    onClear() {
+                      row.default_tax_rule_id = "";
+                      row.default_tax_rule_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar regla fiscal')|tojson }},
@@ -231,12 +258,12 @@
                     <input type="hidden" name="default_tax_rule_id" x-model="row.default_tax_rule_id">
                     <div x-effect="if (!selectedValue) { row.default_tax_rule_id = ''; row.default_tax_rule_label = ''; }"></div>
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="'party-tax-rule-' + index + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? 'party-tax-rule-' + index + '-option-' + highlightedIndex : null">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-tax-rule-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-tax-rule-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
@@ -255,10 +282,15 @@
                       template_type: [{% if party_role == "customer" %}"selling"{% else %}"buying"{% endif %}],
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row.tax_template_id = option.value || option.id || "";
                       row.tax_template_label = option.display_name || option.label || row.tax_template_id;
+                    },
+                    onClear() {
+                      row.tax_template_id = "";
+                      row.tax_template_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar plantilla de impuestos')|tojson }},
@@ -273,12 +305,12 @@
                     <input type="hidden" name="tax_template_id" x-model="row.tax_template_id">
                     <div x-effect="if (!selectedValue) { row.tax_template_id = ''; row.tax_template_label = ''; }"></div>
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                      <input class="form-control ca-smart-select-input" type="text" x-model="search" @input.debounce.300ms="onInput" @focus="fetchOptions" @blur="closeSoon" :placeholder="messages.placeholder" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="'party-tax-template-' + index + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? 'party-tax-template-' + index + '-option-' + highlightedIndex : null">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue || search" @click="clearSelection" :title="messages.clear" :aria-label="messages.clear" x-cloak><i class="bi bi-x-lg"></i></button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="'party-tax-template-' + index + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading"><span class="spinner-border spinner-border-sm me-1"></span><span x-text="messages.loading"></span></div>
-                      <template x-for="option in options" :key="option.id"><button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button></template>
+                      <template x-for="(option, optIndex) in options" :key="option.id"><button class="ca-smart-select-option" type="button" role="option" :id="'party-tax-template-' + index + '-option-' + optIndex" :aria-selected="optIndex === highlightedIndex" :class="{ 'is-highlighted': optIndex === highlightedIndex }" @mousemove="highlightedIndex = optIndex" @blur="closeSoon" @click="selectOption(option)"><span x-text="option.display_name"></span></button></template>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length < minChars" x-text="messages.minChars"></div>
                       <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
                       <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
