@@ -261,28 +261,84 @@
         return sign && formatted !== '0' ? sign + formatted : formatted;
       },
 
+      decimalParts: function (value) {
+        const str = this.toCurrencyString(value);
+        const negative = str.startsWith('-');
+        const unsigned = str.replace(/^-/, '');
+        const [intPart, fracPart = ''] = unsigned.split('.');
+        return { negative, digits: BigInt(intPart + fracPart), scale: fracPart.length };
+      },
+
+      decimalFromParts: function (negative, digits, scale) {
+        let text = digits.toString();
+        if (scale > 0) {
+          text = text.padStart(scale + 1, '0');
+          text = text.slice(0, -scale) + '.' + text.slice(-scale);
+          text = text.replace(/0+$/, '').replace(/\.$/, '');
+        }
+        text = text || '0';
+        return negative && text !== '0' ? '-' + text : text;
+      },
+
+      decimalAdd: function (left, right) {
+        const a = this.decimalParts(left);
+        const b = this.decimalParts(right);
+        const scale = Math.max(a.scale, b.scale);
+        const av = (a.negative ? -a.digits : a.digits) * (10n ** BigInt(scale - a.scale));
+        const bv = (b.negative ? -b.digits : b.digits) * (10n ** BigInt(scale - b.scale));
+        const total = av + bv;
+        return this.decimalFromParts(total < 0n, total < 0n ? -total : total, scale);
+      },
+
+      decimalSubtract: function (left, right) {
+        return this.decimalAdd(left, this.toCurrencyString(right).startsWith('-')
+          ? this.toCurrencyString(right).slice(1)
+          : '-' + this.toCurrencyString(right));
+      },
+
+      decimalMultiply: function (left, right) {
+        const a = this.decimalParts(left);
+        const b = this.decimalParts(right);
+        return this.decimalFromParts(a.negative !== b.negative, a.digits * b.digits, a.scale + b.scale);
+      },
+
+      decimalCompare: function (left, right) {
+        const a = this.decimalParts(left);
+        const b = this.decimalParts(right);
+        const scale = Math.max(a.scale, b.scale);
+        const av = (a.negative ? -a.digits : a.digits) * (10n ** BigInt(scale - a.scale));
+        const bv = (b.negative ? -b.digits : b.digits) * (10n ** BigInt(scale - b.scale));
+        return av < bv ? -1 : av > bv ? 1 : 0;
+      },
+
+      decimalMax: function (left, right) {
+        return this.decimalCompare(left, right) >= 0 ? this.toCurrencyString(left) : this.toCurrencyString(right);
+      },
+
       formatCurrency: function (val) {
         return (this.header.currency || 'NIO') + ' ' + this.parseNumber(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },
 
       normalizeReferenceAllocation: function (line) {
         if (!line) return null;
-        const allocated = this.parseNumber(line.allocated_amount || 0);
-        const outstanding = this.parseNumber(line.outstanding_amount || 0);
-        if (allocated < 0) {
-          line.allocated_amount = 0;
-        } else if (outstanding > 0 && allocated > outstanding) {
-          line.allocated_amount = outstanding;
-        } else {
-          line.allocated_amount = allocated;
+        let allocated = this.toCurrencyString(line.allocated_amount || 0);
+        const outstanding = this.toCurrencyString(line.outstanding_amount || 0);
+        if (this.decimalCompare(allocated, 0) < 0) {
+          allocated = '0';
+        } else if (this.decimalCompare(outstanding, 0) > 0 && this.decimalCompare(allocated, outstanding) > 0) {
+          allocated = outstanding;
         }
+        line.allocated_amount = allocated;
         const documentCurrency = line.currency || this.header.currency;
         const paymentCurrency = this.header.currency;
-        let crossRate = this.parseNumber(line.payment_exchange_rate || 0);
-        if (!crossRate && documentCurrency === paymentCurrency) crossRate = 1;
-        line.payment_exchange_rate = crossRate || line.payment_exchange_rate || 0;
-        const cashDocumentAmount = Math.max(allocated - this.parseNumber(line.discount_amount || 0) - this.parseNumber(line.gain_loss_amount || 0), 0);
-        line.payment_amount = cashDocumentAmount * this.parseNumber(line.payment_exchange_rate || 0);
+        let crossRate = this.toCurrencyString(line.payment_exchange_rate || 0);
+        if (this.decimalCompare(crossRate, 0) === 0 && documentCurrency === paymentCurrency) crossRate = '1';
+        line.payment_exchange_rate = crossRate;
+        const cashDocumentAmount = this.decimalMax(
+          this.decimalSubtract(this.decimalSubtract(allocated, line.discount_amount || 0), line.gain_loss_amount || 0),
+          0
+        );
+        line.payment_amount = this.decimalMultiply(cashDocumentAmount, line.payment_exchange_rate || 0);
         return line;
       },
 
@@ -292,19 +348,19 @@
       },
 
       totalApplied: function () {
-        return this.lines.reduce((sum, line) => sum + this.parseNumber(line.payment_amount || 0), 0);
+        return this.lines.reduce((sum, line) => this.decimalAdd(sum, line.payment_amount || 0), '0');
       },
 
       withholdingTotal: function () {
         return (this.taxCharges.lines || []).reduce((sum, line) => {
-          return line.type === 'withholding' ? sum + this.parseNumber(line.amount || 0) : sum;
-        }, 0);
+          return line.type === 'withholding' ? this.decimalAdd(sum, line.amount || 0) : sum;
+        }, '0');
       },
 
       unallocatedAmount: function () {
-        const headerTotal = this.parseNumber(this.header.paid_amount || 0);
-        const delta = headerTotal - this.totalApplied();
-        return Math.max(delta, 0);
+        const headerTotal = this.toCurrencyString(this.header.paid_amount || 0);
+        const delta = this.decimalSubtract(headerTotal, this.totalApplied());
+        return this.decimalMax(delta, 0);
       },
 
       removeReferenceLine: function (index) {
@@ -503,12 +559,12 @@
       },
 
       calculateTaxLine: function (line) {
-        line.base_amount = this.parseNumber(line.base_amount || this.totalApplied() || 0);
-        line.rate = this.parseNumber(line.rate || 0);
+        line.base_amount = this.toCurrencyString(line.base_amount || this.totalApplied() || 0);
+        line.rate = this.toCurrencyString(line.rate || 0);
         if (line.calculation_method === 'percentage') {
-          line.amount = line.base_amount * line.rate / 100;
+          line.amount = this.decimalMultiply(this.decimalMultiply(line.base_amount, line.rate), '0.01');
         } else {
-          line.amount = this.parseNumber(line.amount || 0);
+          line.amount = this.toCurrencyString(line.amount || 0);
         }
       },
 
@@ -516,33 +572,33 @@
         const lines = this.taxCharges.lines || [];
         const documentTaxTotal = lines.reduce((total, line) => {
           if (line.type === 'withholding' || line.included_in_price || line.affects_document_total === false) return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const capitalizableTaxTotal = lines.reduce((total, line) => {
           if (line.accounting_treatment !== 'capitalizable_inventory_cost') return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const separateTaxTotal = lines.reduce((total, line) => {
           if (line.accounting_treatment !== 'separate_tax_account') return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const withholdingTotal = lines.reduce((total, line) => {
           if (line.type !== 'withholding') return total;
-          return total + this.parseNumber(line.amount || 0);
-        }, 0);
+          return this.decimalAdd(total, line.amount || 0);
+        }, '0');
         const subtotal = this.totalApplied();
         this.taxCharges.summary = {
           subtotal: this.toCurrencyString(subtotal),
           document_tax_total: this.toCurrencyString(documentTaxTotal),
           capitalizable_tax_total: this.toCurrencyString(capitalizableTaxTotal),
-          separate_tax_total: this.toCurrencyString(separateTaxTotal),
+          separate_tax_total: this.toCurrencyString(separate_tax_total),
           withholding_total: this.toCurrencyString(withholdingTotal),
-          grand_total: this.toCurrencyString(subtotal + documentTaxTotal)
+          grand_total: this.toCurrencyString(this.decimalAdd(subtotal, documentTaxTotal))
         };
       },
 
       prepareSubmit: function (event) {
-        if (!this.header.company || !this.header.bank_account_id || this.header.paid_amount < 0) {
+        if (!this.header.company || !this.header.bank_account_id || this.decimalCompare(this.header.paid_amount || 0, 0) < 0) {
           event.preventDefault();
           alert("{{ _('Por favor complete los campos obligatorios.') }}");
           return;
@@ -550,7 +606,8 @@
         for (const line of this.lines) {
           this.normalizeReferenceAllocation(line);
         }
-        if (this.totalApplied() > this.parseNumber(this.header.paid_amount || 0) + this.withholdingTotal() + 0.01) {
+        const available = this.decimalAdd(this.decimalAdd(this.header.paid_amount || 0, this.withholdingTotal()), '0.01');
+        if (this.decimalCompare(this.totalApplied(), available) > 0) {
           event.preventDefault();
           alert("{{ _('El total aplicado no puede ser mayor al monto total del pago.') }}");
           return;
@@ -1137,15 +1194,15 @@
                           </div>
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Base') }}</label>
-                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.base_amount" :readonly="!taxCharges.modalLine.manual">
+                              <input class="form-control text-end" type="number" step="0.0001" x-model="taxCharges.modalLine.base_amount" :readonly="!taxCharges.modalLine.manual">
                           </div>
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Tasa') }}</label>
-                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.rate" :readonly="!taxCharges.modalLine.manual">
+                              <input class="form-control text-end" type="number" step="0.0001" x-model="taxCharges.modalLine.rate" :readonly="!taxCharges.modalLine.manual">
                           </div>
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Monto') }}</label>
-                              <input class="form-control text-end" type="number" step="0.0001" x-model.number="taxCharges.modalLine.amount" :readonly="!taxCharges.modalLine.manual || taxCharges.modalLine.calculation_method === 'percentage'">
+                              <input class="form-control text-end" type="number" step="0.0001" x-model="taxCharges.modalLine.amount" :readonly="!taxCharges.modalLine.manual || taxCharges.modalLine.calculation_method === 'percentage'">
                           </div>
                           <div class="col-md-6">
                               <label class="form-label text-muted small mb-1">{{ _('Método de cálculo') }}</label>

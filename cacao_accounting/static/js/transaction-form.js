@@ -33,19 +33,33 @@
 
   /** Serializa un valor financiero a cadena decimal limpia.
    *
-   * Evita que representaciones IEEE 754 (ej. 0.020000000000000004)
-   * lleguen al backend. Usa toFixed(9) — la escala máxima del sistema —
-   * y elimina ceros finales para producir una cadena que
-   * Decimal(str(value)) en el servidor procese sin perder precisión.
+   * No convierte a Number: normaliza exponentes y limita la fracción a la
+   * escala máxima del sistema para que Decimal(str(value)) reciba el texto
+   * exacto enviado por el formulario.
    */
   function toCurrencyString(value) {
     if (value === null || value === undefined || value === '') return '0';
-    const str = typeof value === 'string' ? value.trim() : String(value);
+    let str = typeof value === 'string' ? value.trim() : String(value);
     if (!str) return '0';
-    const num = Number(str);
-    if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
-    const formatted = num.toFixed(9).replace(/0{1,9}$/, '').replace(/\.$/, '') || '0';
-    return formatted === '-0' ? '0' : formatted;
+    const expMatch = str.match(/^([-+]?)(\d+)(?:\.(\d+))?[eE]([-+]?\d+)$/);
+    if (expMatch) {
+      const sign = expMatch[1] || '';
+      const digits = (expMatch[2] + (expMatch[3] || '')).replace(/^0+/, '') || '0';
+      const exp = parseInt(expMatch[4], 10) - (expMatch[3] || '').length;
+      if (exp >= 0) str = sign + digits + '0'.repeat(exp);
+      else {
+        const pos = digits.length + exp;
+        str = sign + (pos > 0 ? digits.slice(0, pos) + '.' + digits.slice(pos) : '0.' + '0'.repeat(-pos) + digits);
+      }
+    }
+    if (!/^[-+]?\d+(?:\.\d+)?$/.test(str)) return '0';
+    const sign = str.startsWith('-') ? '-' : '';
+    const unsigned = str.replace(/^[-+]/, '');
+    const [intPartRaw, fracRaw = ''] = unsigned.split('.');
+    const intPart = intPartRaw.replace(/^0+(?=\d)/, '') || '0';
+    const frac = fracRaw.slice(0, 9).replace(/0+$/, '');
+    const formatted = frac ? intPart + '.' + frac : intPart;
+    return sign && formatted !== '0' ? sign + formatted : formatted;
   }
 
   function normalizeAllowedUoms(source, fallback) {
