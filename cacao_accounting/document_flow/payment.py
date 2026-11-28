@@ -545,6 +545,19 @@ def _compute_cash_consumed_from_reference(
     return cash_consumed, str(relation_status) if relation_status else None
 
 
+def _payment_allocation_sign(payment: PaymentEntry) -> Decimal:
+    """Signo del saldo documental de un pago según su dirección (#1143).
+
+    Debe coincidir con ``arap_ledger_service._payment_party_sign``: un pago a
+    proveedor o cobro de cliente abre en negativo (liquida), mientras un
+    reembolso de proveedor o pago a cliente abre en positivo.
+    """
+    receive = str(getattr(payment, "payment_type", "") or "").lower() == "receive"
+    if str(getattr(payment, "party_type", "") or "").lower() == "customer":
+        return Decimal("-1") if receive else Decimal("1")
+    return Decimal("1") if receive else Decimal("-1")
+
+
 def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     """Calcula el saldo no aplicado (abierto) de un pago."""
     if getattr(payment, "docstatus", 0) == 2:
@@ -561,7 +574,9 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
         )
     ).scalar_one_or_none()
     if ledger_balance is not None:
-        remaining = -decimal_or_zero(ledger_balance)
+        # #1143: la apertura normal abre en negativo y el reembolso en positivo;
+        # el remanente se orienta con el signo de la dirección del pago.
+        remaining = _payment_allocation_sign(payment) * decimal_or_zero(ledger_balance)
         represented_reference_ids = set(
             database.session.execute(
                 select(ARAPLedgerEntry.reference_id).where(
