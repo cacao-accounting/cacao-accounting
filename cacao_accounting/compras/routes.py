@@ -1587,6 +1587,7 @@ def compras_factura_compra_nota_debito_lista():
         new_button_label=_("Nueva Nota de Débito"),
         page_caption=_("Listado de notas de débito de compra."),
         new_document_type=PURCHASE_DEBIT_NOTE,
+        document_type=PURCHASE_DEBIT_NOTE,
     )
 
 
@@ -1614,6 +1615,7 @@ def compras_factura_compra_nota_credito_lista():
         new_button_label=_("Nueva Nota de Crédito"),
         page_caption=_("Listado de notas de crédito de compra."),
         new_document_type=PURCHASE_CREDIT_NOTE,
+        document_type=PURCHASE_CREDIT_NOTE,
     )
 
 

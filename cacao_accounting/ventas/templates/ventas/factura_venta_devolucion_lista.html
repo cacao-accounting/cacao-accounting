@@ -52,7 +52,7 @@
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista=list_endpoint or "ventas.ventas_factura_venta_devolucion_lista", extra_params=consulta.period_extra_params) }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista=request.endpoint, extra_params=consulta.period_extra_params) }}</div>
 </div>
 
 {% endblock %}
