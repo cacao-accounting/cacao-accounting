@@ -16935,6 +16935,42 @@ msgstr "GL entries"
 msgid "movimientos de inventario"
 msgstr "inventory movements"
 
+msgid "Nueva Recepción de Material"
+msgstr "New Material Receipt"
+
+msgid "Nueva Salida de Material"
+msgstr "New Material Issue"
+
+msgid "Nueva Transferencia de Material"
+msgstr "New Material Transfer"
+
+msgid "Nuevo Ajuste Positivo de Inventario"
+msgstr "New Positive Inventory Adjustment"
+
+msgid "Nuevo Ajuste Negativo de Inventario"
+msgstr "New Negative Inventory Adjustment"
+
+msgid "Nueva Entrada de Almacén"
+msgstr "New Warehouse Entry"
+
+msgid "Editar Recepción de Material"
+msgstr "Edit Material Receipt"
+
+msgid "Editar Salida de Material"
+msgstr "Edit Material Issue"
+
+msgid "Editar Transferencia de Material"
+msgstr "Edit Material Transfer"
+
+msgid "Editar Ajuste Positivo de Inventario"
+msgstr "Edit Positive Inventory Adjustment"
+
+msgid "Editar Ajuste Negativo de Inventario"
+msgstr "Edit Negative Inventory Adjustment"
+
+msgid "Editar Entrada de Almacén"
+msgstr "Edit Warehouse Entry"
+
 #: cacao_accounting/contabilidad/routes.py:432
 #, python-format
 msgid ""

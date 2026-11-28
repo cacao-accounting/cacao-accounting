@@ -871,13 +871,22 @@ STOCK_ENTRY_PURPOSE_LABELS: dict[str, Any] = {
     "adjustment_negative": _l("Ajuste Negativo"),
 }
 
-_STOCK_ENTRY_NEW_TITLES: dict[str, str] = {
-    "material_receipt": "Nueva Recepción de Material",
-    "material_issue": "Nueva Salida de Material",
-    "material_transfer": "Nueva Transferencia de Material",
-    "stock_reconciliation": "Nueva Conciliación de Inventario",
-    "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
-    "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
+_STOCK_ENTRY_NEW_TITLES: dict[str, Any] = {
+    "material_receipt": _l("Nueva Recepción de Material"),
+    "material_issue": _l("Nueva Salida de Material"),
+    "material_transfer": _l("Nueva Transferencia de Material"),
+    "stock_reconciliation": _l("Nueva Conciliación de Inventario"),
+    "adjustment_positive": _l("Nuevo Ajuste Positivo de Inventario"),
+    "adjustment_negative": _l("Nuevo Ajuste Negativo de Inventario"),
+}
+
+_STOCK_ENTRY_EDIT_TITLES: dict[str, Any] = {
+    "material_receipt": _l("Editar Recepción de Material"),
+    "material_issue": _l("Editar Salida de Material"),
+    "material_transfer": _l("Editar Transferencia de Material"),
+    "stock_reconciliation": _l("Editar Conciliación de Inventario"),
+    "adjustment_positive": _l("Editar Ajuste Positivo de Inventario"),
+    "adjustment_negative": _l("Editar Ajuste Negativo de Inventario"),
 }
 
 
@@ -890,9 +899,17 @@ def stock_entry_purpose_label(purpose: str | None) -> str:
     return code
 
 
-def _stock_entry_title(purpose: str | None) -> str:
-    """Build a human friendly title for the stock entry creation page."""
-    return _STOCK_ENTRY_NEW_TITLES.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
+def _stock_entry_title(purpose: str | None, *, editing: bool = False) -> str:
+    """Construye el título traducible del formulario de alta o edición.
+
+    La edición nunca reutiliza el título de alta: cada propósito identifica la
+    operación que se está modificando y los códigos persistidos no se traducen.
+    """
+    if editing:
+        label = _STOCK_ENTRY_EDIT_TITLES.get(purpose or "", _l("Editar Entrada de Almacén"))
+    else:
+        label = _STOCK_ENTRY_NEW_TITLES.get(purpose or "", _l("Nueva Entrada de Almacén"))
+    return str(label) + " - " + APPNAME
 
 
 def _validate_stock_entry_dimensions(
@@ -1510,7 +1527,7 @@ def _render_stock_entry_edit_form(
         },
         "initialLines": initial_lines,
     }
-    titulo = _stock_entry_title(registro.purpose)
+    titulo = _stock_entry_title(registro.purpose, editing=True)
     return render_template(
         "inventario/entrada_nuevo.html",
         form=formulario,
