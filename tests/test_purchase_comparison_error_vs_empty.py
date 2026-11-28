@@ -243,7 +243,9 @@ def test_finalizar_comparativo_http_sin_tasa_no_persiste_estado(entorno_contable
     assert respuesta.status_code in (302, 303)
     with client.session_transaction() as session:
         flashed = [m for _, m in session.get("_flashes", [])]
-    assert flashed, f"sin flashes; status={respuesta.status_code}"
+    assert any(
+        "No existe tipo de cambio para comparar una oferta en USD contra NIO" in mensaje for mensaje in flashed
+    ), f"sin mensaje de tasa; flashes={flashed}"
     with entorno_contable_aislado.app.app_context():
         comparativo = database.session.get(PurchaseRequestComparison, ids["comparison_id"])
         assert comparativo.status == "draft"
