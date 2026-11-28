@@ -23,7 +23,9 @@ from cacao_accounting.contabilidad.journal_repository import (
 from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 from cacao_accounting.contabilidad.posting import (
     PostingError,
-    _lookup_exchange_rate,
+    _journal_line_book_rate,
+    _ledger_exchange_rate,
+    _to_company_currency,
     cancel_document,
     post_comprobante_contable,
 )
@@ -1037,15 +1039,11 @@ def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> N
 
 
 def _validate_balanced_lines(data: JournalDraftInput, *, allow_inactive_accounts: bool = False) -> None:
-    """Validate a journal with the same historical rates used by posting."""
+    """Valida cada libro con las mismas tasas efectivas que usará el posting."""
     account_cache: dict[str, Accounts | None] = {}
-    totals: dict[str | None, tuple[Decimal, Decimal]] = {}
     explicit_books = {line.book for line in data.lines if line.book}
     if explicit_books and any(not line.book for line in data.lines):
         raise JournalValidationError(_("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro."))
-    company_currency = database.session.execute(
-        select(Entity.currency).where(Entity.code == data.company)
-    ).scalar_one_or_none()
     for line in data.lines:
         _validate_journal_line(
             data.company,
@@ -1054,40 +1052,50 @@ def _validate_balanced_lines(data: JournalDraftInput, *, allow_inactive_accounts
             allow_inactive_account=allow_inactive_accounts,
             allow_inactive_currency=allow_inactive_accounts,
         )
-        effective_rate = _journal_line_company_rate(line, data, company_currency)
-        debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
-        totals[line.book] = debit + line.debit * effective_rate, credit + line.credit * effective_rate
-    if any(debit != credit for debit, credit in totals.values()):
-        raise JournalValidationError(_("El comprobante contable no esta balanceado por libro."))
+
+    books = list(database.session.execute(select(Book).where(Book.entity == data.company, Book.status == "activo")).scalars())
+    if data.books:
+        selected = set(data.books)
+        books = [book for book in books if book.id in selected or book.code in selected]
+    if not books:
+        raise JournalValidationError(_("La compañía no tiene libro contable activo."))
+    for book in books:
+        total = Decimal("0")
+        for line in data.lines:
+            if line.book and line.book not in {book.id, book.code}:
+                continue
+            effective_rate = _journal_line_rate_for_book(line, data, book)
+            total += _to_company_currency(line.debit - line.credit, effective_rate)
+        if total != 0:
+            raise JournalValidationError(_("El comprobante contable no esta balanceado por libro."))
 
 
-def _journal_line_company_rate(line: JournalLineInput, data: JournalDraftInput, company_currency: str | None) -> Decimal:
-    """Resolve the journal line rate into the company's functional currency."""
+def _journal_line_rate_for_book(line: JournalLineInput, data: JournalDraftInput, book: Book) -> Decimal:
+    """Reproduce la conversión de posting para una línea y un libro destino."""
     line_currency = line.currency or data.transaction_currency or data.base_currency
-    transaction_currency = data.transaction_currency
-    if line_currency == company_currency:
-        return Decimal("1")
-    if not line_currency or not transaction_currency or not company_currency:
+    if not line_currency or not data.transaction_currency or not data.base_currency or not book.currency:
         raise JournalValidationError(_("El comprobante requiere monedas para validar su balance."))
-
     try:
-        if line_currency == transaction_currency:
-            line_to_transaction_rate = Decimal("1")
-        elif line.exchange_rate is not None:
-            line_to_transaction_rate = line.exchange_rate
-        else:
-            line_to_transaction_rate = _lookup_exchange_rate(line_currency, transaction_currency, data.posting_date)
-
-        if transaction_currency == company_currency:
-            transaction_to_company_rate = Decimal("1")
-        elif data.exchange_rate is not None:
-            transaction_to_company_rate = data.exchange_rate
-        else:
-            transaction_to_company_rate = _lookup_exchange_rate(transaction_currency, company_currency, data.posting_date)
+        header_rate = _ledger_exchange_rate(
+            transaction_currency=data.transaction_currency,
+            ledger_currency=book.currency,
+            document_base_currency=data.base_currency,
+            document_exchange_rate=data.exchange_rate,
+            posting_date=data.posting_date,
+            is_fiscal_year_closing=data.is_fiscal_year_closing,
+        )
+        return _journal_line_book_rate(
+            line_currency=line_currency,
+            book_currency=book.currency,
+            header_currency=data.transaction_currency,
+            base_currency=data.base_currency,
+            line_exchange_rate=line.exchange_rate,
+            header_exchange_rate=header_rate,
+            document_exchange_rate=data.exchange_rate,
+            posting_date=data.posting_date,
+        )
     except PostingError as exc:
         raise JournalValidationError(str(exc)) from exc
-
-    return line_to_transaction_rate * transaction_to_company_rate
 
 
 def _normalize_party_type(value: str | None) -> str | None:

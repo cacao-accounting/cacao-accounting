@@ -4715,6 +4715,42 @@ def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -
     return _add_entries(entries)
 
 
+def _journal_line_book_rate(
+    *,
+    line_currency: str,
+    book_currency: str,
+    header_currency: str,
+    base_currency: str,
+    line_exchange_rate: Decimal | None,
+    header_exchange_rate: Decimal | None,
+    document_exchange_rate: Decimal | None,
+    posting_date: date,
+) -> Decimal:
+    """Resuelve la tasa efectiva de una línea a la moneda de un libro."""
+    if line_currency == book_currency:
+        return Decimal("1")
+    if line_currency == header_currency:
+        line_to_header_rate = Decimal("1")
+    elif line_currency == base_currency:
+        line_to_header_rate = _lookup_exchange_rate(line_currency, header_currency, posting_date)
+    else:
+        line_to_header_rate = line_exchange_rate or _lookup_exchange_rate(line_currency, header_currency, posting_date)
+
+    if book_currency == header_currency:
+        header_to_book_rate = Decimal("1")
+    elif header_exchange_rate is not None:
+        header_to_book_rate = header_exchange_rate
+    elif document_exchange_rate is not None and base_currency != book_currency:
+        header_to_book_rate = document_exchange_rate * _lookup_exchange_rate(base_currency, book_currency, posting_date)
+    else:
+        header_to_book_rate = _lookup_exchange_rate(header_currency, book_currency, posting_date)
+
+    effective_rate = line_to_header_rate * header_to_book_rate
+    if effective_rate <= 0:
+        raise _invalid_exchange_rate_error()
+    return effective_rate
+
+
 def _comprobante_line_value(
     context: LedgerContext,
     original_value: Decimal,
@@ -4735,37 +4771,20 @@ def _comprobante_line_value(
     base_currency = base_context.document_base_currency
     if not base_currency:
         raise PostingError(_("El comprobante requiere moneda base para convertir sus líneas."))
-    if line_currency == book_currency:
-        line_context = context.__class__(**{**context.__dict__, "exchange_rate": Decimal("1")})
-        return line_context, original_value
-
     header_currency = base_context.transaction_currency
     if not header_currency:
         raise PostingError(_("El comprobante requiere moneda transaccional para convertir sus líneas."))
 
-    if line_currency == header_currency:
-        line_to_header_rate = Decimal("1")
-    elif line_currency == base_currency:
-        line_to_header_rate = _lookup_exchange_rate(line_currency, header_currency, context.posting_date)
-    else:
-        line_to_header_rate = context.exchange_rate or _lookup_exchange_rate(
-            line_currency, header_currency, context.posting_date
-        )
-
-    if book_currency == header_currency:
-        header_to_book_rate = Decimal("1")
-    elif base_context.exchange_rate is not None:
-        header_to_book_rate = base_context.exchange_rate
-    elif base_context.document_exchange_rate is not None and base_currency != book_currency:
-        header_to_book_rate = base_context.document_exchange_rate * _lookup_exchange_rate(
-            base_currency, book_currency, context.posting_date
-        )
-    else:
-        header_to_book_rate = _lookup_exchange_rate(header_currency, book_currency, context.posting_date)
-
-    effective_rate = line_to_header_rate * header_to_book_rate
-    if effective_rate <= 0:
-        raise _invalid_exchange_rate_error()
+    effective_rate = _journal_line_book_rate(
+        line_currency=line_currency,
+        book_currency=book_currency,
+        header_currency=header_currency,
+        base_currency=base_currency,
+        line_exchange_rate=context.exchange_rate,
+        header_exchange_rate=base_context.exchange_rate,
+        document_exchange_rate=base_context.document_exchange_rate,
+        posting_date=context.posting_date,
+    )
     converted_value = _to_company_currency(original_value, effective_rate)
     line_context = context.__class__(**{**context.__dict__, "exchange_rate": effective_rate})
     return line_context, converted_value
