@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     CashForecast,
     CashForecastEntry,
     CompanyParty,
+    Currency,
     Entity,
     PaymentTerms,
 )
@@ -149,9 +150,20 @@ def get_base_amount(amount, currency_code, company_currency, target_date):
 
 
 def _resolve_company_currency(company: str) -> str:
-    """Resuelve la moneda base de una compañía."""
+    """Resuelve la moneda funcional configurada de una compañía.
+
+    No asume NIO: sin moneda (o con una moneda inactiva) el pronóstico debe
+    detenerse en lugar de presentar saldos convertidos a una moneda inventada
+    (#1324).
+    """
     entity = database.session.query(Entity).filter_by(code=company).first()
-    return entity.currency if entity else "NIO"
+    currency = str(getattr(entity, "currency", None) or "").strip() if entity else ""
+    if not currency:
+        raise CashForecastConversionError(_("La compañía requiere una moneda funcional configurada."))
+    currency_row = database.session.query(Currency).filter_by(code=currency).first()
+    if currency_row is None or not currency_row.active:
+        raise CashForecastConversionError(_("La moneda funcional de la compañía no esta activa."))
+    return currency
 
 
 def _get_cash_bank_account_ids(company: str) -> list[str]:
