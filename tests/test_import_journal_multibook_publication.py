@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 William Moreno Reyes
 
-"""#2287: importaci?n CSV hasta publicaci?n GL multilibro con monedas distintas."""
+"""#2287: importación CSV hasta publicación GL multilibro con monedas distintas."""
 
 from __future__ import annotations
 
@@ -136,6 +136,11 @@ def test_import_multilibro_dos_monedas_publica_gl_por_libro(entorno_contable_ais
 
 
 def test_import_multilibro_tasa_ausente_sin_historica_rechaza_atomico(entorno_contable_aislado, tmp_path):
+    """El rechazo por FX ausente es discriminante y no deja documento ni GL.
+
+    El lote puede rechazarse en validación o al ejecutar la importación; en
+    ambas fases se exige un error de tasa/cambio y ausencia de evidencia parcial.
+    """
     app = entorno_contable_aislado.app
     _setup_two_books_usd(app)
     with app.app_context():
@@ -183,9 +188,17 @@ def test_import_multilibro_tasa_ausente_sin_historica_rechaza_atomico(entorno_co
                     is None
                 )
                 return
-        # If rejected at validation, no draft/GL created.
+        # Rechazo antes de publicar: el error debe identificar la causa FX.
         errors = ImportBatchError.query.filter_by(batch_id=lote_id).all()
         assert errors, "Lote rechazado debe registrar error de tasa ausente"
+        detalle = " | ".join(f"{error.error_type}: {error.message}" for error in errors).lower()
+        assert "cambio" in detalle or "exchange" in detalle or "tasa" in detalle, detalle
+        assert (
+            database.session.execute(select(ComprobanteContable.id).where(ComprobanteContable.entity == "cacao"))
+            .scalars()
+            .first()
+            is None
+        ), "El rechazo por FX no debe dejar un comprobante en borrador"
         assert database.session.execute(select(GLEntry.id)).scalar_one_or_none() is None
 
 
