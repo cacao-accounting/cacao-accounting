@@ -174,3 +174,36 @@ def test_nota_con_una_sola_linea_conserva_el_flujo_previo(entorno_contable_aisla
         assert len(allocations) == 1
         assert allocations[0].invoice_item_id == only_line.id
         assert allocations[0].amount == Decimal("30")
+
+
+def test_relacion_con_otra_nota_destino_no_desambigua(entorno_contable_aislado):
+    """Una relación cuyo target documental no es esta nota se ignora."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        note, _first, _second = _two_line_scenario("active")
+        note_item = database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=note.id)).scalar_one()
+        relation = database.session.execute(select(DocumentRelation).filter_by(target_item_id=note_item.id)).scalar_one()
+        relation.target_id = "OTRA-NOTA"
+        database.session.commit()
+
+        with pytest.raises(PurchaseReconciliationError, match="única línea"):
+            create_purchase_credit_note_allocations(note.id)
+
+
+def test_linea_enlazada_respeta_su_capacidad_remanente(entorno_contable_aislado):
+    """La relación exacta no permite tomar capacidad de otra línea del artículo."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        supplier_id, item_code, uom_code = _context()
+        invoice = _invoice(supplier_id)
+        first = _line(invoice.id, item_code, uom_code, "100")
+        second = _line(invoice.id, item_code, uom_code, "20")
+        database.session.commit()
+        note = _credit_note(supplier_id, invoice.id, item_code, uom_code, "25")
+        _link(invoice.id, second.id, note, "25", "active")
+
+        with pytest.raises(PurchaseReconciliationError, match="excede el importe de la línea"):
+            create_purchase_credit_note_allocations(note.id)
+
+        assert first.amount == Decimal("100")
+        assert second.amount == Decimal("20")

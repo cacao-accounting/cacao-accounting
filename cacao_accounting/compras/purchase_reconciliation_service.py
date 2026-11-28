@@ -644,6 +644,7 @@ def _linked_source_item(
                 DocumentRelation.source_type == "purchase_invoice",
                 DocumentRelation.source_id == source_id,
                 DocumentRelation.target_type == target_type,
+                DocumentRelation.target_id == note_item.purchase_invoice_id,
                 DocumentRelation.target_item_id == note_item.id,
                 DocumentRelation.status == "active",
             )
