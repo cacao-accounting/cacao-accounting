@@ -1285,6 +1285,9 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
 
         from cacao_accounting.bancos import services
 
+        dialect = database.engine.dialect.name
+        if dialect not in {"postgresql", "mysql"}:
+            pytest.skip("La carrera de lock requiere PostgreSQL o MySQL.")
         original_lock = services._lock_row_for_transition
         first_locked = Event()
         release = Event()
@@ -1297,7 +1300,8 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             with calls_lock:
                 calls.append(1)
                 number = len(calls)
-            pid = database.session.connection().exec_driver_sql("SELECT pg_backend_pid()").scalar()
+            pid_sql = "SELECT pg_backend_pid()" if dialect == "postgresql" else "SELECT CONNECTION_ID()"
+            pid = database.session.connection().exec_driver_sql(pid_sql).scalar()
             with pids_lock:
                 worker_pids[f"worker_{number}"] = int(pid)
             locked = original_lock(model, record_id)
@@ -1307,6 +1311,41 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             return locked
 
         monkeypatch.setattr(services, "_lock_row_for_transition", lock_observable)
+
+        def segundo_espera_al_primero(conn, first_pid: int, second_pid: int) -> bool:
+            """Comprueba la contención específica entre los dos workers."""
+            if dialect == "postgresql":
+                row = (
+                    conn.execute(
+                        text(
+                            "SELECT wait_event_type, pg_blocking_pids(pid) AS blockers "
+                            "FROM pg_stat_activity WHERE pid = :pid"
+                        ),
+                        {"pid": second_pid},
+                    )
+                    .mappings()
+                    .first()
+                )
+                blockers = list((row or {}).get("blockers") or [])
+                return bool(row and row.get("wait_event_type") == "Lock" and first_pid in blockers)
+            row = (
+                conn.execute(
+                    text(
+                        "SELECT blocking.trx_mysql_thread_id AS blocking_thread "
+                        "FROM information_schema.innodb_lock_waits waits "
+                        "JOIN information_schema.innodb_trx requesting "
+                        "ON requesting.trx_id = waits.requesting_trx_id "
+                        "JOIN information_schema.innodb_trx blocking "
+                        "ON blocking.trx_id = waits.blocking_trx_id "
+                        "WHERE requesting.trx_mysql_thread_id = :second_pid"
+                    ),
+                    {"second_pid": second_pid},
+                )
+                .mappings()
+                .first()
+            )
+            return bool(row and int(row["blocking_thread"]) == first_pid)
+
         monitor_engine = create_engine(application.config["SQLALCHEMY_DATABASE_URI"])
         try:
             with ThreadPoolExecutor(max_workers=2) as executor:
@@ -1322,24 +1361,12 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
                         second_pid = worker_pids.get("worker_2")
                     if first_pid and second_pid:
                         with monitor_engine.connect() as conn:
-                            row = (
-                                conn.execute(
-                                    text(
-                                        "SELECT wait_event_type, pg_blocking_pids(pid) AS blockers "
-                                        "FROM pg_stat_activity WHERE pid = :pid"
-                                    ),
-                                    {"pid": second_pid},
-                                )
-                                .mappings()
-                                .first()
-                            )
-                        blockers = list((row or {}).get("blockers") or [])
-                        if row and row.get("wait_event_type") == "Lock" and first_pid in blockers:
-                            blocked = True
-                            break
+                            if segundo_espera_al_primero(conn, int(first_pid), int(second_pid)):
+                                blocked = True
+                                break
                     time.sleep(0.05)
 
-                assert blocked, "El segundo ajuste no mostr? contenci?n de lock real contra el primer worker en PostgreSQL"
+                assert blocked, f"El segundo ajuste no mostró contención de lock real contra el primer worker en {dialect}"
                 release.set()
                 results = [first.result(timeout=30), second.result(timeout=30)]
         finally:
