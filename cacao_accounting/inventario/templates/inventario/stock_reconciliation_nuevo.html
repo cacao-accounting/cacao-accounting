@@ -147,6 +147,7 @@
               <td>
                 <input type="hidden" :name="'item_code_' + index" x-model="line.item_code">
                 <input class="form-control form-control-sm" type="text" x-model="line.item_code" @change="loadSnapshot(line)" placeholder="{{ _('Código') }}">
+                <div class="text-danger small" x-show="line.snapshot_error" x-text="line.snapshot_error"></div>
                 <input type="hidden" :name="'uom_' + index" x-model="line.uom">
               </td>
               <td>
@@ -194,6 +195,7 @@ function stockReconciliationForm(config = {}) {
   const configuredHeader = config.header || {};
   const configuredLines = config.lines || [];
   const snapshotTokens = new Map();
+  const snapshotErrorMessage = "{{ _('No se pudo cargar el snapshot de inventario.') }}";
   return {
     header: {
       company: '',
@@ -247,6 +249,7 @@ function stockReconciliationForm(config = {}) {
     },
     async loadSnapshot(line) {
       if (!this.header.company || !line.item_code || !line.warehouse) return;
+      const company = this.header.company;
       const itemCode = line.item_code;
       const warehouse = line.warehouse;
       const token = (snapshotTokens.get(line.uid) || 0) + 1;
@@ -256,17 +259,43 @@ function stockReconciliationForm(config = {}) {
         item_code: itemCode,
         warehouse,
       });
-      const response = await fetch(`/api/inventory/stock-bin-snapshot?${params.toString()}`, { credentials: 'same-origin' });
-      if (!response.ok) return;
-      const snapshot = await response.json();
-      if (snapshotTokens.get(line.uid) !== token) return;
-      if (line.item_code !== itemCode || line.warehouse !== warehouse) return;
-      line.current_qty = Number(snapshot.actual_qty || 0);
-      line.counted_qty = line.current_qty;
-      line.current_valuation_rate = Number(snapshot.valuation_rate || 0);
-      line.target_valuation_rate = line.current_valuation_rate;
-      line.current_stock_value = Number(snapshot.stock_value || 0);
-      line.target_stock_value = line.current_stock_value;
+      try {
+        const response = await fetch(`/api/inventory/stock-bin-snapshot?${params.toString()}`, {
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('snapshot request failed');
+        const snapshot = await response.json();
+        if (snapshotTokens.get(line.uid) !== token) return;
+        if (this.header.company !== company || line.item_code !== itemCode || line.warehouse !== warehouse) {
+          this.clearSnapshot(line);
+          line.snapshot_error = snapshotErrorMessage;
+          return;
+        }
+        line.current_qty = Number(snapshot.actual_qty || 0);
+        line.counted_qty = line.current_qty;
+        line.current_valuation_rate = Number(snapshot.valuation_rate || 0);
+        line.target_valuation_rate = line.current_valuation_rate;
+        line.current_stock_value = Number(snapshot.stock_value || 0);
+        line.target_stock_value = line.current_stock_value;
+        line.snapshot_error = '';
+      } catch (error) {
+        if (snapshotTokens.get(line.uid) !== token) return;
+        if (this.header.company !== company || line.item_code !== itemCode || line.warehouse !== warehouse) {
+          this.clearSnapshot(line);
+          line.snapshot_error = snapshotErrorMessage;
+          return;
+        }
+        this.clearSnapshot(line);
+        line.snapshot_error = snapshotErrorMessage;
+      }
+    },
+    clearSnapshot(line) {
+      line.current_qty = null;
+      line.counted_qty = null;
+      line.current_valuation_rate = null;
+      line.target_valuation_rate = null;
+      line.current_stock_value = null;
+      line.target_stock_value = null;
     },
   };
 }

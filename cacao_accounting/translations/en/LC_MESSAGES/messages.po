@@ -28585,3 +28585,6 @@ msgid ""
 msgstr ""
 "Reversing the stock movement would leave the bin with a negative quantity "
 "for %(item)s in %(wh)s."
+
+msgid "No se pudo cargar el snapshot de inventario."
+msgstr "Could not load the inventory snapshot."

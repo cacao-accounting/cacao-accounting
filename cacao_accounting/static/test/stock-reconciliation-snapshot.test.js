@@ -110,4 +110,59 @@ describe('stock reconciliation snapshot ordering', function () {
     assert.strictEqual(line.current_qty, 60);
     assert.strictEqual(line.counted_qty, 60);
   });
+
+  it('discards a pending snapshot when the company changes', async function () {
+    const pending = deferred();
+    globalThis.fetch = () => pending.promise;
+    const form = createForm();
+    const line = form.lines[0];
+    line.current_qty = 7;
+    line.counted_qty = 7;
+    line.item_code = 'ITEM-A';
+    line.warehouse = 'BODEGA-1';
+
+    const request = form.loadSnapshot(line);
+    form.header.company = 'otra-compania';
+    pending.resolve(snapshot(50, 5, 250));
+    await request;
+
+    assert.strictEqual(line.current_qty, null);
+    assert.strictEqual(line.counted_qty, null);
+    assert.strictEqual(line.current_stock_value, null);
+    assert.notStrictEqual(line.snapshot_error, undefined);
+  });
+
+  it('clears stale values and flags an error when fetch fails', async function () {
+    globalThis.fetch = async () => {
+      throw new Error('network down');
+    };
+    const form = createForm();
+    const line = form.lines[0];
+    line.current_qty = 7;
+    line.counted_qty = 7;
+    line.current_stock_value = 70;
+    line.item_code = 'ITEM-A';
+    line.warehouse = 'BODEGA-1';
+
+    await form.loadSnapshot(line);
+
+    assert.strictEqual(line.current_qty, null);
+    assert.strictEqual(line.counted_qty, null);
+    assert.strictEqual(line.current_stock_value, null);
+    assert.notStrictEqual(line.snapshot_error, undefined);
+  });
+
+  it('clears stale values when the HTTP response is not ok', async function () {
+    globalThis.fetch = async () => ({ ok: false, json: async () => ({}) });
+    const form = createForm();
+    const line = form.lines[0];
+    line.current_qty = 7;
+    line.item_code = 'ITEM-A';
+    line.warehouse = 'BODEGA-1';
+
+    await form.loadSnapshot(line);
+
+    assert.strictEqual(line.current_qty, null);
+    assert.notStrictEqual(line.snapshot_error, undefined);
+  });
 });
