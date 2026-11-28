@@ -1171,12 +1171,14 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             _validate_sales_catalog_rate(order, i, item_code, qty, uom, rate)
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             warehouse = (
-                request.form.get("warehouse")
+                request.form.get(f"warehouse_{i}")
+                or request.form.get("warehouse")
                 or request.form.get("from_warehouse")
                 or request.form.get("to_warehouse")
-                or request.form.get(f"warehouse_{i}")
                 or None
             )
+            if warehouse:
+                _require_sales_warehouse(order.company, warehouse)
             linea = SalesOrderItem(
                 sales_order_id=order_id,
                 item_code=item_code,
@@ -2050,6 +2052,8 @@ def _build_sales_order_transaction_config(
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
+        "showLineWarehouse": True,
+        "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "availableSourceTypes": [
             {"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},

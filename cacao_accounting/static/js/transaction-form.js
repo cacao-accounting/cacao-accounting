@@ -341,6 +341,9 @@
       if (config.showPricing === false && (column.field === 'rate' || column.field === 'amount')) {
         column.visible = false;
       }
+      if (column.field === 'warehouse' && config.showLineWarehouse === true) {
+        continue;
+      }
       if (column.field === 'warehouse' || column.field === 'batch_id' || column.field === 'serial_no') {
         column.visible = false;
       }
@@ -357,7 +360,6 @@
     });
 
     for (const confCol of configColumns) {
-      if (confCol.field === 'warehouse') continue;
       if (!defaultCols.some(d => d.field === confCol.field)) {
         columnsList.push({ ...confCol });
       }
@@ -529,7 +531,7 @@
         syncLineInputs() {
           const root = this.$root || document;
           const fields = ['item_code', 'item_name', 'description', 'uom', 'qty', 'rate', 'amount',
-            'batch_id', 'serial_no', 'account',
+            'batch_id', 'serial_no', 'account', 'warehouse',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
           const monetaryFields = new Set(['qty', 'rate', 'amount']);
           for (const [index, line] of this.lines.entries()) {
