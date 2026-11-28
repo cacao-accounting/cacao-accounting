@@ -13,7 +13,7 @@ from uuid import uuid4
 from sqlalchemy import inspect, select
 
 from cacao_accounting.contabilidad.journal_service import create_journal_draft, update_journal_draft
-from cacao_accounting.database import Accounts, Book, ComprobanteContable, Entity, User, UserCompanyAccess, database
+from cacao_accounting.database import Accounts, Book, ComprobanteContable, Currency, Entity, User, UserCompanyAccess, database
 
 
 def _payload(**overrides: object) -> dict[str, object]:
@@ -79,6 +79,26 @@ def test_cambiar_de_moneda_con_tasa_enviada_no_conserva_la_tasa_anterior(app, en
 
         assert actualizado.transaction_currency == "NIO"
         assert actualizado.exchange_rate is None
+
+
+def test_cambiar_de_moneda_con_tasa_nueva_explicita_la_persiste(entorno_contable_aislado):
+    """Una tasa distinta enviada junto al nuevo par monetario es una tasa nueva."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+        database.session.commit()
+        actor_id = _actor_id()
+        journal = create_journal_draft(_payload(), user_id=actor_id, assign_identifier=False)
+
+        actualizado = update_journal_draft(
+            journal.id,
+            _payload(transaction_currency="EUR", exchange_rate="40"),
+            user_id=actor_id,
+        )
+
+        assert actualizado.transaction_currency == "EUR"
+        assert actualizado.base_currency == "NIO"
+        assert actualizado.exchange_rate == Decimal("40")
 
 
 def test_cambiar_compania_con_otro_base_no_conserva_la_tasa_anterior(entorno_contable_aislado):
@@ -168,3 +188,29 @@ def test_edicion_http_sin_tasa_conserva_tasa_y_base(entorno_contable_aislado):
     assert page.status_code == 200
     tasas = re.findall(r'"exchange_rate":\s*"([0-9.]+)"', page.get_data(as_text=True))
     assert tasas and Decimal(tasas[0]) == Decimal("36.5")
+
+
+def test_edicion_http_con_par_y_tasa_nuevos_persiste_la_tasa(entorno_contable_aislado):
+    """El formulario HTTP conserva una tasa nueva explícita al cambiar de moneda."""
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    with app.app_context():
+        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+        database.session.commit()
+        journal = create_journal_draft(_payload(), user_id=actor_id, assign_identifier=False)
+        identifier = journal.id
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = actor_id
+        session["_fresh"] = True
+
+    edit_payload = _payload(transaction_currency="EUR", exchange_rate="40")
+    response = client.post(f"/accounting/journal/edit/{identifier}", data={"journal_payload": json.dumps(edit_payload)})
+
+    assert response.status_code == 302
+    with app.app_context():
+        persisted = database.session.get(ComprobanteContable, identifier)
+        assert persisted.transaction_currency == "EUR"
+        assert persisted.base_currency == "NIO"
+        assert persisted.exchange_rate == Decimal("40")

@@ -702,6 +702,16 @@ def _next_journal_reversal_transition_type(transitions: list[DocumentTransition]
     return f"{JOURNAL_REVERSAL_RETRY_PREFIX}{next_number:05d}"
 
 
+def _journal_edit_exchange_rate(journal: ComprobanteContable, data: JournalDraftInput) -> Decimal | None:
+    """Resuelve la tasa efectiva al editar sin confundir una tasa nueva con la obsoleta."""
+    basis_changed = journal.transaction_currency != data.transaction_currency or journal.base_currency != data.base_currency
+    if basis_changed:
+        if data.exchange_rate is None or data.exchange_rate == journal.exchange_rate:
+            return None
+        return data.exchange_rate
+    return data.exchange_rate if data.exchange_rate is not None else journal.exchange_rate
+
+
 def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str) -> ComprobanteContable:
     """Actualiza un comprobante manual en borrador."""
     journal = get_journal(journal_id)
@@ -729,6 +739,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
     )
+    exchange_rate = _journal_edit_exchange_rate(journal, data)
+    data = replace(data, exchange_rate=exchange_rate)
     _validate_balanced_lines(data, allow_inactive_accounts=bool(journal.reversal_of))
     _validate_line_books(data.company, data.books, data.lines)
     _validate_ar_ap_lines(data.company, data.lines, validate_references=not bool(journal.reversal_of))
@@ -741,16 +753,9 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     journal.reference = data.reference
     journal.memo = data.memo
     journal.naming_series_id = data.naming_series_id
-    exchange_rate_basis_changed = (
-        journal.transaction_currency != data.transaction_currency or journal.base_currency != data.base_currency
-    )
     journal.transaction_currency = data.transaction_currency
     journal.base_currency = data.base_currency
-    # El formulario puede enviar la tasa anterior junto al nuevo par de monedas.
-    if exchange_rate_basis_changed:
-        journal.exchange_rate = None
-    elif data.exchange_rate is not None:
-        journal.exchange_rate = data.exchange_rate
+    journal.exchange_rate = exchange_rate
     journal.is_closing = data.is_closing
     journal.is_fiscal_year_closing = data.is_fiscal_year_closing
     journal.fiscal_year_id = data.fiscal_year_id
