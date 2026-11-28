@@ -1359,9 +1359,12 @@ def _preserve_reversal_line_identities(journal: ComprobanteContable, data: Journ
 
 def _validate_reversal_line_currencies(journal: ComprobanteContable, data: JournalDraftInput) -> None:
     """Impide sustituir la moneda histórica de una línea al editar la reversión."""
-    source_lines = list_journal_lines(str(journal.reversal_of))
+    source = get_journal(str(journal.reversal_of))
+    if source is None:
+        raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+    source_lines = list_journal_lines(source.id)
     currencies_by_line_id = {
-        str(line.economic_line_id or line.id): str(line.currency_id or "")
+        str(line.economic_line_id or line.id): str(line.currency_id or source.transaction_currency or "")
         for line in source_lines
         if line.economic_line_id or line.id
     }

@@ -169,3 +169,42 @@ def test_edicion_reversa_rechaza_otra_moneda_inactiva_y_conserva_borrador(entorn
             .order_by(ComprobanteContableDetalle.order)
         ).scalars()
         assert list(monedas) == ["USD", "NIO"]
+
+
+def test_edicion_reversa_legacy_usa_moneda_de_cabecera(entorno_contable_aislado):
+    """Una línea fuente sin currency_id conserva la moneda efectiva de la cabecera."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _periodo_junio()
+        actor_id = database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
+        payload = _payload()
+        payload["transaction_currency"] = "USD"
+        payload["exchange_rate"] = "36.5"
+        payload["lines"][1]["currency"] = "USD"
+        payload["lines"][1]["credit"] = "100"
+        original = create_journal_draft(payload, user_id=actor_id, assign_identifier=False)
+        submit_journal(original.id, user_id=actor_id)
+        source_line = database.session.execute(
+            select(ComprobanteContableDetalle).filter_by(transaction_id=original.id, order=1)
+        ).scalar_one()
+        source_line.currency_id = None
+        database.session.commit()
+
+        reversal = duplicate_journal_as_reversal_draft(
+            original.id,
+            user_id=actor_id,
+            reversal_date_raw=date(2026, 6, 15),
+            reason="Compatibilidad histórica",
+        )
+        payload = serialize_journal_for_form(reversal)
+        payload["memo"] = "Edición legacy sin cambio de moneda"
+
+        actualizada = update_journal_draft(reversal.id, payload, actor_id)
+
+        assert actualizada.memo == payload["memo"]
+        monedas = database.session.execute(
+            select(ComprobanteContableDetalle.currency_id)
+            .filter_by(transaction_id=reversal.id)
+            .order_by(ComprobanteContableDetalle.order)
+        ).scalars()
+        assert list(monedas) == ["USD", "USD"]
