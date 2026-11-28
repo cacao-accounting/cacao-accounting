@@ -15,6 +15,35 @@ from decimal import Decimal
 from typing import Any
 
 _EXCEL_EPOCH = date(1899, 12, 30)
+_SLASH_DATE_FORMATS = ("%d/%m/%Y", "%m/%d/%Y")
+
+
+def _parse_slash_date(text: str, field: str) -> date:
+    """Resuelve DD/MM o MM/DD solo cuando el resultado no es ambiguo."""
+    matches: list[date] = []
+    for date_format in _SLASH_DATE_FORMATS:
+        try:
+            matches.append(datetime.strptime(text, date_format).date())
+        except ValueError:
+            continue
+    if len(set(matches)) != 1:
+        raise ValueError(f"{field} debe ser una fecha válida.")
+    return matches[0]
+
+
+def _parse_import_date_text(text: str, field: str) -> date:
+    """Resuelve texto ISO, datetime o una fecha con barras no ambigua."""
+    if not text:
+        raise ValueError(f"{field} debe ser una fecha válida.")
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        try:
+            return datetime.fromisoformat(text).date()
+        except ValueError as exc:
+            if "/" in text:
+                return _parse_slash_date(text, field)
+            raise ValueError(f"{field} debe ser una fecha válida.") from exc
 
 
 def parse_import_date(value: Any, *, field: str = "fecha") -> date:
@@ -38,14 +67,5 @@ def parse_import_date(value: Any, *, field: str = "fecha") -> date:
         except (OverflowError, ValueError) as exc:
             raise ValueError(f"{field} debe ser una fecha válida.") from exc
     if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            raise ValueError(f"{field} debe ser una fecha válida.")
-        try:
-            return date.fromisoformat(text)
-        except ValueError:
-            try:
-                return datetime.fromisoformat(text).date()
-            except ValueError as exc:
-                raise ValueError(f"{field} debe ser una fecha válida.") from exc
+        return _parse_import_date_text(value.strip(), field)
     raise ValueError(f"{field} debe ser una fecha válida.")
