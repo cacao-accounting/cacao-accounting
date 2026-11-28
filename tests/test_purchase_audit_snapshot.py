@@ -23,6 +23,8 @@ from cacao_accounting.database import (
     DocumentRelation,
     DocumentTaxLine,
     DocumentTaxSummary,
+    Item,
+    ItemUOMConversion,
     Party,
     PurchaseInvoice,
     PurchaseInvoiceItem,
@@ -34,6 +36,7 @@ from cacao_accounting.database import (
     SupplierQuotation,
     SupplierQuotationItem,
     TaxTemplate,
+    UOM,
     database,
 )
 from cacao_accounting.document_flow import create_document_relation
@@ -804,3 +807,181 @@ def test_edicion_factura_registra_cambio_de_origen_por_linea(app, authenticated_
             .all()
         )
         assert ids["linea_a"] in revertidas
+
+
+@pytest.fixture
+def factura_origen_uom(app, entorno_contable):
+    """Factura vinculada a una orden en BOX y otra orden en UND para probar la base."""
+    sufijo = uuid4().hex[:10]
+    box = f"BOX{sufijo[:6]}".upper()
+    with app.app_context():
+        proveedor = Party(code=f"PRV-UOM-{sufijo}", name=f"Proveedor UOM {sufijo}", is_supplier=True)
+        database.session.add(proveedor)
+        database.session.flush()
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=proveedor.id,
+                is_active=True,
+                allow_purchase_invoice_without_order=True,
+                allow_purchase_invoice_without_receipt=True,
+            )
+        )
+        database.session.add(UOM(code=box, name=f"Caja {sufijo}"))
+        item_code = f"ART-UOM-{sufijo}"
+        database.session.add(
+            Item(
+                code=item_code,
+                name="Artículo con conversión",
+                item_type="goods",
+                is_stock_item=False,
+                is_purchase_item=True,
+                default_uom="UND",
+            )
+        )
+        database.session.flush()
+        database.session.add(
+            ItemUOMConversion(
+                item_code=item_code,
+                from_uom=box,
+                to_uom="UND",
+                conversion_factor=Decimal("12"),
+            )
+        )
+        ordenes = {}
+        lineas = {}
+        for letra, qty, qty_base, uom in (("a", "1", "12", box), ("b", "2", "2", "UND")):
+            orden = PurchaseOrder(
+                company="cacao",
+                posting_date=date(2026, 5, 15),
+                docstatus=1,
+                document_no=f"PO-UOM-{letra}-{sufijo}",
+                supplier_id=proveedor.id,
+                supplier_name=proveedor.name,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+            )
+            database.session.add(orden)
+            database.session.flush()
+            linea = PurchaseOrderItem(
+                purchase_order_id=orden.id,
+                item_code=item_code,
+                item_name="Artículo con conversión",
+                qty=Decimal(qty),
+                qty_in_base_uom=Decimal(qty_base),
+                uom=uom,
+                rate=Decimal("10"),
+                amount=Decimal("10") if letra == "a" else Decimal("20"),
+            )
+            database.session.add(linea)
+            database.session.flush()
+            ordenes[letra] = orden.id
+            lineas[letra] = linea.id
+        factura = PurchaseInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=0,
+            document_no=f"FI-UOM-{sufijo}",
+            supplier_id=proveedor.id,
+            supplier_name=proveedor.name,
+            supplier_invoice_no=f"FAC-UOM-{sufijo}",
+            document_type="purchase_invoice",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        linea_factura = PurchaseInvoiceItem(
+            purchase_invoice_id=factura.id,
+            item_code=item_code,
+            item_name="Artículo con conversión",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("12"),
+            uom=box,
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+        database.session.add(linea_factura)
+        database.session.flush()
+        create_document_relation(
+            source_type="purchase_order",
+            source_id=ordenes["a"],
+            source_item_id=lineas["a"],
+            target_type="purchase_invoice",
+            target_id=factura.id,
+            target_item_id=linea_factura.id,
+            qty=Decimal("1"),
+            uom=box,
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+        database.session.commit()
+        ids = {
+            "factura": factura.id,
+            "linea_factura": linea_factura.id,
+            "orden_a": ordenes["a"],
+            "orden_b": ordenes["b"],
+            "linea_a": lineas["a"],
+            "linea_b": lineas["b"],
+            "proveedor": proveedor.id,
+            "sufijo": sufijo,
+            "item_code": item_code,
+        }
+    yield ids
+    with app.app_context():
+        database.session.execute(database.delete(AuditTrail).where(AuditTrail.document_id == ids["factura"]))
+        database.session.execute(
+            database.delete(DocumentRelation).where(
+                DocumentRelation.target_type == "purchase_invoice",
+                DocumentRelation.target_id == ids["factura"],
+            )
+        )
+        database.session.execute(
+            database.delete(PurchaseInvoiceItem).where(PurchaseInvoiceItem.purchase_invoice_id == ids["factura"])
+        )
+        database.session.execute(database.delete(PurchaseInvoice).where(PurchaseInvoice.id == ids["factura"]))
+        for order_id in (ids["orden_a"], ids["orden_b"]):
+            database.session.execute(database.delete(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == order_id))
+            database.session.execute(database.delete(PurchaseOrder).where(PurchaseOrder.id == order_id))
+        database.session.execute(database.delete(CompanyParty).where(CompanyParty.party_id == ids["proveedor"]))
+        database.session.execute(database.delete(Party).where(Party.id == ids["proveedor"]))
+        database.session.execute(database.delete(ItemUOMConversion).where(ItemUOMConversion.item_code == ids["item_code"]))
+        database.session.execute(database.delete(Item).where(Item.code == ids["item_code"]))
+        database.session.execute(database.delete(UOM).where(UOM.code == box))
+        database.session.commit()
+
+
+def test_cambio_de_origen_con_conversion_uom_conserva_cantidad_base(app, authenticated_client, factura_origen_uom):
+    """#2296: el snapshot distingue la cantidad base antes y después del cambio."""
+    ids = factura_origen_uom
+    datos = {
+        "supplier_id": ids["proveedor"],
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "supplier_invoice_no": ids["sufijo"],
+        "from_order": ids["orden_b"],
+        "tax_template_id": "",
+        "item_code_0": ids["item_code"],
+        "item_name_0": "Artículo con conversión",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
+        "source_type_0": "purchase_order",
+        "source_id_0": ids["orden_b"],
+        "source_item_id_0": ids["linea_b"],
+    }
+    respuesta = authenticated_client("admin").post(
+        f"/buying/purchase-invoice/{ids['factura']}/edit",
+        data=datos,
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    _cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
+    assert antes["source_relations"][0]["qty_in_base_uom"] == "12.000000000"
+    assert despues["source_relations"][0]["qty_in_base_uom"] == "2.000000000"
+    assert antes["source_relations"][0]["source_id"] == ids["orden_a"]
+    assert despues["source_relations"][0]["source_id"] == ids["orden_b"]
