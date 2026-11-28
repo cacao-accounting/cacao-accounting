@@ -192,6 +192,66 @@ def _request_item_offer_line(
     return matching[occurrence] if occurrence < len(matching) else None
 
 
+def _conversion_payload(
+    base_rate: Decimal,
+    exchange_rate: Decimal,
+    exchange_rate_date: Any,
+    source: str,
+) -> dict[str, Any]:
+    """Empaqueta la conversión efectiva aplicada a una tarifa de oferta."""
+    return {
+        "base_rate": Decimal(base_rate).quantize(Decimal("0.0001")),
+        "exchange_rate": Decimal(exchange_rate).quantize(Decimal("0.0001")),
+        "exchange_rate_date": exchange_rate_date,
+        "exchange_rate_source": source,
+    }
+
+
+def comparison_line_conversion(
+    offer: SupplierQuotation,
+    line: SupplierQuotationItem,
+    company: str,
+    comparison_date: Any,
+) -> dict[str, Any]:
+    """Resuelve la tarifa funcional y la conversión efectivamente aplicada.
+
+    ``exchange_rate_source`` identifica el origen de la tasa expuesta:
+    ``stored`` (``base_rate`` guardado en la línea), ``same_currency``,
+    ``document`` (tasa de la cotización) o ``lookup`` (tasa consultada para
+    la fecha de comparación, #1942).
+    """
+    rate = Decimal(str(line.rate or 0))
+    base_currency = company_currency(company)
+    transaction_currency = offer.transaction_currency or base_currency
+    conversion_date = offer.posting_date or comparison_date
+    stored_base_rate = Decimal(str(line.base_rate or 0))
+    if stored_base_rate > 0:
+        implied_rate = (stored_base_rate / rate) if rate else Decimal("1")
+        return _conversion_payload(stored_base_rate, implied_rate, conversion_date, "stored")
+    if not transaction_currency or not base_currency or transaction_currency == base_currency:
+        return _conversion_payload(rate, Decimal("1"), None, "same_currency")
+
+    document_exchange_rate = Decimal(str(getattr(offer, "exchange_rate", 0) or 0))
+    if document_exchange_rate > 0:
+        return _conversion_payload(
+            rate * document_exchange_rate,
+            document_exchange_rate,
+            conversion_date,
+            "document",
+        )
+
+    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+
+    try:
+        exchange_rate = _lookup_exchange_rate(transaction_currency, base_currency, conversion_date)
+    except PostingError as exc:
+        raise ValueError(
+            _("No existe tipo de cambio para comparar una oferta en %(transaction_currency)s contra %(base_currency)s.")
+            % {"transaction_currency": transaction_currency, "base_currency": base_currency}
+        ) from exc
+    return _conversion_payload(rate * exchange_rate, exchange_rate, conversion_date, "lookup")
+
+
 def comparison_line_base_rate(
     offer: SupplierQuotation,
     line: SupplierQuotationItem,
@@ -199,34 +259,7 @@ def comparison_line_base_rate(
     comparison_date: Any,
 ) -> Decimal:
     """Resolve a supplier line rate in the company's base currency."""
-    rate = Decimal(str(line.rate or 0))
-    stored_base_rate = Decimal(str(line.base_rate or 0))
-    if stored_base_rate > 0:
-        return stored_base_rate.quantize(Decimal("0.0001"))
-
-    base_currency = company_currency(company)
-    transaction_currency = offer.transaction_currency or base_currency
-    if not transaction_currency or not base_currency or transaction_currency == base_currency:
-        return rate.quantize(Decimal("0.0001"))
-
-    document_exchange_rate = Decimal(str(getattr(offer, "exchange_rate", 0) or 0))
-    if document_exchange_rate > 0:
-        return (rate * document_exchange_rate).quantize(Decimal("0.0001"))
-
-    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
-
-    try:
-        exchange_rate = _lookup_exchange_rate(
-            transaction_currency,
-            base_currency,
-            offer.posting_date or comparison_date,
-        )
-    except PostingError as exc:
-        raise ValueError(
-            _("No existe tipo de cambio para comparar una oferta en %(transaction_currency)s contra %(base_currency)s.")
-            % {"transaction_currency": transaction_currency, "base_currency": base_currency}
-        ) from exc
-    return (rate * exchange_rate).quantize(Decimal("0.0001"))
+    return comparison_line_conversion(offer, line, company, comparison_date)["base_rate"]
 
 
 def purchase_request_comparison_recommendations(
@@ -270,21 +303,23 @@ def purchase_request_comparison_recommendations(
             if line is None or offered_qty < required_qty:
                 continue
             tx_currency = offer.transaction_currency or base_currency
+            conversion = comparison_line_conversion(
+                offer,
+                line,
+                purchase_request.company,
+                purchase_request.posting_date,
+            )
             candidates.append(
                 {
                     "offer": offer,
                     "line": line,
                     "rate": Decimal(str(line.rate or 0)),
-                    "base_rate": comparison_line_base_rate(
-                        offer,
-                        line,
-                        purchase_request.company,
-                        purchase_request.posting_date,
-                    ),
+                    "base_rate": conversion["base_rate"],
                     "transaction_currency": tx_currency,
                     "base_currency": base_currency,
-                    "exchange_rate": Decimal(str(getattr(offer, "exchange_rate", 0) or 0)),
-                    "exchange_rate_date": getattr(offer, "exchange_rate_date", None),
+                    "exchange_rate": conversion["exchange_rate"],
+                    "exchange_rate_date": conversion["exchange_rate_date"],
+                    "exchange_rate_source": conversion["exchange_rate_source"],
                 }
             )
         candidates.sort(

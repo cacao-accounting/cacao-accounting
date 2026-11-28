@@ -197,7 +197,7 @@ macros %}
                   <small class="d-block text-muted">
                     {{ _("Equivalente") }}: {{ format_money_with_currency(candidate.base_rate, candidate.base_currency) }}
                     {% if candidate.exchange_rate and candidate.exchange_rate > 0 %}
-                    ({{ _("TC") }} {{ candidate.exchange_rate }}{% if candidate.exchange_rate_date %}, {{ candidate.exchange_rate_date }}{% endif %})
+                    ({{ _("TC") }} {{ candidate.exchange_rate }}{% if candidate.exchange_rate_date %}, {{ candidate.exchange_rate_date }}{% endif %}{% if candidate.exchange_rate_source == 'lookup' %} · {{ _("tasa consultada") }}{% endif %})
                     {% endif %}
                   </small>
                   {% endif %}
