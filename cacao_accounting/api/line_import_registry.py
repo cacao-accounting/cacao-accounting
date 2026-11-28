@@ -645,13 +645,6 @@ class LineImportSchemaRegistry:
             "label": "Movimiento de inventario",
             "columns": [
                 {"key": "item_code", "label": LABEL_ITEM, "required": True, "type": "string", "aliases": ALIASES_ITEM_CODE},
-                {
-                    "key": "description",
-                    "label": LABEL_DESCRIPTION,
-                    "required": False,
-                    "type": "string",
-                    "aliases": ALIASES_DESCRIPTION,
-                },
                 {"key": "quantity", "label": LABEL_QUANTITY, "required": True, "type": "decimal", "aliases": ALIASES_QUANTITY},
                 {"key": "uom", "label": LABEL_UOM, "required": True, "type": "string", "aliases": ALIASES_UOM},
                 {

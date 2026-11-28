@@ -28600,3 +28600,6 @@ msgstr "Errors:"
 
 msgid "La cuenta de inventario es obligatoria para la configuración de la bodega."
 msgstr "The inventory account is required for the warehouse configuration."
+
+msgid "Este tipo de documento no admite descripción por línea."
+msgstr "This document type does not accept a line description."

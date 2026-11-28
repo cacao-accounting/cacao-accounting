@@ -617,6 +617,14 @@ def _validate_import_row(
     errors: list[dict[str, Any]] = []
     validated_row = row.copy()
     _validate_schema_columns(row, row_no, schema, errors)
+    if "description" not in {column["key"] for column in schema["columns"]} and str(row.get("description") or "").strip():
+        errors.append(
+            {
+                "row": row_no,
+                "field": "description",
+                "message": _("Este tipo de documento no admite descripción por línea."),
+            }
+        )
     _enrich_and_validate_master_data(row, validated_row, row_no, company_id, doctype, errors)
     if doctype == "journal_entry":
         _validate_journal_entry_row(row, row_no, errors)
