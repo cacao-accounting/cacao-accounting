@@ -1186,7 +1186,9 @@ def _find_ar_ap_reference_targets(
     return [
         item
         for item in list_open_items(company=company, party_type=party_type, party_id=party_id)
-        if item.document_type == document_type and item.document_id == reference_name and item.outstanding > 0
+        if item.document_type == document_type
+        and (item.document_id == reference_name or item.document_no == reference_name)
+        and item.outstanding > 0
     ]
 
 

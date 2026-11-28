@@ -307,6 +307,7 @@ def list_open_items(
         ARAPLedgerEntry.economic_line_id,
         func.sum(ARAPLedgerEntry.document_amount).label("outstanding"),
         func.max(ARAPLedgerEntry.posting_date).label("posting_date"),
+        func.max(ARAPLedgerEntry.document_no).label("document_no"),
     ).group_by(
         ARAPLedgerEntry.document_id,
         ARAPLedgerEntry.document_type,
@@ -335,7 +336,7 @@ def list_open_items(
             currency=str(row.currency),
             outstanding=abs(_decimal(row.outstanding)),
             company=row.company,
-            document_no=None,
+            document_no=row.document_no,
             economic_line_id=row.economic_line_id,
             account_id=None,
             party_type=row.party_type,
