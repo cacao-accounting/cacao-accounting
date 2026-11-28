@@ -20,7 +20,17 @@ from cacao_accounting.compras.services import (
     _save_import_landed_cost_items,
 )
 from cacao_accounting.contabilidad.posting_service import PostingError, _post_with_calculation_engine_payload
-from cacao_accounting.database import ImportLandedCost, ImportLandedCostItem, Item, PurchaseInvoice, UOM, database
+from cacao_accounting.database import (
+    Accounts,
+    ImportLandedCost,
+    ImportLandedCostItem,
+    Item,
+    PurchaseInvoice,
+    UOM,
+    Warehouse,
+    WarehouseCompanyAccount,
+    database,
+)
 
 
 def _item(line_id: str, weight: str, volume: str = "0") -> ItemContext:
@@ -227,8 +237,19 @@ def test_el_builder_real_alimenta_dimensiones_y_prorratea_por_peso(app, entorno_
         suffix = uuid4().hex[:6].upper()
         explicit_code = f"WGT-A-{suffix}"
         catalog_code = f"WGT-B-{suffix}"
+        warehouse_code = f"WGT-W-{suffix}"
+        inventory = Accounts(
+            entity="cacao",
+            code=f"WGT-INV-{suffix}",
+            name="Inventario",
+            classification="asset",
+            account_type="stock",
+        )
+        warehouse = Warehouse(code=warehouse_code, name="Bodega", company="cacao", is_active=True)
         database.session.add_all(
             [
+                inventory,
+                warehouse,
                 Item(
                     code=explicit_code,
                     name="Artículo con peso de línea",
@@ -248,18 +269,29 @@ def test_el_builder_real_alimenta_dimensiones_y_prorratea_por_peso(app, entorno_
             ]
         )
         database.session.commit()
+        database.session.add(
+            WarehouseCompanyAccount(
+                warehouse_code=warehouse_code,
+                company="cacao",
+                inventory_account_id=inventory.id,
+                is_active=True,
+            )
+        )
+        database.session.commit()
         documento = _seed_landed_cost()
 
         with app.test_request_context(
             method="POST",
             data={
                 "item_item_code_0": explicit_code,
+                "item_warehouse_0": warehouse_code,
                 "item_qty_0": "1",
                 "item_uom_0": "UND",
                 "item_rate_0": "10",
                 "item_weight_0": "2",
                 "item_weight_uom_0": "UND",
                 "item_item_code_1": catalog_code,
+                "item_warehouse_1": warehouse_code,
                 "item_qty_1": "1",
                 "item_uom_1": "UND",
                 "item_rate_1": "10",

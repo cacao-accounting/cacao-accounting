@@ -747,10 +747,13 @@ def _build_landed_cost_item_contexts(
         )
         try:
             inventory_account_id = inventory_account_id_for_document_line(document, item, company)
-        except SQLAlchemyError:
-            inventory_account_id = None
-        if inventory_account_id:
-            inventory_accounts[str(item.id)] = str(inventory_account_id)
+        except SQLAlchemyError as exc:
+            raise CalculationContextBuilderError(
+                _("Falta la cuenta de inventario para una línea de recepción de compra.")
+            ) from exc
+        if not inventory_account_id:
+            raise CalculationContextBuilderError(_("Falta la cuenta de inventario para una línea de recepción de compra."))
+        inventory_accounts[str(item.id)] = str(inventory_account_id)
 
     return item_contexts, inventory_accounts
 
