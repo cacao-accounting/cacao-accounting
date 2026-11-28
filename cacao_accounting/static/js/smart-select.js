@@ -207,7 +207,8 @@
           if (event?.target) {
             this.search = event.target.value || '';
           }
-          if (this.selectedLabel && this.search !== this.selectedLabel) {
+          const selectionText = this.selectedLabel || this.selectedValue || '';
+          if ((this.selectedValue || this.selectedLabel) && this.search !== selectionText) {
             this.selectedValue = '';
             this.selectedLabel = '';
             this._safeCallOnClear();

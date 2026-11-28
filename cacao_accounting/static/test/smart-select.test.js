@@ -484,6 +484,35 @@ describe('smart-select', function () {
     assert.strictEqual(component.search, '');
   });
 
+  it('clears an initial value without a resolved label when typing empties the field', function () {
+    const events = [];
+    const hiddenInput = {
+      value: 'cust-old',
+      dispatchEvent: (event) => events.push(event.type),
+    };
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'party', name: 'party_id', initialValue: 'cust-old' });
+    component.$root = { classList: { toggle() {} }, querySelector: () => hiddenInput };
+    component.init();
+
+    component.onInput({ target: { value: '' } });
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change']);
+
+    component.selectedValue = 'cust-old';
+    component.selectedLabel = '';
+    hiddenInput.value = 'cust-old';
+    events.length = 0;
+
+    component.onInput({ target: { value: 'Cust' } });
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change']);
+  });
+
   it('notifies dependent selectors when typing invalidates a selected filter', function () {
     const companyInput = {
       value: 'cacao',
