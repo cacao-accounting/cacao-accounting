@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from threading import Barrier, Event
 from uuid import uuid4
 
 import pytest
@@ -201,7 +201,7 @@ def test_apply_party_group_rejects_incompatible_type(tmp_path):
         database.session.remove()
 
 
-def test_ruta_administrativa_espera_el_bloqueo_del_grupo(tmp_path):
+def test_ruta_administrativa_espera_el_bloqueo_del_grupo(tmp_path, monkeypatch):
     """El POST administrativo queda bloqueado mientras otra sesión retiene el ancla."""
     app = _app(tmp_path, "2271-route.sqlite")
     suffix = uuid4().hex[:8]
@@ -241,14 +241,27 @@ def test_ruta_administrativa_espera_el_bloqueo_del_grupo(tmp_path):
 
     with app.app_context():
         # La sesión principal retiene el ancla del grupo; el POST debe esperarla.
-        locked_party_group(group_id)
+        original_lock = locked_party_group
+        attempting = Event()
+        acquired = Event()
+
+        def _signaled_lock(group_id_value: str):
+            attempting.set()
+            locked = original_lock(group_id_value)
+            acquired.set()
+            return locked
+
+        monkeypatch.setattr("cacao_accounting.party_management.locked_party_group", _signaled_lock)
+        original_lock(group_id)
         try:
             with ThreadPoolExecutor(max_workers=1) as ex:
                 future = ex.submit(change_group)
-                with pytest.raises(TimeoutError):
-                    future.result(timeout=0.5)
+                assert attempting.wait(timeout=5)
+                # La ruta ya intentó el lock pero no puede atravesarlo.
+                assert acquired.wait(timeout=0.5) is False
                 database.session.commit()
-            status = future.result(timeout=20)
+                status = future.result(timeout=20)
+            assert acquired.wait(timeout=5)
         finally:
             database.session.rollback()
         database.session.remove()
