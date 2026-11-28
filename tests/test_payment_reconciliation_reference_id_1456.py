@@ -9,7 +9,11 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-from cacao_accounting.api.line_import import _validate_payment_reconciliation_row
+from cacao_accounting.api.line_import import (
+    LineImportSchemaRegistry,
+    _validate_import_row,
+    _validate_payment_reconciliation_row,
+)
 from cacao_accounting.database import Party, PaymentEntry, SalesInvoice, database
 
 
@@ -50,8 +54,8 @@ def _escenario(app) -> dict:
         return {"payment": pago.id, "reference": factura.id, "party": cliente.id}
 
 
-def test_payment_reconciliation_import_accepts_reference_id(app, entorno_contable):
-    ids = _escenario(app)
+def test_payment_reconciliation_import_accepts_reference_id(entorno_contable_aislado):
+    ids = _escenario(entorno_contable_aislado.app)
     row = {
         "payment_id": ids["payment"],
         "reference_type": "sales_invoice",
@@ -59,7 +63,38 @@ def test_payment_reconciliation_import_accepts_reference_id(app, entorno_contabl
         "allocated_amount": "100",
     }
     errors: list[dict] = []
-    with app.app_context():
+    with entorno_contable_aislado.app.app_context():
         _validate_payment_reconciliation_row(row, 1, "cacao", errors, party_type="customer", party_id=ids["party"])
 
     assert errors == []
+
+
+def test_import_row_accepts_reference_id_without_materialized_open_item(entorno_contable_aislado):
+    """La ruta real de importación no exige un ARAPOpenItem previo."""
+    app = entorno_contable_aislado.app
+    ids = _escenario(app)
+    row = {
+        "payment_id": ids["payment"],
+        "reference_type": "sales_invoice",
+        "reference_id": ids["reference"],
+        "allocated_amount": "100",
+    }
+    schema = LineImportSchemaRegistry.get_schema("payment_reconciliation")
+    assert schema is not None
+
+    with app.app_context():
+        errors, validated = _validate_import_row(
+            row=row,
+            row_no=1,
+            schema=schema,
+            doctype="payment_reconciliation",
+            company_id="cacao",
+            party_type="customer",
+            party_id=ids["party"],
+            allocation_date=date(2026, 5, 15),
+        )
+
+    assert errors == []
+    assert validated["payment_id"] == ids["payment"]
+    assert validated["reference_type"] == "sales_invoice"
+    assert validated["reference_id"] == ids["reference"]

@@ -727,7 +727,8 @@ def _enrich_and_validate_master_data(
     if row.get("currency"):
         _validate_currency_reference(row, validated_row, row_no, errors)
     _validate_party_reference(row, validated_row, row_no, company_id, errors)
-    _validate_open_item_reference(row, validated_row, row_no, company_id, errors)
+    if doctype != "payment_reconciliation":
+        _validate_open_item_reference(row, validated_row, row_no, company_id, errors)
 
 
 def _validate_bank_account_reference(
