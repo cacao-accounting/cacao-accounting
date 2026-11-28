@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     ComprobanteContable,
     DocumentRelation,
     DocumentTransition,
+    GLEntry,
     ImportLandedCost,
     LandedCostAllocation,
     PaymentEntry,
@@ -245,6 +246,27 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
         dependencies.extend(
             CancellationDependency("conciliacion bancaria", str(row.id), "reconciliation_item") for row in reconciliation_rows
         )
+
+    # #1316: una partida bancaria puede conciliarse contra una línea GL del
+    # documento. Anular el documento dejaría esa partida apuntando a una línea
+    # cancelada y el movimiento bancario seguiría consumido.
+    gl_documents = select(GLEntry.id).where(
+        GLEntry.voucher_id == source_id,
+        GLEntry.is_cancelled.is_(False),
+    )
+    company = getattr(document, "company", None) or getattr(document, "entity", None)
+    if company:
+        gl_documents = gl_documents.where(GLEntry.company == company)
+    reconciliation_gl_rows = database.session.execute(
+        select(ReconciliationItem).where(
+            ReconciliationItem.target_type == "gl_entry",
+            ReconciliationItem.target_id.in_(gl_documents),
+            ReconciliationItem.status.not_in(("cancelled", "reverted", "closed")),
+        )
+    ).scalars()
+    dependencies.extend(
+        CancellationDependency("conciliacion bancaria", str(row.id), "reconciliation_item") for row in reconciliation_gl_rows
+    )
 
     if isinstance(document, PaymentEntry):
         # Las referencias del pago son efectos internos reversibles. El hook de
