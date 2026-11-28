@@ -25,7 +25,7 @@ def test_alembic_head_round_trip_without_building_schema(tmp_path):
     with app.app_context():
         alembic.upgrade("head")
         revisions = {script.revision for script in alembic.current()}
-        assert "20261015_0001" in revisions
+        assert "20261127_0001" in revisions
         inspector = sa.inspect(database.engine)
         assert not inspector.has_table("user")
 

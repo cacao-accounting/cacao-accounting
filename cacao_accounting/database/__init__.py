@@ -2485,6 +2485,7 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
         index=True,
     )
     item_name = database.Column(database.String(200), nullable=True)
+    description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -2611,6 +2612,7 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
         index=True,
     )
     item_name = database.Column(database.String(200), nullable=True)
+    description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -2928,6 +2930,7 @@ class SalesOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         index=True,
     )
     item_name = database.Column(database.String(200), nullable=True)
+    description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -3004,6 +3007,7 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         index=True,
     )
     item_name = database.Column(database.String(200), nullable=True)
+    description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -3099,6 +3103,7 @@ class SalesInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         index=True,
     )
     item_name = database.Column(database.String(200), nullable=True)
+    description = database.Column(database.Text(), nullable=True)
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
