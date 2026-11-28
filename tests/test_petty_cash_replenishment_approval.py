@@ -1451,6 +1451,34 @@ def test_replenishment_cannot_skip_payment_to_reimbursed_status(replenishment_ap
         )
 
 
+def test_http_status_cannot_skip_payment_to_reimbursed(replenishment_app):
+    """El endpoint real rechaza reembolsado sin Nota de Débito ni cambio de estado."""
+    application, ids = replenishment_app
+    with application.app_context():
+        replenishment = database.session.get(PettyCashReplenishment, ids["replenishment_by_preparer"])
+        assert replenishment is not None
+        replenishment.status = "aprobado"
+        database.session.commit()
+
+    response = _authenticated_client(application, ids["editor_user"]).post(
+        f"/cash_management/petty-cash-replenishment/{ids['replenishment_by_preparer']}/status",
+        data={"status": "reembolsado"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "Transición de reposición no válida" in response.get_data(as_text=True)
+    with application.app_context():
+        replenishment = database.session.get(PettyCashReplenishment, ids["replenishment_by_preparer"])
+        assert replenishment is not None
+        assert replenishment.status == "aprobado"
+        assert replenishment.bank_debit_note_id is None
+        assert (
+            database.session.execute(database.select(PaymentEntry.id).where(PaymentEntry.company == ids["company"])).first()
+            is None
+        )
+
+
 def test_replenishment_waits_for_sqlite_writer_and_rechecks_committed_status(replenishment_app):
     """A waiting SQLite writer sees a completed reimbursement before creating another payment."""
     application, ids = replenishment_app
