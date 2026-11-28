@@ -4109,10 +4109,18 @@ def _create_stock_ledger_for_document(
     warehouse: str | None,
     line: Any,
 ) -> StockLedgerEntry:
-    from cacao_accounting.inventario.service import update_serial_state
+    from cacao_accounting.inventario.service import (
+        InventoryServiceError,
+        update_serial_state,
+        validate_batch_item_ownership,
+    )
 
     warehouse = _required_stock_warehouse(document, line, warehouse)
     item = _stock_item_for(line)
+    try:
+        validate_batch_item_ownership(line, item)
+    except InventoryServiceError as exc:
+        raise PostingError(str(exc)) from exc
     source_layer_id = None
     consumed_layers = None
     is_purchase_return = getattr(document, "is_return", False) and _is_purchase_receipt(document)

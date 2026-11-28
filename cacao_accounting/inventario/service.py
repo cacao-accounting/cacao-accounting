@@ -355,13 +355,39 @@ def item_qty_in_base_uom(item_code: str | None, quantity: Any, uom: str | None) 
         ) from exc
 
 
-def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None = None) -> None:
+def _require_batch_line(line: Any, item: Item) -> Batch:
+    """Devuelve el lote de la línea validando existencia, actividad y artículo."""
     batch_id = getattr(line, "batch_id", None)
     if not batch_id:
         raise InventoryServiceError(_("El item requiere lote."))
     batch = database.session.get(Batch, batch_id)
     if not batch or batch.item_code != item.code or not batch.is_active:
         raise InventoryServiceError(_("El lote no existe, esta inactivo o no pertenece al item."))
+    return batch
+
+
+def validate_batch_item_ownership(line: Any, item: Item | None = None) -> None:
+    """Rechaza un lote que no pertenezca al artículo de la línea (#1754).
+
+    Aplica aunque el artículo no exija control de lote: un lote opcional enviado
+    por el formulario debe existir, estar activo y corresponder al mismo
+    ``item_code`` para no atribuir el movimiento a otro artículo.
+    """
+    if not getattr(line, "batch_id", None):
+        return
+    if item is None:
+        item_code = getattr(line, "item_code", None)
+        item = database.session.get(Item, item_code)
+        if item is None and item_code:
+            item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        return
+    _require_batch_line(line, item)
+
+
+def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None = None) -> None:
+    batch = _require_batch_line(line, item)
+    batch_id = batch.id
     if outgoing:
         if not warehouse:
             raise InventoryServiceError(_("La salida por lote requiere bodega."))
@@ -507,6 +533,8 @@ def validate_batch_serial(
         return
     if item.has_batch or item.has_expiry_date:
         _validate_batch(line, item, outgoing=outgoing, warehouse=warehouse)
+    else:
+        validate_batch_item_ownership(line, item)
     if item.has_expiry_date:
         batch = database.session.get(Batch, getattr(line, "batch_id", None))
         if batch is None or batch.expiry_date is None:
