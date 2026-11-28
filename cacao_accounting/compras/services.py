@@ -2243,6 +2243,24 @@ def _resolve_receipt_creation_source(
     return receipt_source or order_source, from_order
 
 
+def _validate_purchase_return_supplier(
+    source: PurchaseReceipt | None,
+    supplier_id: str | None,
+    company: str | None = None,
+) -> None:
+    """Exige que una devolución conserve compañía y proveedor de la recepción origen.
+
+    La misma invariante se valida al postear; aplicarla en el borrador evita
+    preparar un documento que siempre será rechazado (#1755).
+    """
+    if source is None:
+        return
+    if supplier_id and source.supplier_id != supplier_id:
+        raise ValueError(_("La devolución y la recepción original deben compartir compañía y proveedor."))
+    if company and source.company != company:
+        raise ValueError(_("La devolución y la recepción original deben compartir compañía y proveedor."))
+
+
 def _create_purchase_receipt_from_form():
     """Crea una recepción de compra desde el formulario."""
     try:
@@ -2253,6 +2271,8 @@ def _create_purchase_receipt_from_form():
         source, from_order = _resolve_receipt_creation_source(from_receipt, from_order)
         company, transaction_currency = _validate_purchase_flow_header(source)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
+        if from_receipt:
+            _validate_purchase_return_supplier(source, supplier_id, company)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         # #1332: el alta de recepción es una operación de Inventario; la ruta
         # autoriza `inventory.crear` y el servicio debe exigir el mismo módulo.
@@ -2315,6 +2335,12 @@ def _apply_purchase_receipt_edit(registro):
     registro.supplier_id = supplier_id
     registro.supplier_name = supplier.name if supplier else None
     registro.company = request.form.get("company") or None
+    if registro.is_return and registro.reversal_of:
+        _validate_purchase_return_supplier(
+            database.session.get(PurchaseReceipt, registro.reversal_of),
+            registro.supplier_id,
+            registro.company,
+        )
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
     requested_currency = (request.form.get("transaction_currency") or request.form.get("currency") or "").strip()
