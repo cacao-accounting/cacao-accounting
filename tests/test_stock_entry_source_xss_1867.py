@@ -5,7 +5,10 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from cacao_accounting.database import Entity, PurchaseReceipt, database
+from cacao_accounting.inventario.services import _source_context
 
 
 def _allow_inventory_companies(monkeypatch):
@@ -58,3 +61,22 @@ def test_source_api_url_accepts_safe_source_id(app, entorno_contable, authentica
     html = resp.get_data(as_text=True)
     assert f"/api/buying/purchase-receipt/{rid}/items" in html
     assert "fetchSource" in html
+    assert "Recepci\\u00f3n de Compra" in html
+    assert "Remisi\\u00f3n de Mercader\\u00eda Vendida" in html
+    assert "recepci?n de compra" not in html
+    assert "remisi?n de mercader?a" not in html
+
+
+@pytest.mark.parametrize(
+    ("source_type", "prefijo", "etiqueta"),
+    [
+        ("purchase_receipt", "/api/buying/purchase-receipt/", "recepción de compra"),
+        ("delivery_note", "/api/sales/delivery-note/", "remisión de mercadería vendida"),
+    ],
+)
+def test_source_context_conserva_etiquetas_legibles(source_type, prefijo, etiqueta):
+    """El contexto seguro conserva la URL y la etiqueta visible del origen."""
+    url, etiqueta_visible = _source_context(source_type, "ID_SEGURO")
+
+    assert url == f"{prefijo}ID_SEGURO/items"
+    assert etiqueta_visible == etiqueta
