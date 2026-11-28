@@ -240,7 +240,7 @@ class ProjectCapitalizationService:
 
         for cap_journal in capitalization_journals:
             # Atomicidad por fuente (#1784): no confirmar por diario; si una moneda falla,
-            # el rollback del grupo revierte diarios y v?nculo de capitalizaci?n.
+            # el rollback del grupo revierte diarios y vínculo de capitalización.
             submit_journal(cap_journal.id, user_id=user_id, commit=False)
 
         orig_journal.capitalized_by_id = capitalization_journals[0].id
