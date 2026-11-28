@@ -36,6 +36,7 @@
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
+  {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
   {{ tf_macros.transaction_form_header(_("Editar Cotización de Proveedor") if edit else _("Cotización de Proveedor"), cancel_url=url_for('compras.compras_cotizacion_proveedor_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">

@@ -209,7 +209,7 @@ def test_edicion_solicitud_conserva_lineas_con_decimal_invalido(app, entorno_con
         assert lineas == [(Decimal("2"), "UND")]
 
 
-def _cotizacion_inicial(app, supplier_id: str) -> tuple[str, str]:
+def _cotizacion_inicial(app, supplier_id: str) -> tuple[str, str, int]:
     sufijo = uuid4().hex[:8]
     with app.app_context():
         cotizacion = SupplierQuotation(
@@ -237,15 +237,17 @@ def _cotizacion_inicial(app, supplier_id: str) -> tuple[str, str]:
             )
         )
         database.session.commit()
-        return str(cotizacion.id), sufijo
+        return str(cotizacion.id), sufijo, cotizacion.version
 
 
 def test_edicion_cotizacion_conserva_lineas_con_decimal_invalido(app, entorno_contable, authenticated_client):
     """La edición de cotizaciones tampoco propaga ValueError."""
-    cotizacion_id, _sufijo = _cotizacion_inicial(app, _supplier_id(app))
+    cotizacion_id, _sufijo, version = _cotizacion_inicial(app, _supplier_id(app))
+    datos = _datos_linea("edición inválida", "rate_0", "Infinity", _supplier_id(app))
+    datos["version"] = str(version)
     respuesta = authenticated_client().post(
         f"/buying/supplier-quotation/{cotizacion_id}/edit",
-        data=_datos_linea("edición inválida", "rate_0", "Infinity", _supplier_id(app)),
+        data=datos,
     )
 
     assert respuesta.status_code == 200

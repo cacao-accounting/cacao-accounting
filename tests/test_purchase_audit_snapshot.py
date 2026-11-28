@@ -362,7 +362,7 @@ def cotizacion_con_landed_cost(app, entorno_contable):
             )
         )
         database.session.commit()
-        ids = {"cotizacion": cotizacion.id, "proveedor": proveedor.id, "inicial": inicial}
+        ids = {"cotizacion": cotizacion.id, "proveedor": proveedor.id, "inicial": inicial, "version": cotizacion.version}
     yield ids
     with app.app_context():
         database.session.execute(
@@ -380,6 +380,7 @@ def cotizacion_con_landed_cost(app, entorno_contable):
 def _datos_cotizacion(ids, landed_cost: str | None = None) -> dict:
     """Formulario de edición de la cotización con los landed costs indicados."""
     datos = {
+        "version": str(ids["version"]),
         "supplier_id": ids["proveedor"],
         "company": "cacao",
         "posting_date": "2026-05-15",

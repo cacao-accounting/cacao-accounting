@@ -600,36 +600,43 @@ def _supplier_quotation_sources(
 
 def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, quotation_id: str):
     """Maneja la actualizacion de una cotizacion de proveedor desde el formulario POST."""
-    before_state = _capture_purchase_state(registro)
-    supplier_id = form.get("supplier_id") or None
-    supplier = database.session.get(Party, supplier_id) if supplier_id else None
-    registro.supplier_id = supplier_id
-    registro.supplier_name = supplier.name if supplier else None
-    requested_company = form.get("company") or registro.company
-    if requested_company != registro.company:
-        database.session.rollback()
-        flash(_("La compañía de una cotización existente no puede cambiarse."), "danger")
+    if _check_optimistic_version(registro):
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
-    if registro.purchase_quotation_id:
-        source = database.session.get(PurchaseQuotation, registro.purchase_quotation_id)
-        if source and source.company != requested_company:
+    try:
+        before_state = _capture_purchase_state(registro)
+        supplier_id = form.get("supplier_id") or None
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        registro.supplier_id = supplier_id
+        registro.supplier_name = supplier.name if supplier else None
+        requested_company = form.get("company") or registro.company
+        if requested_company != registro.company:
             database.session.rollback()
-            flash(_("La compañía debe coincidir con la solicitud de cotización origen."), "danger")
+            flash(_("La compañía de una cotización existente no puede cambiarse."), "danger")
             return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
-    registro.company = requested_company
-    registro.posting_date = _parse_date(form.get("posting_date"))
-    registro.remarks = form.get("remarks")
-    _copy_logistics(registro, form=form)
-    registro.landed_cost_estimates_json = _landed_cost_snapshot(form=form)
-    for item in database.session.execute(
-        database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
-    ).scalars():
-        database.session.delete(item)
-    _qty, total = _save_supplier_quotation_items(registro.id)
-    _set_purchase_document_totals(registro, total)
-    after_state = _capture_purchase_state(registro)
-    log_update(registro, before=before_state, after=after_state)
-    database.session.commit()
+        if registro.purchase_quotation_id:
+            source = database.session.get(PurchaseQuotation, registro.purchase_quotation_id)
+            if source and source.company != requested_company:
+                database.session.rollback()
+                flash(_("La compañía debe coincidir con la solicitud de cotización origen."), "danger")
+                return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
+        registro.company = requested_company
+        registro.posting_date = _parse_date(form.get("posting_date"))
+        registro.remarks = form.get("remarks")
+        _copy_logistics(registro, form=form)
+        registro.landed_cost_estimates_json = _landed_cost_snapshot(form=form)
+        for item in database.session.execute(
+            database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _qty, total = _save_supplier_quotation_items(registro.id)
+        _set_purchase_document_totals(registro, total)
+        after_state = _capture_purchase_state(registro)
+        log_update(registro, before=before_state, after=after_state)
+        database.session.commit()
+    except StaleDataError:
+        database.session.rollback()
+        flash(_("El documento fue modificado por otro usuario. Recargue la página e intente nuevamente."), "danger")
+        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     flash(_("Cotizacion de proveedor actualizada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
 
@@ -3771,6 +3778,10 @@ def _handle_purchase_invoice_edit_post(registro):
         log_update(registro, before=before_state, after=after_state)
         database.session.commit()
         flash(_("Factura de compra actualizada correctamente."), "success")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
+    except StaleDataError:
+        database.session.rollback()
+        flash(_("El documento fue modificado por otro usuario. Recargue la página e intente nuevamente."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
     except ValueError as exc:
         database.session.rollback()
