@@ -209,11 +209,15 @@ def _bank_reconciliation_date(company: str) -> date:
 
 def _cash_accessible_companies():
     """Return the companies readable by the current cash-management user."""
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
     permissions = Permisos(
         modulo=obtener_id_modulo_por_nombre("cash"),
         usuario=current_user.id,
     )
-    if permissions.administrador:
+    # #2303: en Desktop el administrador conserva el alcance global de una
+    # sola compañía; en Cloud su lectura operativa también se limita a su UCA.
+    if permissions.administrador and is_desktop_mode():
         return None
     companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
     if not companies:

@@ -378,8 +378,8 @@ def test_con_compania_no_ofrece_acciones_de_otra_compania(companias_caja):
     assert ids["gasto_beta_no"] not in gastos
 
 
-def test_admin_cloud_con_uca_parcial_oculta_acciones_de_beta(companias_caja):
-    """El admin ve filas globales, pero solo opera las acciones de su compañía."""
+def test_admin_cloud_con_uca_parcial_no_expone_datos_de_beta(companias_caja):
+    """#2303: en Cloud el admin solo lee compañías de su UCA, igual que el detalle."""
     application, ids = companias_caja
     client = _cliente(application, ids["admin_alpha"])
 
@@ -387,13 +387,13 @@ def test_admin_cloud_con_uca_parcial_oculta_acciones_de_beta(companias_caja):
     assert bancos.status_code == 200
     cuerpo_bancos = bancos.get_data(as_text=True)
     assert ids["bank_alpha_no"] in cuerpo_bancos
-    assert ids["bank_beta_no"] in cuerpo_bancos
+    assert ids["bank_beta_no"] not in cuerpo_bancos
 
     vales = client.get("/cash_management/petty-cash-voucher/list")
     assert vales.status_code == 200
     cuerpo_vales = vales.get_data(as_text=True)
     assert ids["vale_alpha_draft_no"] in cuerpo_vales
-    assert ids["vale_beta_draft_no"] in cuerpo_vales
+    assert ids["vale_beta_draft_no"] not in cuerpo_vales
     assert f"/petty-cash-voucher/{ids['vale_alpha_draft']}/status" in cuerpo_vales
     assert f"/petty-cash-voucher/{ids['vale_beta_draft']}/status" not in cuerpo_vales
     assert f"/petty-cash-voucher/{ids['vale_alpha_sent']}/liquidate" in cuerpo_vales
@@ -403,7 +403,7 @@ def test_admin_cloud_con_uca_parcial_oculta_acciones_de_beta(companias_caja):
     assert gastos.status_code == 200
     cuerpo_gastos = gastos.get_data(as_text=True)
     assert ids["gasto_alpha_no"] in cuerpo_gastos
-    assert ids["gasto_beta_no"] in cuerpo_gastos
+    assert ids["gasto_beta_no"] not in cuerpo_gastos
     assert f"/petty-cash-expense/{ids['gasto_alpha']}/cancel" in cuerpo_gastos
     assert f"/petty-cash-expense/{ids['gasto_beta']}/cancel" not in cuerpo_gastos
 
@@ -434,6 +434,19 @@ def test_acciones_de_beta_se_rechazan_sin_mutar(companias_caja):
     with application.app_context():
         assert database.session.get(PettyCashVoucher, ids["vale_beta_draft"]).voucher_status == "borrador"
         assert database.session.get(PettyCashExpense, ids["gasto_beta"]).docstatus == 1
+
+
+def test_admin_desktop_conserva_lectura_global(companias_caja):
+    """#2303: Desktop mantiene el alcance global administrativo."""
+    application, ids = companias_caja
+    application.config["MODO_ESCRITORIO"] = True
+    try:
+        client = _cliente(application, ids["admin_alpha"])
+        cuerpo = client.get("/cash_management/bank-account/list").get_data(as_text=True)
+        assert ids["bank_alpha_no"] in cuerpo
+        assert ids["bank_beta_no"] in cuerpo
+    finally:
+        application.config["MODO_ESCRITORIO"] = False
 
 
 def test_anonimo_no_accede_a_listados_de_caja(companias_caja):

@@ -2081,12 +2081,15 @@ def _cash_authorized_companies() -> list[str]:
 
 def _apply_cash_company_scope(base_query: Any, model: Any) -> Any:
     """Apply explicit or authorized company scope to a cash list query."""
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    admin_global = getattr(current_user, "classification", None) == "admin" and is_desktop_mode()
     if hasattr(model, "company"):
         company = request.args.get("company")
         if company:
             exige_acceso_compania("cash", company, "consultar")
             return base_query.filter(model.company == company)
-        if getattr(current_user, "classification", None) == "admin":
+        if admin_global:
             return base_query
         companies = _cash_authorized_companies()
         if not companies:
@@ -2104,7 +2107,7 @@ def _apply_cash_company_scope(base_query: Any, model: Any) -> Any:
             return base_query.where(
                 model.bank_account_id.in_(database.select(BankAccount.id).where(BankAccount.company == company_arg))
             )
-        if getattr(current_user, "classification", None) == "admin":
+        if admin_global:
             return base_query
         companies = _cash_authorized_companies()
         if not companies:

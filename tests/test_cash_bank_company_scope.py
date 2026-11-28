@@ -155,6 +155,7 @@ def bank_company_scope_scenario():
                 UserCompanyAccess(user_id=creator_id, company_code=company_alpha),
                 UserCompanyAccess(user_id=editor_id, company_code=company_alpha),
                 UserCompanyAccess(user_id=denied_id, company_code=company_alpha),
+                UserCompanyAccess(user_id=admin_id, company_code=company_alpha),
             ]
         )
         database.session.commit()
@@ -271,8 +272,8 @@ def test_bank_transaction_list_accepts_authorized_company_filter(bank_company_sc
     assert ids["beta_description"] not in body
 
 
-def test_bank_transaction_list_admin_keeps_global_scope(bank_company_scope_scenario):
-    """An administrator keeps every company's transactions."""
+def test_bank_transaction_list_admin_cloud_limited_to_uca(bank_company_scope_scenario):
+    """#2303: el admin Cloud solo ve las compañías de su UCA."""
     app, ids = bank_company_scope_scenario
     client = _authenticated_client(app, ids["admin_id"])
 
@@ -281,7 +282,7 @@ def test_bank_transaction_list_admin_keeps_global_scope(bank_company_scope_scena
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert ids["alpha_description"] in body
-    assert ids["beta_description"] in body
+    assert ids["beta_description"] not in body
 
 
 def test_cash_listings_require_consult_permission(bank_company_scope_scenario):
