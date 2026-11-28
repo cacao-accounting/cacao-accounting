@@ -1179,6 +1179,16 @@ def _item_price_criteria_match(candidate: Any, min_qty: Any, valid_from: Any, va
     return candidate.min_qty == min_qty and candidate.valid_from == valid_from and candidate.valid_upto == valid_upto
 
 
+def _lock_item_price_list(price_list_id: str) -> None:
+    """Serializa la validación y escritura de tarifas de una misma lista."""
+    if database.session.get_bind().dialect.name == "sqlite":
+        connection = database.session.connection()
+        raw_connection = getattr(connection.connection, "driver_connection", None)
+        if raw_connection is not None and not raw_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+    database.session.execute(database.select(PriceList.id).filter_by(id=price_list_id).with_for_update()).scalar_one_or_none()
+
+
 def _duplicate_item_price_error(
     price_list_id: str,
     item_code: str,
@@ -1190,7 +1200,7 @@ def _duplicate_item_price_error(
     exclude_id: str | None = None,
 ) -> str | None:
     """Rechaza tarifas contradictorias con criterios idénticos."""
-    query = database.select(ItemPrice).filter_by(price_list_id=price_list_id, item_code=item_code)
+    query = database.select(ItemPrice).filter_by(price_list_id=price_list_id, item_code=item_code).with_for_update()
     if uom is None:
         query = query.where(ItemPrice.uom.is_(None))
     else:
@@ -1231,11 +1241,9 @@ def precios_item():
         if reference_error:
             flash(reference_error, "danger")
             return redirect(url_for("admin.precios_item"))
-        # Serializa escrituras por lista de precios para reducir carreras (SQLite single-writer;
-        # PostgreSQL/otros con FOR UPDATE). Sin migraciones no se agrega constraint única.
-        database.session.execute(
-            database.select(PriceList.id).filter_by(id=price_list.id).with_for_update()
-        ).scalar_one_or_none()
+        # SQLite reserva el turno de escritura; PostgreSQL/MySQL bloquean la lista.
+        # La consulta de duplicados es corriente para releer tras adquirir el lock.
+        _lock_item_price_list(price_list.id)
         duplicate_error = _duplicate_item_price_error(
             request.form.get("price_list_id") or "", item_code, uom, min_qty, valid_from, valid_upto
         )
@@ -1326,9 +1334,7 @@ def actualizar_precio_item(item_price_id: str):
     if not expected.is_finite() or expected != item_price.price:
         flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
         return redirect(url_for("admin.precios_item"))
-    database.session.execute(
-        database.select(PriceList.id).filter_by(id=item_price.price_list_id).with_for_update()
-    ).scalar_one_or_none()
+    _lock_item_price_list(item_price.price_list_id)
     duplicate_error = _duplicate_item_price_error(
         item_price.price_list_id,
         item_price.item_code,

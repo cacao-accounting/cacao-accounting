@@ -9,7 +9,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
-from threading import Barrier
+from threading import Barrier, Event, Lock
 from uuid import uuid4
 
 import pytest
@@ -128,6 +128,24 @@ def _seed(app, suffix: str, user_id: str) -> str:
         return price_id
 
 
+def _empty_item_price_form(app, price_id: str) -> dict[str, str]:
+    """Deja la lista sin tarifas y devuelve criterios válidos para dos altas rivales."""
+    with app.app_context():
+        price = database.session.get(ItemPrice, price_id)
+        form = {
+            "price_list_id": price.price_list_id,
+            "item_code": price.item_code,
+            "uom": price.uom,
+            "min_qty": str(price.min_qty),
+            "valid_from": price.valid_from.isoformat(),
+            "valid_upto": price.valid_upto.isoformat(),
+        }
+        database.session.delete(price)
+        database.session.commit()
+        database.session.remove()
+        return form
+
+
 def _client(app, user_id: str):
     client = app.test_client()
     with client.session_transaction() as session:
@@ -174,6 +192,90 @@ def test_dos_ediciones_concurrentes_no_pierden_actualizacion(tmp_path):
         with app.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_alta_duplicada_revalida_despues_del_lock(tmp_path, monkeypatch):
+    """La segunda alta espera el lock y vuelve a consultar antes de confirmar."""
+    from cacao_accounting.admin import routes as admin_routes
+
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6]
+    user_id = f"user-{suffix}"
+    price_id = _seed(app, suffix, user_id)
+    form = _empty_item_price_form(app, price_id)
+    original_lock = admin_routes._lock_item_price_list
+    original_duplicate = admin_routes._duplicate_item_price_error
+    state_lock = Lock()
+    lock_calls = 0
+    duplicate_calls = 0
+    first_checking = Event()
+    second_lock_attempted = Event()
+    second_checked = Event()
+    release_first = Event()
+
+    def observed_lock(price_list_id: str) -> None:
+        nonlocal lock_calls
+        with state_lock:
+            lock_calls += 1
+            call_number = lock_calls
+        if call_number == 2:
+            second_lock_attempted.set()
+        original_lock(price_list_id)
+
+    def controlled_duplicate(*args, **kwargs):
+        nonlocal duplicate_calls
+        with state_lock:
+            duplicate_calls += 1
+            call_number = duplicate_calls
+        if call_number == 1:
+            first_checking.set()
+            if not release_first.wait(timeout=15):
+                raise AssertionError("La primera verificación no fue liberada.")
+        elif call_number == 2:
+            second_checked.set()
+        return original_duplicate(*args, **kwargs)
+
+    monkeypatch.setattr(admin_routes, "_lock_item_price_list", observed_lock)
+    monkeypatch.setattr(admin_routes, "_duplicate_item_price_error", controlled_duplicate)
+
+    def create(price: str) -> str:
+        client = _client(app, user_id)
+        response = client.post(
+            "/settings/item-prices",
+            data={**form, "price": price},
+            follow_redirects=True,
+        )
+        return response.get_data(as_text=True)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            first = workers.submit(create, "10")
+            assert first_checking.wait(timeout=10)
+            second = workers.submit(create, "20")
+            assert second_lock_attempted.wait(timeout=10)
+            assert not second_checked.wait(timeout=0.3), "La segunda escritura no esperó el lock."
+            release_first.set()
+            results = [first.result(timeout=20), second.result(timeout=20)]
+    finally:
+        release_first.set()
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+    successes = [html for html in results if "Precio de item creado correctamente." in html]
+    duplicates = [html for html in results if "Ya existe una tarifa con los mismos criterios" in html]
+    assert len(successes) == 1
+    assert len(duplicates) == 1
+    assert lock_calls == 2
+    assert duplicate_calls == 2
+    with app.app_context():
+        prices = (
+            database.session.execute(database.select(ItemPrice).filter_by(price_list_id=form["price_list_id"])).scalars().all()
+        )
+        assert len(prices) == 1
+        assert prices[0].price == Decimal("10.0000")
+        database.session.remove()
+        database.engine.dispose()
 
 
 def test_dos_listas_predeterminadas_concurrentes_dejan_una_sola(tmp_path):
