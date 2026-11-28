@@ -1082,6 +1082,15 @@ _SOURCE_READ_MODULES: dict[str, tuple[str, ...]] = {
 }
 
 
+def _source_read_allowed(read_modules: tuple[str, ...], company: str) -> bool:
+    """Indica si el usuario puede consultar el origen en alguno de sus módulos."""
+    for module in read_modules:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        if permissions.consultar and permissions.tiene_acceso_compania(company):
+            return True
+    return False
+
+
 def stock_entry_source_header(source_type: str | None, source_id: str | None) -> dict[str, str] | None:
     """Devuelve la compañía y moneda del origen para hidratar la cabecera bloqueada.
 
@@ -1089,11 +1098,9 @@ def stock_entry_source_header(source_type: str | None, source_id: str | None) ->
     transaccional, y el usuario puede consultar el documento origen en su
     módulo y compañía. Sin moneda (datos legacy o importados) la cabecera
     queda editable para no bloquear un formulario imposible (#1874). Un origen
-    de otra compañía o sin permiso de lectura del origen falla cerrado
-    con 403 (#1874 QA).
+    de otra compañía o sin permiso de lectura del origen responde igual que uno
+    inexistente para no permitir enumerar IDs (#1874 QA).
     """
-    from cacao_accounting.decorators import exige_acceso_compania_cualquiera
-
     model = _SOURCE_MODELS.get(source_type or "")
     read_modules = _SOURCE_READ_MODULES.get(source_type or "")
     if model is None or not read_modules or not source_id:
@@ -1106,7 +1113,10 @@ def stock_entry_source_header(source_type: str | None, source_id: str | None) ->
     if not currency:
         return None
     # #1874: requiere lectura del origen antes de exponer su existencia/moneda.
-    exige_acceso_compania_cualquiera(read_modules, str(company), "consultar")
+    # Sin permiso se responde igual que un origen inexistente para no permitir
+    # enumerar IDs por la diferencia entre 403 y 200.
+    if not _source_read_allowed(read_modules, str(company)):
+        return None
     return {"company": str(company), "currency": currency}
 
 

@@ -147,7 +147,7 @@ def _usuario_solo_inventario_crear(app, *, con_lectura_inventario: bool = False)
 
 
 def test_usuario_sin_lectura_origen_no_recibe_hidratacion(app):
-    """#1874 QA: sin permiso de lectura del origen se rechaza con 403."""
+    """#1874 QA: sin lectura del origen la respuesta es indistinguible de inexistente."""
     with app.app_context():
         origen = PurchaseReceipt(
             company="cacao",
@@ -171,10 +171,13 @@ def test_usuario_sin_lectura_origen_no_recibe_hidratacion(app):
         with client.session_transaction() as session:
             session["_auth_version"] = u.auth_version
 
-    response = client.get(f"{URL}?source_type=purchase_receipt&source_id={origen_id}")
+    existente = client.get(f"{URL}?source_type=purchase_receipt&source_id={origen_id}")
+    inexistente = client.get(f"{URL}?source_type=purchase_receipt&source_id=NO-EXISTE")
 
-    assert response.status_code == 403
-    body = response.get_data(as_text=True)
+    assert existente.status_code == inexistente.status_code == 200
+    body = existente.get_data(as_text=True)
+    assert '"initialSourceType": ""' in body
+    assert '"initialHeader"' not in body
     assert '"currency": "USD"' not in body
 
 
