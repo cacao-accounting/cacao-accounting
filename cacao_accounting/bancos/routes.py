@@ -731,6 +731,7 @@ def bancos_reglas_matching():
                 return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
         try:
             days_tolerance, amount_tolerance = _matching_tolerances_from_form(request.form)
+            priority = int(request.form.get("priority") or 100)
         except (TypeError, ValueError):
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
             return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
@@ -747,7 +748,7 @@ def bancos_reglas_matching():
             days_tolerance=days_tolerance,
             amount_tolerance=amount_tolerance,
             reference_contains=request.form.get("reference_contains") or None,
-            priority=int(request.form.get("priority") or 100),
+            priority=priority,
             is_active=request.form.get("is_active") is not None,
             auto_reconcile=bool(request.form.get("auto_reconcile")),
         )
@@ -816,6 +817,9 @@ def bancos_regla_matching_ejecutar(rule_id: str):
         flash(_(str(exc)), "danger")
     except BankReconciliationError as exc:
         flash(_(str(exc)), "danger")
+    except (TypeError, ValueError):
+        database.session.rollback()
+        flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
     return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
 
 

@@ -89,6 +89,7 @@ def _admin_client(app, user_id: str):
         ("days_tolerance", "not-an-integer"),
         ("amount_tolerance", "-10"),
         ("amount_tolerance", "Infinity"),
+        ("priority", "not-an-integer"),
     ],
 )
 def test_rule_creation_rejects_invalid_tolerances_without_persisting(matching_tolerance_app, field, value):

@@ -179,6 +179,26 @@ def test_manual_execution_rejects_another_account(bank_rule_scope_scenario):
     assert "transacciones evaluadas" not in body
 
 
+@pytest.mark.parametrize("field", ["date_from", "date_to"])
+def test_manual_execution_rejects_invalid_dates(bank_rule_scope_scenario, field: str):
+    """Una fecha malformada devuelve validación controlada, no HTTP 500."""
+    app, ids = bank_rule_scope_scenario
+    client = _authenticated_client(app, ids["admin"])
+    data = {"bank_account_id": ids["account_a"], "date_from": "2026-05-01", "date_to": "2026-05-31"}
+    data[field] = "2026-99-42"
+
+    response = client.post(
+        f"/cash_management/bank-matching-rules/{ids['scoped_rule']}/run",
+        data=data,
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Todos los campos obligatorios deben tener valores válidos." in body
+    assert "transacciones evaluadas" not in body
+
+
 def test_service_rejects_account_from_another_company(bank_rule_scope_scenario):
     """The service itself refuses an account outside the rule's company (QA2 B2)."""
     app, ids = bank_rule_scope_scenario
