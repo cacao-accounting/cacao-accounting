@@ -400,7 +400,14 @@ def _create_split_month_close(company: str, first_period_id: str) -> tuple[str, 
     first_period = database.session.get(AccountingPeriod, first_period_id)
     assert first_period is not None
     month_end = first_period.end
-    first_period.end = date(month_end.year, month_end.month, 15)
+    first_period_end = date(month_end.year, month_end.month, 15)
+    first_period.end = first_period_end
+    database.session.add_all(
+        [
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("1.05"), date=first_period_end),
+            ExchangeRate(origin="EUR", destination="NIO", rate=Decimal("40"), date=first_period_end),
+        ]
+    )
     second_period = AccountingPeriod(
         entity=company,
         fiscal_year_id=first_period.fiscal_year_id,
@@ -453,3 +460,93 @@ def test_ruta_de_cierre_revaloriza_el_periodo_exacto_en_mes_dividido(request):
         assert {entry.ledger_id for entry in entries} == {libro_eur_id}
         assert {entry.exchange_rate for entry in entries} == {Decimal("1.10")}
         assert any(entry.account_id == banco_gl_id for entry in entries)
+
+
+@pytest.mark.parametrize("primer_periodo_cerrado", [False, True])
+def test_segundo_segmento_conserva_revalorizacion_y_gl_del_primero(business_app, primer_periodo_cerrado: bool):
+    """#1157: revalorizar un segmento no anula otro período del mismo mes."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, first_period_id, libro_eur_id, _banco_gl_id, _ganancia_gl_id = _sembrar_libro_secundario_en_euros(
+            company, con_tasa_eur_nio=True
+        )
+        user_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        second_close_id, second_period_id, month_end = _create_split_month_close(company, first_period_id)
+        first_period = database.session.get(AccountingPeriod, first_period_id)
+        assert first_period is not None
+        first_period_end = first_period.end
+        first_close = PeriodCloseRun(company=company, period_id=first_period_id, run_status="open")
+        database.session.add(first_close)
+        database.session.commit()
+
+        client = business_app.test_client()
+        _authenticate_client(client, str(user_id))
+        primera_respuesta = client.post(f"/accounting/period-close/monthly/{first_close.id}/exchange-revaluation")
+        assert primera_respuesta.status_code == 302
+        primera = database.session.execute(
+            database.select(ExchangeRevaluation).filter_by(company=company, run_date=first_period_end)
+        ).scalar_one()
+        assert primera.status == "posted"
+        assert primera.total_gain == Decimal("600.0000")
+        primeras_lineas = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=primera.id,
+                    is_reversal=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(primeras_lineas) == 2
+        assert all(not linea.is_cancelled for linea in primeras_lineas)
+        assert {linea.accounting_period_id for linea in primeras_lineas} == {first_period_id}
+
+        if primer_periodo_cerrado:
+            first_period.is_closed = True
+            database.session.commit()
+
+        segunda_respuesta = client.post(f"/accounting/period-close/monthly/{second_close_id}/exchange-revaluation")
+        assert segunda_respuesta.status_code == 302
+        segunda = database.session.execute(
+            database.select(ExchangeRevaluation).filter_by(company=company, run_date=month_end)
+        ).scalar_one()
+        assert segunda.status == "posted"
+        assert segunda.total_gain == Decimal("200.0000")
+        database.session.expire_all()
+        primera_persistida = database.session.get(ExchangeRevaluation, primera.id)
+        assert primera_persistida is not None
+        assert primera_persistida.status == "posted"
+        lineas_primera_persistidas = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=primera.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {linea.id for linea in lineas_primera_persistidas} == {linea.id for linea in primeras_lineas}
+        assert all(not linea.is_cancelled for linea in lineas_primera_persistidas)
+        assert not any(linea.is_reversal for linea in lineas_primera_persistidas)
+
+        lineas_segunda = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=segunda.id,
+                    is_cancelled=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert lineas_segunda
+        assert {linea.accounting_period_id for linea in lineas_segunda} == {second_period_id}
+        assert {linea.posting_date for linea in lineas_segunda} == {month_end}
+        assert {linea.ledger_id for linea in lineas_segunda} == {libro_eur_id}

@@ -103,11 +103,13 @@ class ExchangeRevaluationService:
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
 
+        effective_run_date = database.func.coalesce(ExchangeRevaluation.run_date, ExchangeRevaluation.posting_date)
         previous_runs = (
             database.session.execute(
                 select(ExchangeRevaluation)
                 .filter_by(company=company, year=year, month=month)
                 .where(ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED)
+                .where(effective_run_date >= period.start, effective_run_date <= period.end)
                 .order_by(ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc())
                 .with_for_update()
                 .execution_options(populate_existing=True)
@@ -475,7 +477,17 @@ class ExchangeRevaluationService:
             .execution_options(populate_existing=True)
         ).scalars()
         for prior_run in list(outstanding_runs):
+            if self._belongs_to_other_period_in_closing_month(prior_run, period):
+                continue
             self._void_outstanding_run(prior_run, user_id, reversal_floor)
+
+    def _belongs_to_other_period_in_closing_month(self, run: ExchangeRevaluation, period: AccountingPeriod) -> bool:
+        """Indica si la corrida pertenece a otro segmento del mes que se cierra."""
+        run_date = run.run_date or run.posting_date
+        if run_date is None:
+            return False
+        same_closing_month = (run_date.year, run_date.month) == (period.end.year, period.end.month)
+        return same_closing_month and not period.start <= run_date <= period.end
 
     def _reversal_scope(self, company: str, period: AccountingPeriod | date) -> tuple[date, date, date]:
         """Devuelve inicio/fin del ejercicio y la fecha minima de reversa."""
