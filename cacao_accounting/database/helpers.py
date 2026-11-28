@@ -168,6 +168,23 @@ def _clasificar_estado_esquema(
     return "current" if not bootstrap_incompleto else "bootstrap_incomplete"
 
 
+def _esquema_tiene_columnas_requeridas(
+    inspector: Any,
+    tablas_modelo: set[str],
+    tablas_existentes: set[str],
+) -> bool:
+    """Comprueba que cada tabla del modelo conserva sus columnas requeridas."""
+    if not tablas_modelo or not tablas_modelo.issubset(tablas_existentes):
+        return False
+    metadata = cast(Any, database.Model).metadata
+    for tabla in tablas_modelo:
+        columnas_requeridas = set(metadata.tables[tabla].columns.keys())
+        columnas_existentes = {column["name"] for column in inspector.get_columns(tabla)}
+        if not columnas_requeridas.issubset(columnas_existentes):
+            return False
+    return True
+
+
 def estado_esquema_base_datos() -> dict[str, object]:
     """Clasifica el estado del esquema para comandos de base de datos.
 
@@ -202,7 +219,7 @@ def estado_esquema_base_datos() -> dict[str, object]:
     inspector = sa_inspect(database.engine)
     tablas_existentes = set(inspector.get_table_names())
     tablas_modelo = set(cast(Any, database.Model).metadata.tables.keys())
-    esquema_completo = bool(tablas_modelo) and tablas_modelo.issubset(tablas_existentes)
+    esquema_completo = _esquema_tiene_columnas_requeridas(inspector, tablas_modelo, tablas_existentes)
     bootstrap_incompleto = bool(tablas_presentes == tablas_core and not datos_base_completos())
     bootstrap_iniciado = _bootstrap_iniciado(usuarios, config_count) if tablas_presentes else False
     estado = _clasificar_estado_esquema(

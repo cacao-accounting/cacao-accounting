@@ -126,6 +126,42 @@ def test_verify_stamps_unversioned_but_initialized_schema(tmp_path):
         database.engine.dispose()
 
 
+def test_unversioned_schema_missing_required_column_is_rejected(tmp_path, monkeypatch):
+    """No se sella head ni se pierden datos cuando falta una columna del contrato."""
+    app = _app(tmp_path, "unversioned_missing_column.sqlite")
+    with app.app_context():
+        from cacao_accounting.database import CacaoConfig, User
+
+        database.create_all()
+        database.session.execute(text("ALTER TABLE audit_trail DROP COLUMN hash_version"))
+        database.session.add(User(user="admin", password=b"x", active=True, classification="admin"))
+        database.session.add(CacaoConfig(key="SETUP_COMPLETE", value="True"))
+        database.session.commit()
+
+        columns = {column["name"] for column in inspect(database.engine).get_columns("audit_trail")}
+        assert "hash_version" not in columns
+        estado = estado_esquema_base_datos()
+        assert estado["status"] == "partial"
+        with pytest.raises(RuntimeError, match="parcial|inconsistente"):
+            verificar_esquema_base_datos(permitir_migrar=True)
+        assert not inspect(database.engine).has_table("alembic_version")
+        assert database.session.execute(database.select(database.func.count()).select_from(User)).scalar_one() == 1
+        assert database.session.execute(database.select(database.func.count()).select_from(CacaoConfig)).scalar_one() == 1
+        database.session.remove()
+        database.engine.dispose()
+
+    monkeypatch.setattr(cli, "_obtener_aplicacion", lambda: app)
+    result = CliRunner().invoke(cli.db_migrate)
+    assert result.exit_code != 0
+    assert "parcial" in result.output.lower() or "respaldo" in result.output.lower()
+    with app.app_context():
+        assert not inspect(database.engine).has_table("alembic_version")
+        assert database.session.execute(database.select(database.func.count()).select_from(User)).scalar_one() == 1
+        assert database.session.execute(database.select(database.func.count()).select_from(CacaoConfig)).scalar_one() == 1
+        database.session.remove()
+        database.engine.dispose()
+
+
 def test_downgrade_rejects_rows_sealed_by_the_product(tmp_path):
     """#1849: la fila v2 la produce el sellado real, no un literal del test."""
     app = _app(tmp_path, "audit.sqlite")
