@@ -738,8 +738,9 @@ def test_ciclo_temporal_reconcilia_reclasificacion_con_gl(entorno_contable_aisla
         assert pendiente[ids["item"]] == gasto_2[next(iter(gasto_2))]
 
 
-def test_asignacion_solo_no_candidata_no_activa_fallback_legacy(app, entorno_contable):
+def test_asignacion_solo_no_candidata_no_activa_fallback_legacy(entorno_contable_aislado):
     """#2277: asignaciones activas no candidatas no deben disparar fallback legacy."""
+    app = entorno_contable_aislado.app
     suffix = uuid4().hex[:8]
     supplier_id = _supplier_id(app)
     with app.app_context():
@@ -767,8 +768,9 @@ def test_asignacion_solo_no_candidata_no_activa_fallback_legacy(app, entorno_con
         assert amounts == {code: Decimal("100")}
 
 
-def test_asignacion_cancelada_no_bloquea_fallback_legacy(app, entorno_contable):
+def test_asignacion_cancelada_no_bloquea_fallback_legacy(entorno_contable_aislado):
     """#2277: asignaciones canceladas no cuentan como evidencia activa."""
+    app = entorno_contable_aislado.app
     suffix = uuid4().hex[:8]
     supplier_id = _supplier_id(app)
     with app.app_context():
