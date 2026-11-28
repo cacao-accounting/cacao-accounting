@@ -297,6 +297,7 @@ def _motor_externo_2321() -> str:
     return uri
 
 
+@pytest.mark.database
 def test_revocaciones_concurrentes_bajo_repeatable_read(monkeypatch):
     """#2321: la revalidación bajo lock no decide con el snapshot MySQL viejo."""
     from concurrent.futures import ThreadPoolExecutor
