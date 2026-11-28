@@ -1081,7 +1081,7 @@ def _apply_standard_reconciliation_allocation(
     available: Decimal,
     outstanding: Decimal,
     reconciliation_id: str,
-) -> Any:
+) -> tuple[AllocationLine, bool]:
     """Plan and persist a standard AR/AP allocation through the allocation engine."""
     from cacao_accounting.contabilidad.arap_allocation import (
         ARAPOpenItem,
@@ -1092,7 +1092,7 @@ def _apply_standard_reconciliation_allocation(
         plan_allocation,
     )
 
-    allocation_line = _plan_reconciliation_allocation(
+    allocation_line, replayed = _plan_reconciliation_allocation(
         raw_line=raw_line,
         payment=payment,
         document=document,
@@ -1145,7 +1145,7 @@ def _apply_standard_reconciliation_allocation(
             reconciliation_id=reconciliation_id,
         ),
     )
-    return allocation_line
+    return allocation_line, replayed
 
 
 def _process_reconciliation_line(
@@ -1193,7 +1193,7 @@ def _process_reconciliation_line(
             reconciliation_id=reconciliation_id,
         )
     else:
-        allocation_line = _apply_standard_reconciliation_allocation(
+        allocation_line, replayed = _apply_standard_reconciliation_allocation(
             raw_line=raw_line,
             payment=payment,
             document=document,
@@ -1206,6 +1206,8 @@ def _process_reconciliation_line(
             outstanding=outstanding,
             reconciliation_id=reconciliation_id,
         )
+        if replayed:
+            return
     payment_remaining[values.payment_id] -= allocation_line.source_amount
 
 
@@ -1220,7 +1222,7 @@ def _plan_reconciliation_allocation(
     allocated: Decimal,
     available: Decimal,
     allocation_date: date,
-) -> AllocationLine:
+) -> tuple[AllocationLine, bool]:
     """Valida una línea con el motor AR/AP y devuelve importes en ambas monedas."""
     from cacao_accounting.contabilidad.arap_allocation import (
         ARAPOpenItem,
@@ -1278,10 +1280,17 @@ def _plan_reconciliation_allocation(
         if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
             message = str(_MSG_PAGO_EXCEDE_SALDO)
         raise _document_flow_error(message, 409) from exc
-    line = plan.lines[0]
+    if plan.lines:
+        line = plan.lines[0]
+        replayed = False
+    elif plan.replayed_lines:
+        line = plan.replayed_lines[0]
+        replayed = True
+    else:  # pragma: no cover - el planner solo omite líneas en un replay validado
+        raise _document_flow_error(_("La asignación del pago no produjo una línea."), 409)
     if line.source_amount > available + Decimal("0.01"):
         raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
-    return line
+    return line, replayed
 
 
 def _persist_reconciliation_allocation(

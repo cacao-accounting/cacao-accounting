@@ -28490,3 +28490,6 @@ msgstr "The dimension value could not be added. Verify the selected references."
 
 #~ msgid "Último movimiento"
 #~ msgstr "Last movement"
+
+msgid "La asignación del pago no produjo una línea."
+msgstr "The payment allocation did not produce a line."

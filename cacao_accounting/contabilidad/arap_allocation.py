@@ -183,6 +183,7 @@ class AllocationPlan:
     source_currency: str
     source_amount: Decimal
     lines: tuple[AllocationLine, ...]
+    replayed_lines: tuple[AllocationLine, ...] = ()
 
     @property
     def allocated_source_amount(self) -> Decimal:
@@ -426,6 +427,7 @@ class AllocationPlanner:
             existing_keys if isinstance(existing_keys, Mapping) else {key: None for key in existing_keys}
         )
         lines: list[AllocationLine] = []
+        replayed: list[AllocationLine] = []
         requested: dict[str, Decimal] = {}
         seen_keys: set[str] = set()
         consumed = Decimal("0")
@@ -460,6 +462,7 @@ class AllocationPlanner:
             # #1836: una clave solo es repetición si coincide todo el contenido.
             if key and key in existing:
                 self._validate_replay(key, line, existing[key])
+                replayed.append(line)
                 continue
             item_key = self.resolver._key(item)
             total = requested.get(item_key, Decimal("0")) + amount
@@ -472,7 +475,12 @@ class AllocationPlanner:
                 raise AllocationOverpaymentError(_("Las asignaciones exceden el efectivo disponible."))
             consumed += source_line
             lines.append(line)
-        return AllocationPlan(source_currency=source_currency, source_amount=available, lines=tuple(lines))
+        return AllocationPlan(
+            source_currency=source_currency,
+            source_amount=available,
+            lines=tuple(lines),
+            replayed_lines=tuple(replayed),
+        )
 
     @staticmethod
     def _validate_replay(key: str, line: AllocationLine, persisted: str | None) -> None:
