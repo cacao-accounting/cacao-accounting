@@ -27872,6 +27872,9 @@ msgstr "A project's company cannot be changed after creation."
 msgid "No se puede cancelar la recepción porque tiene devoluciones activas."
 msgstr "The receipt cannot be cancelled because it has active returns."
 
+msgid "La importación bancaria sin referencia requiere la huella del archivo para distinguir movimientos con la misma fecha e importe."
+msgstr "Bank import without a reference requires the file fingerprint to distinguish movements with the same date and amount."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 

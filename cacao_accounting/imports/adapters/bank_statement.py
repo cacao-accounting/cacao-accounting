@@ -187,9 +187,14 @@ class BankStatementAdapter(BaseImportAdapter):
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
-        """Build bank transactions from the imported data."""
+        """Build bank transactions from the imported data.
+
+        Sin referencia bancaria la fecha y el importe no identifican un
+        movimiento: se exige la huella del archivo para distinguir filas
+        legítimas y conservar la idempotencia (#1510/#2350).
+        """
         transactions = []
-        fingerprint = str(context.get("import_fingerprint") or "")
+        fingerprint = str(context.get("import_fingerprint") or "").strip()
         for position, row in enumerate(document_data, start=1):
             posting_date = row.get("posting_date")
             try:
@@ -200,13 +205,21 @@ class BankStatementAdapter(BaseImportAdapter):
             withdrawal = self._optional_amount(row.get("withdrawal"))
             if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
                 raise ValueError(_("El monto bancario en columnas 'deposit'/'withdrawal' no puede ser negativo."))
+            reference_number = _text(row.get("reference_number") or row.get("reference"))
+            if not reference_number and not fingerprint:
+                raise ValueError(
+                    _(
+                        "La importación bancaria sin referencia requiere la huella del archivo "
+                        "para distinguir movimientos con la misma fecha e importe."
+                    )
+                )
             row_number = getattr(row, "row_number", position)
             transactions.append(
                 {
                     "bank_account_id": _text(row.get("bank_account_id")),
                     "company_id": context.get("company_id"),
                     "posting_date": posting_date,
-                    "reference_number": _text(row.get("reference_number") or row.get("reference")),
+                    "reference_number": reference_number,
                     "description": _text(row.get("description")),
                     "deposit": deposit,
                     "withdrawal": withdrawal,
