@@ -1289,6 +1289,7 @@ def _apply_recurring_templates(
                 application_date=application_date,
                 user_id=user_id,
                 company=company,
+                submit=True,
             )
             success_count += 1
         except RecurringJournalError as exc:

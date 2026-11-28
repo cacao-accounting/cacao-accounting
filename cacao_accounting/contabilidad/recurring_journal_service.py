@@ -381,8 +381,9 @@ def apply_recurring_template(
     application_date: date,
     user_id: str,
     company: str | None = None,
+    submit: bool = False,
 ) -> RecurringJournalApplication:
-    """Aplica una plantilla recurrente a un periodo específico."""
+    """Aplica una plantilla y opcionalmente contabiliza su comprobante."""
     template = _recurring_template_for_application(template_id, user_id, company)
     if not template.start_date <= application_date <= template.end_date:
         raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
@@ -426,7 +427,10 @@ def apply_recurring_template(
     database.session.flush()
     journal.recurrent_application_id = application.id
 
-    # La aplicación queda pendiente hasta que el comprobante pase al GL.
+    # El asistente de cierre solicita el envío para no aprobar un check con
+    # comprobantes aún en borrador; otros callers conservan el flujo pendiente.
+    if submit:
+        return _resume_pending_recurring_application(application, user_id)
     database.session.commit()
     return application
 
