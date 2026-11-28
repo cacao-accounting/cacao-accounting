@@ -515,7 +515,7 @@ def lista_impuestos():
         if account_id:
             account = database.session.get(Accounts, account_id)
             if not account or not account.active:
-                flash(_("La cuenta contable seleccionada no es v?lida."), "danger")
+                flash(_("La cuenta contable seleccionada no es válida."), "danger")
                 return redirect(url_for("admin.lista_impuestos"))
         tax = Tax(
             name=request.form.get("name") or "",
@@ -552,14 +552,14 @@ def lista_plantillas_impuesto():
         if company:
             entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
             if not entity or not bool(getattr(entity, "enabled", False)):
-                flash(_("La compa??a seleccionada no es v?lida."), "danger")
+                flash(_("La compañía seleccionada no es válida."), "danger")
                 return redirect(url_for("admin.lista_plantillas_impuesto"))
         if currency:
             currency_ok = database.session.execute(
                 database.select(Currency.id).filter_by(code=currency, active=True)
             ).scalar_one_or_none()
             if currency_ok is None:
-                flash(_("La moneda seleccionada no es v?lida."), "danger")
+                flash(_("La moneda seleccionada no es válida."), "danger")
                 return redirect(url_for("admin.lista_plantillas_impuesto"))
         template = TaxTemplate(
             name=request.form.get("name") or "",
@@ -607,17 +607,17 @@ def _create_tax_template_item_from_post(template: TaxTemplate):
         is_inclusive=bool(request.form.get("is_inclusive")),
     )
     if item.calculation_base not in {"net_document", "previous_total"}:
-        flash(_("La base de c?lculo del impuesto no es v?lida."), "danger")
+        flash(_("La base de cálculo del impuesto no es válida."), "danger")
         return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
     if item.behavior not in {"additive", "deductive"}:
-        flash(_("El comportamiento del impuesto no es v?lido."), "danger")
+        flash(_("El comportamiento del impuesto no es válido."), "danger")
         return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
     database.session.add(item)
     try:
         database.session.commit()
     except IntegrityError:
         database.session.rollback()
-        flash(_("No se pudo agregar la l?nea de impuesto. Verifique las referencias seleccionadas."), "danger")
+        flash(_("No se pudo agregar la línea de impuesto. Verifique las referencias seleccionadas."), "danger")
         return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
     flash(_("Linea de impuesto agregada correctamente."), "success")
     return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
@@ -902,16 +902,16 @@ def _add_dimension_value_from_request() -> Any:
     value = (request.form.get("value") or "").strip()
     company = (request.form.get("company") or "").strip() or None
     if not dimension_type_id or not value:
-        flash(_("Seleccione un tipo de dimensi?n y proporcione un valor."), "danger")
+        flash(_("Seleccione un tipo de dimensión y proporcione un valor."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     dimension_type = database.session.get(DimensionType, dimension_type_id)
     if not dimension_type or not dimension_type.is_active:
-        flash(_("El tipo de dimensi?n seleccionado no es v?lido."), "danger")
+        flash(_("El tipo de dimensión seleccionado no es válido."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     if company:
         entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
         if not entity or not bool(getattr(entity, "enabled", False)):
-            flash(_("La compa??a seleccionada no es v?lida."), "danger")
+            flash(_("La compañía seleccionada no es válida."), "danger")
             return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     database.session.add(
         DimensionValue(
@@ -925,9 +925,9 @@ def _add_dimension_value_from_request() -> Any:
         database.session.commit()
     except IntegrityError:
         database.session.rollback()
-        flash(_("No se pudo agregar el valor de dimensi?n. Verifique las referencias seleccionadas."), "danger")
+        flash(_("No se pudo agregar el valor de dimensión. Verifique las referencias seleccionadas."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
-    flash(_("Valor de dimensi?n agregado correctamente."), "success")
+    flash(_("Valor de dimensión agregado correctamente."), "success")
     return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
 
 

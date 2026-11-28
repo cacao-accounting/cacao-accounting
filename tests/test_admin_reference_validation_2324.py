@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """#2324: rutas admin validan referencias antes de persistir.
 
-Cubre impuestos, plantillas de impuestos, ?tems de plantilla y valores de dimensi?n.
-Las referencias inv?lidas deben responder con redirect+flash y no mutar la base.
+Cubre impuestos, plantillas de impuestos, ítems de plantilla y valores de dimensión.
+Las referencias inválidas deben responder con redirect+flash y no mutar la base.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     Tax,
     TaxTemplate,
     TaxTemplateItem,
+    User,
     database,
 )
 
@@ -61,7 +62,7 @@ def test_tax_rechaza_cuenta_inexistente(app, authenticated_client, modulo_admin_
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "cuenta contable seleccionada no es v?lida" in _msg(resp).lower() or "no es v" in _msg(resp).lower()
+    assert "La cuenta contable seleccionada no es válida." in _msg(resp)
     with app.app_context():
         assert database.session.execute(database.select(Tax).filter_by(name=name)).scalar_one_or_none() is None
 
@@ -76,7 +77,7 @@ def test_tax_template_rechaza_company_y_currency_invalidas(app, authenticated_cl
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
+    assert "La compañía seleccionada no es válida." in _msg(resp)
     with app.app_context():
         row = database.session.execute(database.select(TaxTemplate).filter_by(name=bad_company_name)).scalar_one_or_none()
         assert row is None
@@ -88,7 +89,7 @@ def test_tax_template_rechaza_company_y_currency_invalidas(app, authenticated_cl
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "moneda seleccionada no es v?lida" in _msg(resp).lower() or "moneda" in _msg(resp).lower()
+    assert "La moneda seleccionada no es válida." in _msg(resp)
     with app.app_context():
         row = database.session.execute(database.select(TaxTemplate).filter_by(name=bad_currency_name)).scalar_one_or_none()
         assert row is None
@@ -157,7 +158,7 @@ def test_dimension_value_rechaza_tipo_y_compania_invalidos(app, authenticated_cl
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "tipo de dimensi?n seleccionado no es v?lido" in _msg(resp).lower() or "dimensi" in _msg(resp).lower()
+    assert "El tipo de dimensión seleccionado no es válido." in _msg(resp)
     with app.app_context():
         assert database.session.execute(database.select(DimensionValue).filter_by(value=value)).scalar_one_or_none() is None
 
@@ -179,7 +180,7 @@ def test_dimension_value_rechaza_tipo_y_compania_invalidos(app, authenticated_cl
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
+    assert "La compañía seleccionada no es válida." in _msg(resp)
     with app.app_context():
         row = database.session.execute(database.select(DimensionValue).filter_by(value=bad_company_value)).scalar_one_or_none()
         assert row is None
@@ -201,7 +202,7 @@ def test_tax_template_rechaza_company_deshabilitada(app, authenticated_client, m
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
+    assert "La compañía seleccionada no es válida." in _msg(resp)
     with app.app_context():
         row = database.session.execute(database.select(TaxTemplate).filter_by(name=name)).scalar_one_or_none()
         assert row is None
@@ -226,7 +227,35 @@ def test_dimension_value_rechaza_company_deshabilitada(app, authenticated_client
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
+    assert "La compañía seleccionada no es válida." in _msg(resp)
     with app.app_context():
         row = database.session.execute(database.select(DimensionValue).filter_by(value=value)).scalar_one_or_none()
         assert row is None
+
+
+def test_mensaje_de_compania_invalida_se_traduce_al_ingles(app, authenticated_client, modulo_admin_activo, reference_users):
+    """El mensaje de referencia inválida se resuelve desde el catálogo inglés."""
+    with app.app_context():
+        usuario = database.session.get(User, str(reference_users["admin"].id))
+        anterior = usuario.language
+        usuario.language = "en"
+        database.session.commit()
+    try:
+        resp = authenticated_client("admin").post(
+            "/settings/tax-templates",
+            data={
+                "name": f"Tpl en {uuid4().hex[:8]}",
+                "company": f"ZZ{uuid4().hex[:6]}",
+                "template_type": "selling",
+                "currency": "",
+            },
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert "The selected company is not valid." in _msg(resp)
+        assert "no es válida" not in _msg(resp)
+    finally:
+        with app.app_context():
+            usuario = database.session.get(User, str(reference_users["admin"].id))
+            usuario.language = anterior
+            database.session.commit()
