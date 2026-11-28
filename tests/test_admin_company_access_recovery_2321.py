@@ -231,3 +231,13 @@ def test_revocaciones_concurrentes_conservan_un_admin_recuperable(tmp_path, monk
     with reader.app_context():
         database.session.remove()
         database.engine.dispose()
+
+
+def test_mensaje_de_revocacion_tiene_traduccion_inglesa():
+    """#2321: el mensaje visible conserva español correcto y una traducción."""
+    from pathlib import Path
+
+    catalogo = Path(__file__).parents[1] / "cacao_accounting/translations/en/LC_MESSAGES/messages.po"
+    contenido = catalogo.read_text(encoding="utf-8")
+    assert "dejaría la compañía" in contenido
+    assert "Company access cannot be revoked for %(company)s" in contenido

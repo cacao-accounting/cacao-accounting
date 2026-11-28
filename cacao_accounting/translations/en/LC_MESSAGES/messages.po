@@ -28564,3 +28564,10 @@ msgstr "Manage API credential"
 
 msgid "La conciliación no puede reducir inventario sin un valor funcional mayor que cero."
 msgstr "Stock reconciliation cannot reduce inventory without a functional value greater than zero."
+
+msgid ""
+"No se puede revocar el acceso a %(company)s porque dejaría la compañía sin un administrador "
+"autorizado para recuperar el acceso."
+msgstr ""
+"Company access cannot be revoked for %(company)s because it would leave the company without "
+"an administrator authorized to recover access."

@@ -125,7 +125,7 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
             if not _company_has_recoverable_admin(assignment.company_code, exclude_user_id=user_id):
                 raise ValueError(
                     _(
-                        "No se puede revocar el acceso a %(company)s porque dejar?a la compa??a sin un administrador "
+                        "No se puede revocar el acceso a %(company)s porque dejaría la compañía sin un administrador "
                         "autorizado para recuperar el acceso."
                     )
                     % {"company": assignment.company_code}
