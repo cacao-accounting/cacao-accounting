@@ -4325,7 +4325,14 @@ def _reversed_stock_layer_id(movement: StockLedgerEntry) -> str | None:
     return str(original_layer) if original_layer is not None else None
 
 
-def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellation_date: Any) -> StockLedgerEntry:
+def _create_stock_reversal(
+    document: Any,
+    movement: StockLedgerEntry,
+    cancellation_date: Any,
+    *,
+    capacity_validated: bool = False,
+) -> StockLedgerEntry:
+    """Crea una contrapartida y valida su prefijo salvo que el lote ya esté validado."""
     qty_change = -_decimal_value(movement.qty_change)
     value_change = -_decimal_value(movement.stock_value_difference)
     valuation_rate = _decimal_value(movement.valuation_rate)
@@ -4336,8 +4343,9 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
     if qty_change > 0 and value_change > 0:
         valuation_rate = value_change / qty_change
     posting_date = cancellation_date
-    # #1868: revalidar contra bin refrescado bajo lock antes de mutar.
-    if qty_change < 0:
+    # La ruta de cancelación valida el conjunto completo bajo lock. Un caller
+    # directo conserva la guarda individual para no crear un prefijo negativo.
+    if qty_change < 0 and not capacity_validated:
         bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
         current_qty = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
         item = database.session.get(Item, movement.item_code)
@@ -5838,13 +5846,13 @@ def _cancel_stock_movements_if_needed(
     if not original_movements:
         raise PostingError(_("El documento no tiene movimientos de inventario para reversar."))
 
+    # La validación por lote toma los locks de los bins y se mantiene sobre el
+    # neto del documento. Revalidar prefijos individuales reintroduciría el
+    # bloqueo dependiente del orden que corrige #1857.
     _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
     for movement in _reversal_order(original_movements):
-        # Revalidar capacidad con lock justo antes de mutar: otra reversa pudo
-        # consumir el stock entre la validaci?n inicial y este punto (#1868).
-        _validate_stock_reversal_capacity([movement])
-        stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date))
+        stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date, capacity_validated=True))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
     _persist_stock_book_reversals(original_movements, stock_reversals)
