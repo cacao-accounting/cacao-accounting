@@ -19,7 +19,6 @@ from cacao_accounting.database import (
     Party,
     PartyGroup,
     User,
-    UserCompanyAccess,
     database,
 )
 from cacao_accounting.party_management import locked_party_group, apply_party_group
