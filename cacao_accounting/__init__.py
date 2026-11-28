@@ -519,6 +519,7 @@ def _transaction_form_i18n_labels() -> dict[str, str]:
         "errorBatchRequired": _("El item {item_code} requiere lote."),
         "errorSerialRequired": _("El item {item_code} requiere número de serie."),
         "errorFormulaNotAllowed": _("El archivo contiene fórmulas. Reemplace las celdas por valores fijos antes de importar."),
+        "errorDuplicateHeader": _("El encabezado está duplicado."),
         "errorTaxPreview": _("No se pudo calcular."),
         "errorLoadingSourceStep": _("Espere a que termine la carga del documento origen."),
         # Valores por defecto para líneas fiscales manuales

@@ -193,7 +193,7 @@
         errors.push({
           row: 1,
           field: col.key,
-          message: `Encabezado duplicado para la columna ${col.label || col.key}.`,
+          message: `${i18n.errorDuplicateHeader || 'El encabezado está duplicado.'} ${col.label || col.key}`,
         });
       }
       const first = indexes.length ? indexes[0] : -1;
@@ -201,7 +201,7 @@
         errors.push({
           row: 1,
           field: col.key,
-          message: `Encabezado duplicado para la columna ${col.label || col.key}.`,
+          message: `${i18n.errorDuplicateHeader || 'El encabezado está duplicado.'} ${col.label || col.key}`,
         });
       }
       if (first >= 0) usedHeaderIndexes.add(first);

@@ -9,6 +9,10 @@ import json
 import subprocess
 from pathlib import Path
 
+from flask_babel import force_locale
+
+from cacao_accounting import _transaction_form_i18n_labels
+
 
 def _run_js(script: str) -> dict:
     js_path = Path(__file__).parents[1] / "cacao_accounting/static/js/transaction-form.js"
@@ -27,7 +31,7 @@ const fs=require('fs'),vm=require('vm');
 const code=fs.readFileSync(process.argv[1],'utf8');
 function grab(n){const m=code.match(new RegExp('function '+n+'[\\s\\S]*?\\n  }'));return m?m[0]:'';}
 const src=['normalizeImportHeader','findImportColumnIndex','mapImportedRows'].map(grab).join('\n');
-const sb={console}; vm.createContext(sb); vm.runInContext(src,sb);
+const sb={console,i18n:{errorDuplicateHeader:'The header is duplicated.'}}; vm.createContext(sb); vm.runInContext(src,sb);
 const schema={columns:[
   {key:'item_code',label:'Artículo',aliases:[]},
   {key:'quantity',label:'Cantidad',aliases:['qty']},
@@ -41,6 +45,13 @@ process.stdout.write(JSON.stringify(mapped));
     assert mapped["rows"] == []
     assert mapped["errors"]
     assert mapped["errors"][0]["field"] == "quantity"
+    assert mapped["errors"][0]["message"].startswith("The header is duplicated.")
+
+
+def test_mensaje_de_encabezado_duplicado_esta_traducido(app):
+    """El proveedor del frontend reutiliza el msgid inglés existente."""
+    with app.app_context(), force_locale("en"):
+        assert _transaction_form_i18n_labels()["errorDuplicateHeader"] == "The header is duplicated."
 
 
 def test_sales_quotation_import_applies_discount_1448():
