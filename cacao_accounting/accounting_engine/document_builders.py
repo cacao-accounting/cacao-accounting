@@ -1696,11 +1696,14 @@ def _prior_payment_document_net(
     from sqlalchemy import func
 
     prior_references = database.session.execute(
-        select(PaymentReference.payment_id, PaymentReference.allocated_amount).where(
+        select(PaymentReference.payment_id, PaymentReference.allocated_amount)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
             PaymentReference.reference_type == document_type,
             PaymentReference.reference_id == document_id,
             PaymentReference.company == company,
             PaymentReference.payment_id != exclude_payment_id,
+            PaymentEntry.docstatus == 1,
         )
     ).all()
     if not prior_references:
@@ -1771,6 +1774,7 @@ def _document_carrying_value_in_ledger(
                 GLEntry.voucher_type == voucher_type,
                 GLEntry.voucher_id.in_(voucher_ids),
                 GLEntry.is_cancelled.is_(False),
+                GLEntry.is_reversal.is_(False),
             )
         ).scalar_one()
         return _decimal_value(row)
