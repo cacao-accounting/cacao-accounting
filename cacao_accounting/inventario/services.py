@@ -645,7 +645,6 @@ def _stock_entry_line_detail(entry: StockEntry, index: int) -> tuple[str | None,
 
 def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Decimal:
     """Create one stock movement line and its source relation."""
-    _validate_stock_entry_warehouses(entry)
     line_cost_center, line_project, line_remarks = _stock_entry_line_detail(entry, index)
     qty = _form_decimal(f"qty_{index}", "1", non_negative=True)
     rate = _form_decimal(f"rate_{index}", "0", non_negative=True)
@@ -668,6 +667,7 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
             ) from exc
     source_wh = request.form.get(f"source_warehouse_{index}", "").strip() or entry.from_warehouse
     target_wh = request.form.get(f"target_warehouse_{index}", "").strip() or entry.to_warehouse
+    _validate_stock_entry_warehouses(entry, source_wh, target_wh)
     line = StockEntryItem(
         stock_entry_id=entry.id,
         item_code=item_code,
@@ -1515,6 +1515,12 @@ def _render_stock_entry_edit_form(
         if request.method == "POST"
         else [_stock_entry_line_form_data(item, item_names, origins) for item in lineas]
     )
+    bodegas_disponibles = [
+        {"code": warehouse.code, "name": warehouse.name}
+        for (warehouse,) in database.session.execute(
+            database.select(Warehouse).filter_by(company=registro.company, is_active=True)
+        ).all()
+    ]
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
@@ -1522,6 +1528,12 @@ def _render_stock_entry_edit_form(
         "allowManualAmount": registro.purpose in {"adjustment_positive", "adjustment_negative"},
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "showLineWarehouses": True,
+        "columns": [
+            {"field": "source_warehouse", "label": _("Bodega origen"), "visible": True, "width": 2},
+            {"field": "target_warehouse", "label": _("Bodega destino"), "visible": True, "width": 2},
+        ],
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},

@@ -361,6 +361,22 @@
                     </template>
                   </select>
                 </template>
+                <template x-if="column.field === 'source_warehouse'">
+                  <select class="form-select form-select-sm" :name="'source_warehouse_' + index" x-model="line.source_warehouse">
+                    <option value=""></option>
+                    <template x-for="warehouse in availableWarehouses" :key="warehouse.code">
+                      <option :value="warehouse.code" x-text="warehouse.name"></option>
+                    </template>
+                  </select>
+                </template>
+                <template x-if="column.field === 'target_warehouse'">
+                  <select class="form-select form-select-sm" :name="'target_warehouse_' + index" x-model="line.target_warehouse">
+                    <option value=""></option>
+                    <template x-for="warehouse in availableWarehouses" :key="warehouse.code">
+                      <option :value="warehouse.code" x-text="warehouse.name"></option>
+                    </template>
+                  </select>
+                </template>
                 <template x-if="column.field === 'uom'">
                   <div class="ca-smart-select" x-data='smartSelect({
                       doctype: "uom",

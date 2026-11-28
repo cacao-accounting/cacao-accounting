@@ -913,6 +913,7 @@ def inventario_entrada_nuevo():
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
+    bodegas_disponibles = [{"code": code, "name": name} for code, name in warehouse_choices if code]
     items_disponibles = _stock_entry_item_choices()
     uoms_disponibles = [{"code": code, "name": name} for code, name in _uom_choices()]
     purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
@@ -927,6 +928,12 @@ def inventario_entrada_nuevo():
         "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "showLineWarehouses": True,
+        "columns": [
+            {"field": "source_warehouse", "label": _("Bodega origen"), "visible": True, "width": 2},
+            {"field": "target_warehouse", "label": _("Bodega destino"), "visible": True, "width": 2},
+        ],
         "initialSourceType": request.args.get("source_type") if source_header else "",
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},

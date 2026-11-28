@@ -531,7 +531,7 @@
         syncLineInputs() {
           const root = this.$root || document;
           const fields = ['item_code', 'item_name', 'description', 'uom', 'qty', 'rate', 'amount',
-            'batch_id', 'serial_no', 'account', 'warehouse',
+            'batch_id', 'serial_no', 'account', 'warehouse', 'source_warehouse', 'target_warehouse',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
           const monetaryFields = new Set(['qty', 'rate', 'amount']);
           for (const [index, line] of this.lines.entries()) {
