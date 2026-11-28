@@ -3665,16 +3665,23 @@ def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
     """Revert payment relations and bank reconciliation links atomically."""
     payment.unallocated_amount = Decimal("0")
     revert_relations_for_target("payment_entry", payment.id, reason="payment_cancelled")
-    linked_transactions = (
-        database.session.execute(database.select(BankTransaction).filter_by(payment_entry_id=payment.id)).scalars().all()
+    # #1228: el pago puede participar en varias partidas del mismo movimiento;
+    # se descubren por ReconciliationItem y no solo por payment_entry_id.
+    affected_transaction_ids = set(
+        database.session.execute(
+            database.select(ReconciliationItem.source_id).where(
+                ReconciliationItem.source_type == "bank_transaction",
+                ReconciliationItem.target_type == "payment_entry",
+                ReconciliationItem.target_id == payment.id,
+                ReconciliationItem.status != "cancelled",
+            )
+        ).scalars()
+    )
+    affected_transaction_ids.update(
+        database.session.execute(database.select(BankTransaction.id).filter_by(payment_entry_id=payment.id)).scalars()
     )
     from cacao_accounting.internal_control_service import bank_reconciliation_transition
 
-    with bank_reconciliation_transition(*linked_transactions):
-        for transaction in linked_transactions:
-            transaction.is_reconciled = False
-            transaction.payment_entry_id = None
-        database.session.flush()
     database.session.execute(
         database.update(ReconciliationItem)
         .where(
@@ -3684,6 +3691,16 @@ def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
         )
         .values(status="cancelled")
     )
+    database.session.flush()
+    transactions = [
+        transaction
+        for transaction_id in affected_transaction_ids
+        if (transaction := database.session.get(BankTransaction, transaction_id, with_for_update=True)) is not None
+    ]
+    with bank_reconciliation_transition(*transactions):
+        for transaction in transactions:
+            _refresh_bank_transaction_reconciliation(transaction)
+        database.session.flush()
     references = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
     affected_docs = {
         (reference.flow_source_type or reference.reference_type, reference.reference_id)
@@ -3692,3 +3709,27 @@ def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
     }
     for reference_type, reference_id in affected_docs:
         _refresh_payment_reference_document(reference_type, reference_id)
+
+
+def _refresh_bank_transaction_reconciliation(transaction: BankTransaction) -> None:
+    """Deriva is_reconciled y payment_entry_id de las partidas activas restantes."""
+    remaining = database.session.execute(
+        database.select(database.func.coalesce(database.func.sum(ReconciliationItem.allocated_amount), Decimal("0"))).where(
+            ReconciliationItem.source_type == "bank_transaction",
+            ReconciliationItem.source_id == transaction.id,
+            ReconciliationItem.status != "cancelled",
+        )
+    ).scalar_one()
+    amount = abs(Decimal(str(transaction.deposit or 0))) + abs(Decimal(str(transaction.withdrawal or 0)))
+    transaction.is_reconciled = bool(amount > 0 and Decimal(str(remaining or 0)) >= amount)
+    transaction.payment_entry_id = database.session.execute(
+        database.select(ReconciliationItem.target_id)
+        .where(
+            ReconciliationItem.source_type == "bank_transaction",
+            ReconciliationItem.source_id == transaction.id,
+            ReconciliationItem.target_type == "payment_entry",
+            ReconciliationItem.status != "cancelled",
+        )
+        .order_by(ReconciliationItem.created, ReconciliationItem.id)
+        .limit(1)
+    ).scalar_one_or_none()
