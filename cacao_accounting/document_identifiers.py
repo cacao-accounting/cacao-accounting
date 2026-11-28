@@ -23,6 +23,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
 from cacao_accounting.default_scope import lock_default_scope
+from sqlalchemy.exc import IntegrityError
 
 
 from cacao_accounting.i18n import _
@@ -755,30 +756,40 @@ def assign_document_identifier(
     if counter and counter.company != company_code:
         raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
 
-    identifier = generate_identifier(
-        entity_type=entity_type,
-        entity_id=getattr(document, "id"),
-        posting_date=posting_date,
-        company=company_code,
-        naming_series_id=naming_series.id,
-        sequence_id=sequence_id,
-    )
+    # #2332: el rechazo determinista del número externo (prefijo o duplicado
+    # conocido) ocurre antes de consumir la secuencia interna. La generación y
+    # el registro del número se confirman o revierten juntos, de modo que una
+    # carrera de unicidad tampoco deja document_no ni consumo parcial.
+    external_value: str | None = None
+    if counter is not None:
+        external_value = external_number or counter.next_suggested_formatted
+        _validate_external_number(counter, external_value)
+
+    with database.session.begin_nested():
+        identifier = generate_identifier(
+            entity_type=entity_type,
+            entity_id=getattr(document, "id"),
+            posting_date=posting_date,
+            company=company_code,
+            naming_series_id=naming_series.id,
+            sequence_id=sequence_id,
+        )
+        if counter is not None and external_value is not None:
+            _register_external_number(
+                counter=counter,
+                external_number=external_value,
+                entity_type=entity_type,
+                entity_id=getattr(document, "id"),
+            )
 
     setattr(document, "posting_date", posting_date)
     setattr(document, "naming_series_id", naming_series.id)
     setattr(document, "document_no", identifier)
 
     # 2. Identificador externo (opcional)
-    if counter:
-        ext_num = external_number or counter.next_suggested_formatted
-        _validate_and_register_external_number(
-            counter=counter,
-            external_number=ext_num,
-            entity_type=entity_type,
-            entity_id=getattr(document, "id"),
-        )
+    if counter is not None and external_value is not None:
         setattr(document, "external_counter_id", counter.id)
-        setattr(document, "external_number", ext_num)
+        setattr(document, "external_number", external_value)
 
 
 def _validate_and_register_external_number(
@@ -788,7 +799,26 @@ def _validate_and_register_external_number(
     entity_type: str,
     entity_id: str,
 ) -> None:
-    """Valida unicidad y registra el uso de un numero externo.
+    """Valida y registra el uso de un numero externo.
+
+    Raises:
+        ExternalNumberDuplicateError: Si el numero ya fue utilizado con este contador.
+        IdentifierConfigurationError: Si el numero no respeta el prefijo del contador.
+    """
+    _validate_external_number(counter, external_number)
+    _register_external_number(
+        counter=counter,
+        external_number=external_number,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+
+
+def _validate_external_number(counter: ExternalCounter, external_number: str) -> None:
+    """Rechaza un número externo con prefijo inválido o ya registrado.
+
+    No muta el contador, el documento ni la sesión: el llamador puede invocarlo
+    antes de consumir la secuencia interna.
 
     Raises:
         ExternalNumberDuplicateError: Si el numero ya fue utilizado con este contador.
@@ -820,7 +850,22 @@ def _validate_and_register_external_number(
             }
         )
 
-    # Intentar extraer el valor numerico del numero externo (despues del prefijo)
+
+def _register_external_number(
+    *,
+    counter: ExternalCounter,
+    external_number: str,
+    entity_type: str,
+    entity_id: str,
+) -> None:
+    """Registra el uso del número externo y actualiza la sugerencia.
+
+    La escritura ocurre en un savepoint para que una colisión de unicidad
+    concurrente revierta solo este registro y deje la sesión utilizable.
+
+    Raises:
+        ExternalNumberDuplicateError: Si otro proceso registró el mismo número.
+    """
     prefix = counter.prefix or ""
     raw = external_number[len(prefix) :]
     try:
@@ -835,13 +880,17 @@ def _validate_and_register_external_number(
         entity_id=entity_id,
         sequence_value=sequence_value,
     )
-    database.session.add(usage)
-
-    # Actualizar last_used si el valor numerico es mayor al actual
-    if sequence_value is not None and sequence_value > (counter.last_used or 0):
-        counter.last_used = sequence_value
-
-    database.session.flush()
+    try:
+        with database.session.begin_nested():
+            database.session.add(usage)
+            if sequence_value is not None and sequence_value > (counter.last_used or 0):
+                counter.last_used = sequence_value
+            database.session.flush()
+    except IntegrityError as exc:
+        raise ExternalNumberDuplicateError(
+            _("El número externo '%(external_number)s' ya fue utilizado en este contador.")
+            % {"external_number": external_number}
+        ) from exc
 
 
 # -------------------------------------------------------------------------------------
