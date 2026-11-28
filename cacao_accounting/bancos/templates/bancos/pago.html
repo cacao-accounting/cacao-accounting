@@ -53,7 +53,7 @@
   {{ macros.workflow_buttons(
         registro.docstatus,
         url_for('bancos.bancos_pago_submit', payment_id=registro.id),
-        url_for('bancos.bancos_pago_cancel', payment_id=registro.id),
+        url_for('bancos.bancos_pago_cancel', payment_id=registro.id) if status.code != 'pending_cancellation' else None,
         _('Aprobar'),
         _('Anular')) }}
   {{ macros.detail_nav_buttons(

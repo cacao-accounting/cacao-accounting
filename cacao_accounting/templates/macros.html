@@ -891,7 +891,7 @@
         <i class="bi bi-check-circle me-1"></i>{{ submit_label }}
       </button>
     </form>
-  {% elif docstatus == 1 %}
+  {% elif docstatus == 1 and cancel_url %}
     <form method="post" action="{{ cancel_url }}" class="d-inline"
           onsubmit='var r=prompt({{ _("Indique el motivo de la anulación:")|tojson }}); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();'>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
