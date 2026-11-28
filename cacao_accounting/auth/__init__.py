@@ -11,7 +11,19 @@ from typing import Any
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, current_app, flash, has_request_context, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    has_request_context,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask.typing import ResponseReturnValue
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user, user_logged_in
 from sqlalchemy.exc import IntegrityError
@@ -511,9 +523,92 @@ def _current_password_is_valid(password_form: Any) -> bool:
 
 def _render_profile(profile_form: Any, password_form: Any) -> str:
     """Render the profile template with both forms."""
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
     return render_template(
         PROFILE_HTML,
         profile_form=profile_form,
         password_form=password_form,
+        api_credential_available=not is_desktop_mode(),
         titulo=_("Mi Perfil - Cacao Accounting"),
     )
+
+
+# <---------------------------------------------------------------------------------------------> #
+# Credencial API explícita para integraciones (solo Cloud).
+# <---------------------------------------------------------------------------------------------> #
+API_CREDENTIAL_ACTIONS = frozenset({"emitir", "rotar", "revocar"})
+
+API_CREDENTIAL_NO_STORE = {
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+def _render_api_credential(
+    *,
+    companies: list[str],
+    has_credential: bool,
+    credential: str | None = None,
+    revoked: bool = False,
+) -> Any:
+    """Render the credential page without allowing the response to be cached."""
+    html = render_template(
+        "api_credential.html",
+        companies=companies,
+        has_credential=has_credential,
+        credential=credential,
+        revoked=revoked,
+        titulo=_("Credencial API - Cacao Accounting"),
+    )
+    response = make_response(html)
+    response.headers.update(API_CREDENTIAL_NO_STORE)
+    return response
+
+
+@login.route("/auth/api-credential", methods=["GET", "POST"])
+@login_required
+def api_credential():  # pragma: no cover
+    """Gestiona la credencial API del usuario autenticado: emitir, rotar o revocar.
+
+    El login del navegador emite un JWT y redirige, por lo que un integrador no
+    puede leerlo. Esta acción entrega el secreto una única vez en la respuesta
+    y conserva la huella persistida y ``auth_version`` como autoridades de
+    validación, incluso si la caché no está disponible.
+    """
+    from cacao_accounting.company_context import explicit_company_grants
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    if is_desktop_mode():
+        abort(404)
+
+    companies = sorted(explicit_company_grants())
+    if not companies:
+        abort(403)
+
+    if request.method == "GET":
+        return _render_api_credential(
+            companies=companies,
+            has_credential=bool(current_user.api_token_hash),
+        )
+
+    action = request.form.get("accion", "")
+    if action not in API_CREDENTIAL_ACTIONS:
+        abort(400)
+
+    if action == "revocar":
+        # Se elimina la huella persistida: el JWT deja de validar sin tocar
+        # ``auth_version`` y sin cerrar la sesión del navegador.
+        current_user.token = None
+        database.session.commit()
+        return _render_api_credential(companies=companies, has_credential=False, revoked=True)
+
+    credential = helpers.asignar_token_para_usuario(current_user)
+    if credential is None:
+        current_app.logger.error("No se pudo emitir la credencial API del usuario autenticado")
+        abort(503)
+    # Emitir o rotar reemplaza la huella anterior: la credencial previa deja de
+    # validar de inmediato y la nueva solo se muestra en esta respuesta.
+    return _render_api_credential(companies=companies, has_credential=True, credential=credential)

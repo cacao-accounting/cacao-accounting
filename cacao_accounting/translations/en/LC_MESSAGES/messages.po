@@ -28493,3 +28493,71 @@ msgstr "The dimension value could not be added. Verify the selected references."
 
 msgid "La asignación del pago no produjo una línea."
 msgstr "The payment allocation did not produce a line."
+
+msgid "Credencial API - Cacao Accounting"
+msgstr "API Credential - Cacao Accounting"
+
+msgid "Credencial API"
+msgstr "API Credential"
+
+msgid ""
+"Esta credencial permite que una integración autorizada consulte la API sin iniciar sesión en el navegador. Hereda los "
+"permisos y las compañías autorizadas de su usuario; no concede acceso adicional."
+msgstr ""
+"This credential lets an authorized integration query the API without signing in through the browser. It inherits the "
+"permissions and authorized companies of your user; it grants no additional access."
+
+msgid ""
+"Copie la credencial ahora. Por seguridad no se volverá a mostrar y no queda registrada en la interfaz."
+msgstr "Copy the credential now. For security it will not be shown again and is not stored in the interface."
+
+msgid "Credencial"
+msgstr "Credential"
+
+msgid ""
+"Envíela como encabezado Authorization: Bearer <credencial>. Expira en 8 horas y puede rotarla o revocarla en cualquier "
+"momento."
+msgstr ""
+"Send it as an Authorization: Bearer <credential> header. It expires in 8 hours and you can rotate or revoke it at any "
+"time."
+
+msgid "La credencial fue revocada. Las integraciones que la usaban ya no pueden autenticarse."
+msgstr "The credential was revoked. Integrations that used it can no longer authenticate."
+
+msgid ""
+"Existe una credencial vigente. El secreto no se puede recuperar; si lo perdió, rótela para emitir uno nuevo."
+msgstr "A credential is currently valid. The secret cannot be recovered; if you lost it, rotate it to issue a new one."
+
+msgid "No hay una credencial vigente para su usuario."
+msgstr "There is no valid credential for your user."
+
+msgid "Compañías autorizadas"
+msgstr "Authorized companies"
+
+msgid "Endpoints con credencial"
+msgstr "Endpoints accepting the credential"
+
+msgid "Expiración"
+msgstr "Expiration"
+
+msgid "8 horas desde la emisión"
+msgstr "8 hours after issuance"
+
+msgid "Emitir credencial"
+msgstr "Issue credential"
+
+msgid "Rotar credencial"
+msgstr "Rotate credential"
+
+msgid "Revocar credencial"
+msgstr "Revoke credential"
+
+msgid "Credencial API para integraciones"
+msgstr "API credential for integrations"
+
+msgid ""
+"Emita, rote o revoque la credencial que usan las integraciones autorizadas. El secreto se muestra una sola vez."
+msgstr "Issue, rotate or revoke the credential used by authorized integrations. The secret is shown only once."
+
+msgid "Gestionar credencial API"
+msgstr "Manage API credential"

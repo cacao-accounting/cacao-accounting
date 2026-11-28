@@ -87,8 +87,14 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def asignar_token_para_usuario(identidad: User) -> None:
-    """Genera y asigna el token de autenticación para la API REST."""
+def asignar_token_para_usuario(identidad: User) -> str | None:
+    """Genera, asigna y devuelve el token de autenticación de la API REST.
+
+    El valor se devuelve para que una emisión explícita pueda mostrarlo una
+    única vez sin depender de la caché, que es opcional. La huella persistida
+    en ``api_token_hash`` sigue siendo la autoridad de validación.
+    """
+    token: str | None = None
     try:
         ahora = _utcnow()
         payload = {
@@ -101,17 +107,19 @@ def asignar_token_para_usuario(identidad: User) -> None:
             # segundo produzcan el mismo JWT y reactiven uno revocado.
             "jti": uuid4().hex,
         }
-        identidad.token = encode(
+        token = encode(
             payload,
             current_app.config["SECRET_KEY"],
             algorithm="HS256",
         )
+        identidad.token = token
         # La huella persistida es la autoridad cuando la caché no está disponible.
         database.session.commit()
-        assert identidad.token is not None  # nosec
     except (KeyError, PyJWTError) as exc:
         assert exc is not None  # nosec
         log.warning("No se pudo generar auth token.")
+        return None
+    return token
 
 
 def revocar_credenciales_usuario(identidad: User) -> None:
