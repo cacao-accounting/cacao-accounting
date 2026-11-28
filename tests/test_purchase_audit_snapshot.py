@@ -125,6 +125,7 @@ def factura_editable(app, entorno_contable):
         database.session.commit()
         ids = {
             "factura": factura.id,
+            "version": factura.version,
             "orden": orden.id,
             "plantilla": plantilla.id,
             "proveedor": proveedor.id,
@@ -194,11 +195,14 @@ def _ultimo_cambio_de_factura(app, factura_id):
         )
 
 
-def _editar_factura(authenticated_client, factura_id, datos):
-    """Envía la edición de la factura en borrador y devuelve la respuesta seguida."""
+def _editar_factura(app, authenticated_client, factura_id, datos):
+    """Envía la edición con la versión actual y devuelve la respuesta seguida."""
+    with app.app_context():
+        factura = database.session.get(PurchaseInvoice, factura_id)
+        version = factura.version
     respuesta = authenticated_client("admin").post(
         f"/buying/purchase-invoice/{factura_id}/edit",
-        data=datos,
+        data={**datos, "version": str(version)},
         follow_redirects=True,
     )
     assert respuesta.status_code == 200
@@ -222,7 +226,7 @@ def test_edicion_registra_numero_de_proveedor_y_plantilla_en_auditoria(app, auth
         "rate_0": "10",
         "amount_0": "20",
     }
-    respuesta = _editar_factura(authenticated_client, ids["factura"], datos)
+    respuesta = _editar_factura(app, authenticated_client, ids["factura"], datos)
 
     assert "Factura de compra actualizada correctamente." in respuesta.get_data(as_text=True)
     cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
@@ -254,7 +258,7 @@ def test_edicion_registra_moneda_tasa_y_logistica_en_auditoria(app, authenticate
         "rate_0": "10",
         "amount_0": "20",
     }
-    respuesta = _editar_factura(authenticated_client, ids["factura"], datos)
+    respuesta = _editar_factura(app, authenticated_client, ids["factura"], datos)
 
     assert "Factura de compra actualizada correctamente." in respuesta.get_data(as_text=True)
     cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
@@ -314,7 +318,7 @@ def test_snapshot_incluye_evidencia_fiscal_antes_de_editar(app, authenticated_cl
         "rate_0": "10",
         "amount_0": "20",
     }
-    _editar_factura(authenticated_client, ids["factura"], datos)
+    _editar_factura(app, authenticated_client, ids["factura"], datos)
 
     _cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
     assert antes["tax_summary"]["document_id"] == ids["factura"]
@@ -516,7 +520,7 @@ def test_edicion_registra_recuperacion_de_base_currency(app, authenticated_clien
         "rate_0": "10",
         "amount_0": "20",
     }
-    _editar_factura(authenticated_client, ids["factura"], datos)
+    _editar_factura(app, authenticated_client, ids["factura"], datos)
 
     cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
     assert cambios["base_currency"]["before"] is None
@@ -701,6 +705,7 @@ def factura_con_dos_origenes(app, entorno_contable):
         database.session.commit()
         ids = {
             "factura": factura.id,
+            "version": factura.version,
             "linea_factura": linea_factura.id,
             "orden_a": ordenes["a"],
             "orden_b": ordenes["b"],
@@ -740,6 +745,7 @@ def test_edicion_factura_registra_cambio_de_origen_por_linea(app, authenticated_
     """HTTP: el snapshot conserva el origen anterior y el nuevo de cada línea (#2137)."""
     ids = factura_con_dos_origenes
     datos = {
+        "version": str(ids["version"]),
         "supplier_id": ids["proveedor"],
         "company": "cacao",
         "posting_date": "2026-05-15",
@@ -926,6 +932,7 @@ def factura_origen_uom(entorno_contable_aislado):
         database.session.commit()
         ids = {
             "factura": factura.id,
+            "version": factura.version,
             "linea_factura": linea_factura.id,
             "orden_a": ordenes["a"],
             "orden_b": ordenes["b"],
@@ -951,6 +958,7 @@ def test_cambio_de_origen_con_conversion_uom_conserva_cantidad_base(entorno_cont
         session["_auth_version"] = auth_version
         session["_fresh"] = True
     datos = {
+        "version": str(ids["version"]),
         "supplier_id": ids["proveedor"],
         "company": "cacao",
         "posting_date": "2026-05-15",

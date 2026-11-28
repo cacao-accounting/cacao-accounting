@@ -1973,14 +1973,14 @@ def _create_purchase_order_from_request(form: dict):
 
 
 def _check_optimistic_version(registro: Any) -> str | None:
-    """Rechaza ediciones basadas en una versión obsoleta del documento (#1680)."""
+    """Rechaza ediciones sin versión válida o con una versión obsoleta (#1680)."""
     raw_version = request.form.get("version")
-    if raw_version in (None, ""):
-        return None
     try:
+        if raw_version in (None, ""):
+            raise ValueError("missing version")
         submitted = int(raw_version)
     except (TypeError, ValueError):
-        return None
+        submitted = -1
     current = int(getattr(registro, "version", 0) or 0)
     if submitted != current:
         database.session.rollback()

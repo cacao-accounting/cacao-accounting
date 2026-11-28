@@ -91,6 +91,7 @@ def factura_con_base_obsoleta(app, entorno_contable):
         database.session.commit()
         ids = {
             "factura": factura.id,
+            "version": factura.version,
             "proveedor": proveedor.id,
             "sufijo": sufijo,
         }
@@ -105,6 +106,7 @@ def test_editar_factura_refresca_base_currency_desde_la_compania(app, authentica
     respuesta = cliente.post(
         f"/buying/purchase-invoice/{ids['factura']}/edit",
         data={
+            "version": str(ids["version"]),
             "supplier_id": ids["proveedor"],
             "company": "cacao",
             "posting_date": "2026-05-15",
@@ -178,12 +180,15 @@ def test_impuesto_manual_en_compra_reconcilia_total_ap_y_gl(
             database.select(PurchaseInvoice).filter_by(supplier_invoice_no=f"MANUAL-{ids['sufijo']}")
         ).scalar_one()
         invoice_id = invoice.id
+        invoice_version = invoice.version
         assert invoice.grand_total == Decimal("115.00")
         assert invoice.outstanding_amount == Decimal("115.00")
 
+    update_data = form_data("120", "20")
+    update_data["version"] = str(invoice_version)
     updated = client.post(
         f"/buying/purchase-invoice/{invoice_id}/edit",
-        data=form_data("120", "20"),
+        data=update_data,
         follow_redirects=True,
     )
     assert updated.status_code == 200

@@ -356,6 +356,7 @@ def _orden_con_dos_proveedores(app):
         database.session.commit()
         return {
             "order_id": orden.id,
+            "version": orden.version,
             "valid_id": valido.id,
             "mutable_id": mutable.id,
             "series_id": series_id,
@@ -409,6 +410,7 @@ def test_purchase_order_edit_post_rejects_invalid_supplier(app, authenticated_cl
     response = authenticated_client("admin").post(
         f"/buying/purchase-order/{orden_id}/edit",
         data={
+            "version": str(data["version"]),
             "company": "cacao",
             "supplier_id": mutable_id,
             "posting_date": "2026-05-15",
@@ -434,12 +436,15 @@ def test_purchase_order_edit_post_accepts_valid_supplier(app, authenticated_clie
     data = po_two_suppliers
     orden_id = data["order_id"]
     with app.app_context():
-        database.session.get(PurchaseOrder, orden_id).supplier_id = None
+        orden = database.session.get(PurchaseOrder, orden_id)
+        orden.supplier_id = None
         database.session.commit()
+        current_version = orden.version
 
     response = authenticated_client("admin").post(
         f"/buying/purchase-order/{orden_id}/edit",
         data={
+            "version": str(current_version),
             "company": "cacao",
             "supplier_id": data["valid_id"],
             "posting_date": "2026-05-15",

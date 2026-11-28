@@ -38,7 +38,7 @@ from cacao_accounting.database import (
 FECHA = date(2026, 5, 15)
 
 
-def _formulario(supplier_id: str | None) -> dict[str, str]:
+def _formulario(supplier_id: str | None, *, version: int | None = None) -> dict[str, str]:
     """Datos mínimos que el formulario transaccional envía al alta y edición."""
     datos = {
         "company": "cacao",
@@ -51,6 +51,8 @@ def _formulario(supplier_id: str | None) -> dict[str, str]:
     }
     if supplier_id:
         datos["supplier_id"] = supplier_id
+    if version is not None:
+        datos["version"] = str(version)
     return datos
 
 
@@ -136,7 +138,7 @@ def test_la_edicion_no_muta_la_cabecera_con_un_cliente(app, entorno_contable):
         database.session.commit()
         cotizacion_id = cotizacion.id
         admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
-        with app.test_request_context("/", method="POST", data=_formulario(cliente_id)):
+        with app.test_request_context("/", method="POST", data=_formulario(cliente_id, version=cotizacion.version)):
             login_user(admin)
             respuesta = _handle_purchase_quotation_edit_post(cotizacion)
 
@@ -327,8 +329,9 @@ def test_edicion_http_con_linea_invalida_conserva_borrador(app, entorno_contable
     cotizacion_id = _sembrar_rfq_vinculada(app, proveedor_id)
     with app.app_context():
         estado_antes = _estado_rfq(cotizacion_id)
+        version = database.session.get(PurchaseQuotation, cotizacion_id).version
 
-    datos = _formulario(proveedor_id)
+    datos = _formulario(proveedor_id, version=version)
     datos.update({"posting_date": "2026-05-16", "remarks": "Edición inválida"})
     if cantidad is None:
         for campo in ("item_code_0", "item_name_0", "qty_0", "uom_0"):
@@ -411,7 +414,7 @@ def test_edicion_rfq_no_cambia_proveedor_no_vigente(app, entorno_contable, caso)
         database.session.commit()
         cotizacion_id = cotizacion.id
         admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
-        with app.test_request_context("/", method="POST", data=_formulario(candidato_id)):
+        with app.test_request_context("/", method="POST", data=_formulario(candidato_id, version=cotizacion.version)):
             login_user(admin)
             assert _handle_purchase_quotation_edit_post(cotizacion) is not None
 

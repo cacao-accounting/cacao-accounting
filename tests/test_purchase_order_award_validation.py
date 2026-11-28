@@ -788,7 +788,7 @@ def test_edicion_rechaza_cambio_de_proveedor_con_adjudicacion(adjudicaciones, mo
             .id
         )
 
-    form = _form_orden(ids, supplier_id=ids["proveedor_b"])
+    form = _form_orden(ids, supplier_id=ids["proveedor_b"], version=str(_version_orden(application, orden_id)))
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
@@ -815,7 +815,7 @@ def test_edicion_rechaza_quitar_proveedor_con_adjudicacion(adjudicaciones, monke
             .id
         )
 
-    form = _form_orden(ids, supplier_id="")
+    form = _form_orden(ids, supplier_id="", version=str(_version_orden(application, orden_id)))
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
@@ -839,7 +839,7 @@ def test_edicion_conserva_orden_con_linea_adjudicada(adjudicaciones, monkeypatch
             .id
         )
 
-    form = _form_orden(ids, remarks="Actualizada")
+    form = _form_orden(ids, remarks="Actualizada", version=str(_version_orden(application, orden_id)))
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
@@ -863,6 +863,12 @@ def _orden_creada(application, ids) -> str:  # noqa: ANN001 - fixture helper
         )
 
 
+def _version_orden(application, orden_id: str) -> int:  # noqa: ANN001 - fixture helper
+    """Devuelve la versión del snapshot que el formulario está editando."""
+    with application.app_context():
+        return database.session.get(PurchaseOrder, orden_id).version
+
+
 def _linea_orden(application, orden_id: str) -> PurchaseOrderItem:  # noqa: ANN001 - fixture helper
     """Carga la única línea persistida de la orden."""
     with application.app_context():
@@ -870,10 +876,11 @@ def _linea_orden(application, orden_id: str) -> PurchaseOrderItem:  # noqa: ANN0
 
 
 def _editar_orden(application, ids, orden_id: str, form: dict) -> None:  # noqa: ANN001 - fixture helper
-    """Ejecuta el POST de edición de la orden con el formulario indicado."""
+    """Ejecuta el POST de edición con la versión actual del documento."""
     from flask_login import login_user
 
-    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
+    data = {**form, "version": str(_version_orden(application, orden_id))}
+    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=data):
         login_user(database.session.get(User, ids["user"]))
         orden = database.session.get(PurchaseOrder, orden_id)
         _update_purchase_order_from_request(orden)
@@ -964,7 +971,7 @@ def test_edicion_con_tarifa_no_finita_preserva_orden(adjudicaciones, monkeypatch
     _crear_orden(application, ids, monkeypatch)
     orden_id = _orden_creada(application, ids)
 
-    form = _form_orden(ids, rate_0="Infinity")
+    form = _form_orden(ids, rate_0="Infinity", version=str(_version_orden(application, orden_id)))
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
         from flask_login import login_user
 
@@ -1042,12 +1049,13 @@ def test_orden_generada_desde_adjudicacion_usada_se_edita_por_http(adjudicacione
         orden_id = orden.id
         award_id = orden.purchase_award_id
         cantidad = orden.total_qty
+        version = orden.version
 
     client = application.test_client()
     with client.session_transaction() as sesion:
         sesion["_user_id"] = ids["user"]
         sesion["_fresh"] = True
-    form = _form_orden(ids, qty_0="5", remarks="Editada por HTTP")
+    form = _form_orden(ids, qty_0="5", remarks="Editada por HTTP", version=str(version))
     respuesta = client.post(f"/buying/purchase-order/{orden_id}/edit", data=form)
 
     assert respuesta.status_code == 302, respuesta.get_data(as_text=True)[:500]

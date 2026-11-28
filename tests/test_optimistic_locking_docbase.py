@@ -27,6 +27,7 @@ def _seed(app):
             base_currency="NIO",
             exchange_rate=1,
             docstatus=0,
+            remarks="original",
         )
         database.session.add(po)
         database.session.commit()
@@ -89,3 +90,21 @@ def test_purchase_order_edit_rejects_stale_form_version(app):
 
             result_ok = _check_optimistic_version(stale_po)
         assert result_ok is None
+
+
+@pytest.mark.parametrize("data", [{}, {"version": ""}, {"version": "invalid"}, {"version": "0"}])
+def test_purchase_order_edit_rejects_missing_or_invalid_version(app, data):
+    """Un formulario de edición sin versión utilizable falla cerrado."""
+    po_id = _seed(app)
+    with app.app_context():
+        po = database.session.get(PurchaseOrder, po_id)
+        assert po is not None and po.version == 1
+        with app.test_request_context(f"/compras/orden-compra/{po_id}/editar", method="POST", data=data):
+            from cacao_accounting.compras.services import _update_purchase_order_from_request
+
+            response = _update_purchase_order_from_request(po)
+            assert response.status_code == 302
+        database.session.expire_all()
+        persisted = database.session.get(PurchaseOrder, po_id)
+        assert persisted.remarks == "original"
+        assert persisted.version == 1
