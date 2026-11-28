@@ -514,6 +514,12 @@ def compras_solicitud_compra_editar(request_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -830,6 +836,12 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -2279,6 +2291,12 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
