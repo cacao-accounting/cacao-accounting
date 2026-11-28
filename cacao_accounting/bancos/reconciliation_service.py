@@ -142,6 +142,19 @@ def _payment_belongs_to_bank(payment: PaymentEntry, bank_account_id: str) -> boo
     return bank_account_id in {payment.bank_account_id, payment.target_bank_account_id}
 
 
+def _payment_leg_currency(payment: PaymentEntry, bank_account_id: str | None) -> str | None:
+    """Moneda de la pierna bancaria que se concilia (#1317).
+
+    En una transferencia interna la pierna destino se expresa en la moneda de
+    la cuenta destino, no en la moneda origen del encabezado.
+    """
+    if payment.payment_type == "internal_transfer" and bank_account_id:
+        account = database.session.get(BankAccount, bank_account_id)
+        if account is not None and account.currency:
+            return str(account.currency)
+    return str(payment.currency) if payment.currency else None
+
+
 def _gl_direction(entry: GLEntry) -> str | None:
     """Interpreta débito bancario como depósito y crédito como retiro."""
     if _decimal_value(entry.debit) > 0:
@@ -408,7 +421,7 @@ def _target_payment_amount(
         raise BankReconciliationError(_("La entrada de pago a conciliar no existe."))
     if getattr(payment, "docstatus", 0) != 1:
         raise BankReconciliationError(_("La entrada de pago debe estar aprobada para conciliarse."))
-    payment_currency = str(payment.currency) if payment.currency else company_currency
+    payment_currency = _payment_leg_currency(payment, bank_account_id) or company_currency
     if not bank_currency or payment_currency == bank_currency:
         return _payment_amount(payment, bank_account_id)
     if bank_currency != company_currency:
@@ -603,7 +616,7 @@ def _candidate_payment_amount(
     payment: PaymentEntry, transaction: BankTransaction, bank_currency: str | None, company_currency: str | None
 ) -> Decimal | None:
     """Convierte el importe del pago a la moneda del banco cuando es necesario."""
-    payment_currency = str(payment.currency) if payment.currency else company_currency
+    payment_currency = _payment_leg_currency(payment, transaction.bank_account_id) or company_currency
     if bank_currency and payment_currency != bank_currency and bank_currency != company_currency:
         return None
     if not bank_currency or payment_currency == bank_currency:
