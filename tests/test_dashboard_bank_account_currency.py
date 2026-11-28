@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.pool import StaticPool
@@ -765,3 +766,73 @@ def test_partidas_directas_incompletas_no_inventan_moneda_bancaria(bank_balance_
     assert Decimal(str(rows["USD-1607"]["balance"])) == Decimal("100")
     assert Decimal(str(rows["EUR-INCOMPLETE-2313"]["balance"])) == Decimal("0")
     assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("14400")
+
+
+def test_partidas_exactas_y_sin_moneda_no_se_suman_entre_si(bank_balance_scene):
+    """#2313: una fila sin moneda no se agrega al saldo de la moneda exacta."""
+    with bank_balance_scene.app_context():
+        cuenta = database.session.query(Accounts).filter_by(entity="cacao", code="1102").first()
+        libro = database.session.query(Book).filter_by(entity="cacao").first()
+        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+        banco = Bank(name=f"Banco mixto {uuid4().hex[:6]}", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        cuenta_eur = BankAccount(
+            company="cacao",
+            bank_id=banco.id,
+            account_name="Cuenta EUR mixta",
+            account_no=f"EUR-MIX-{uuid4().hex[:8]}",
+            currency="EUR",
+            gl_account_id=cuenta.id,
+            is_active=True,
+        )
+        database.session.add(cuenta_eur)
+        database.session.commit()
+        account_no = cuenta_eur.account_no
+        antes = Decimal(str(get_banks_data("cacao", "NIO", None, None)["kpis"]["balance"]["value"]))
+
+        database.session.add_all(
+            [
+                GLEntry(
+                    posting_date=date(2026, 5, 26),
+                    company="cacao",
+                    account_id=cuenta.id,
+                    bank_account_id=cuenta_eur.id,
+                    ledger_id=libro.id,
+                    debit=Decimal("3600"),
+                    credit=Decimal("0"),
+                    debit_in_account_currency=Decimal("100"),
+                    credit_in_account_currency=Decimal("0"),
+                    account_currency="EUR",
+                    company_currency="NIO",
+                    voucher_type="journal_entry",
+                    voucher_id=f"JE-2313-MIX-{uuid4().hex[:8]}",
+                    is_cancelled=False,
+                ),
+                GLEntry(
+                    posting_date=date(2026, 5, 26),
+                    company="cacao",
+                    account_id=cuenta.id,
+                    bank_account_id=cuenta_eur.id,
+                    ledger_id=libro.id,
+                    debit=Decimal("7200"),
+                    credit=Decimal("0"),
+                    debit_in_account_currency=None,
+                    credit_in_account_currency=None,
+                    account_currency=None,
+                    company_currency=None,
+                    voucher_type="journal_entry",
+                    voucher_id=f"JE-2313-NONE-{uuid4().hex[:8]}",
+                    is_cancelled=False,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    rows = {row["account_no"]: row for row in payload["tables"]["account_balances"]}
+    fila = rows[account_no]
+    assert Decimal(str(fila["balance"])) == Decimal("100")
+    despues = Decimal(str(payload["kpis"]["balance"]["value"]))
+    assert despues - antes == Decimal("10800")
