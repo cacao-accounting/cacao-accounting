@@ -15,6 +15,8 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import posting_service
 from cacao_accounting.contabilidad.cancellation_service import _consumed_stock_dependencies
+from cacao_accounting.contabilidad.posting_service import _cancel_stock_movements_if_needed
+from cacao_accounting.internal_control_service import _LEDGER_CANCELLATION_ACTIVE, authorized_posting
 from cacao_accounting.database import (
     Batch,
     Currency,
@@ -273,6 +275,117 @@ def test_salida_posterior_dependiente_del_ingreso_se_bloquea():
 
         deps_b = _consumed_stock_dependencies(rec_b, "stock_entry", rec_b.id)
         assert any(d.kind == "consumo de inventario por lote" and d.identifier == iss_b.id for d in deps_b)
+
+
+def test_reversa_rechaza_valor_negativo_con_cantidad_positiva():
+    """#2343: cancelar un ingreso no puede dejar valor negativo con unidades disponibles."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        rec_a = _movimiento("REC-VAL1", "material_receipt", date(2026, 5, 1), "to_warehouse")
+        database.session.add(
+            StockBin(
+                company="cacao",
+                item_code="ITEM-B",
+                warehouse="WH1",
+                actual_qty=Decimal("90"),
+                stock_value=Decimal("595"),
+                valuation_rate=Decimal("6.6111"),
+            )
+        )
+        database.session.add(_sle(entry_id=rec_a.id, qty=10, value=1000, batch_id=batch_a))
+        database.session.commit()
+        movement = database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=rec_a.id)).scalar_one()
+
+        with pytest.raises(posting_service.PostingError, match="valor de inventario negativo"):
+            posting_service._validate_stock_reversal_capacity([movement])
+
+
+def test_reversa_con_valor_suficiente_sigue_permitida():
+    """La guarda de valor no bloquea una cancelación que conserva valor positivo."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        rec_a = _movimiento("REC-VAL2", "material_receipt", date(2026, 5, 1), "to_warehouse")
+        database.session.add(
+            StockBin(
+                company="cacao",
+                item_code="ITEM-B",
+                warehouse="WH1",
+                actual_qty=Decimal("10"),
+                stock_value=Decimal("1500"),
+                valuation_rate=Decimal("150"),
+            )
+        )
+        database.session.add(_sle(entry_id=rec_a.id, qty=10, value=1000, batch_id=batch_a))
+        database.session.commit()
+        movement = database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=rec_a.id)).scalar_one()
+
+        posting_service._validate_stock_reversal_capacity([movement])
+
+
+def test_cancelacion_no_persiste_reversa_si_el_valor_queda_negativo():
+    """El flujo real de cancelación rechaza antes de crear la reversa."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        rec_a = _movimiento("REC-VAL3", "material_receipt", date(2026, 5, 1), "to_warehouse")
+        database.session.add(
+            StockBin(
+                company="cacao",
+                item_code="ITEM-B",
+                warehouse="WH1",
+                actual_qty=Decimal("90"),
+                stock_value=Decimal("595"),
+                valuation_rate=Decimal("6.6111"),
+            )
+        )
+        database.session.add(_sle(entry_id=rec_a.id, qty=10, value=1000, batch_id=batch_a))
+        database.session.commit()
+
+        token = _LEDGER_CANCELLATION_ACTIVE.set(("Stock Entry", rec_a.id))
+        try:
+            with authorized_posting():
+                with pytest.raises(posting_service.PostingError, match="valor de inventario negativo"):
+                    _cancel_stock_movements_if_needed(rec_a, "cacao", "stock_entry", rec_a.id, date(2026, 5, 2))
+        finally:
+            _LEDGER_CANCELLATION_ACTIVE.reset(token)
+        database.session.rollback()
+
+        database.session.expire_all()
+        movimientos = (
+            database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=rec_a.id)).scalars().all()
+        )
+        assert len(movimientos) == 1
+        assert movimientos[0].is_cancelled is False
+        bin_row = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-B", warehouse="WH1")
+        ).scalar_one()
+        assert Decimal(str(bin_row.actual_qty)) == Decimal("90")
+        assert Decimal(str(bin_row.stock_value)) == Decimal("595")
+
+
+def test_reversa_rechaza_valor_negativo_con_cantidad_positiva_desde_salida():
+    """Una salida reversada aumenta el valor; no se confunde con la guarda nueva."""
+    app = _app()
+    with app.app_context():
+        batch_a = app.config["BATCH_A"]
+        iss_a = _movimiento("ISS-VAL1", "material_issue", date(2026, 5, 2), "from_warehouse")
+        database.session.add(
+            StockBin(
+                company="cacao",
+                item_code="ITEM-B",
+                warehouse="WH1",
+                actual_qty=Decimal("0"),
+                stock_value=Decimal("0"),
+                valuation_rate=Decimal("0"),
+            )
+        )
+        database.session.add(_sle(entry_id=iss_a.id, qty=-5, value=-50, batch_id=batch_a, day=date(2026, 5, 2)))
+        database.session.commit()
+        movement = database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=iss_a.id)).scalar_one()
+
+        posting_service._validate_stock_reversal_capacity([movement])
 
 
 def test_stock_reversal_persiste_batch_en_svl():

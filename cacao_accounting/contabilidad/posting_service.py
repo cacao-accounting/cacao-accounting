@@ -4397,18 +4397,21 @@ def _stock_reversal_item(item_code: str) -> Item:
 
 def _project_stock_reversal_bins(
     movements: Sequence[StockLedgerEntry],
-) -> tuple[dict[tuple[str, str, str], Decimal], dict[tuple[str, str, str], Item]]:
-    """Proyecta la cantidad final por artículo/bodega y conserva el artículo."""
+) -> tuple[dict[tuple[str, str, str], Decimal], dict[tuple[str, str, str], Decimal], dict[tuple[str, str, str], Item]]:
+    """Proyecta cantidad y valor finales por artículo/bodega y conserva el artículo."""
     projected: dict[tuple[str, str, str], Decimal] = {}
+    projected_value: dict[tuple[str, str, str], Decimal] = {}
     items: dict[tuple[str, str, str], Item] = {}
     for movement in movements:
         key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
         if key not in projected:
             bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
             projected[key] = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
+            projected_value[key] = _decimal_value(bin_row.stock_value) if bin_row else Decimal("0")
             items[key] = _stock_reversal_item(movement.item_code)
         projected[key] -= _decimal_value(movement.qty_change)
-    return projected, items
+        projected_value[key] -= _decimal_value(movement.stock_value_difference)
+    return projected, projected_value, items
 
 
 def _project_stock_reversal_batches(
@@ -4462,15 +4465,37 @@ def _reject_negative_batch_stock(
             )
 
 
+def _reject_negative_stock_value(
+    projected: dict[tuple[str, str, str], Decimal],
+    projected_value: dict[tuple[str, str, str], Decimal],
+    items: dict[tuple[str, str, str], Item],
+) -> None:
+    """Bloquea una reversa que dejaría valor negativo con cantidad no negativa.
+
+    Una bodega con unidades disponibles no puede quedar valuada por debajo de
+    cero: la evidencia de costo dejaría de ser interpretable (#2343).
+    """
+    for key, value in projected_value.items():
+        if value < 0 and projected[key] >= 0:
+            raise PostingError(
+                _(
+                    "No se puede cancelar el movimiento de %(item_name)s: "
+                    "la bodega %(warehouse)s quedaría con un valor de inventario negativo."
+                )
+                % {"item_name": items[key].name, "warehouse": key[2]}
+            )
+
+
 def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
     """Reject reversals that leave a bin or batch with forbidden negative stock.
 
     Valida el resultado final por art?culo/bodega y por lote cuando aplica.
     Bloquea el bin para serializar con otras reversas concurrentes (#1868).
     """
-    projected, items = _project_stock_reversal_bins(movements)
+    projected, projected_value, items = _project_stock_reversal_bins(movements)
     batch_projected = _project_stock_reversal_batches(movements)
     _reject_negative_stock(projected, items)
+    _reject_negative_stock_value(projected, projected_value, items)
     _reject_negative_batch_stock(batch_projected, items)
 
 
