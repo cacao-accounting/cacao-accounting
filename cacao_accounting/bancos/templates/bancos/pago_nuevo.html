@@ -659,7 +659,7 @@
     <div class="row g-3">
       <div class="col-md-3">
           <label class="form-label text-muted small mb-1">{{ _('Tipo de pago') }} <span class="text-danger">*</span></label>
-          <select class="form-select bg-light" x-model="header.payment_type">
+          <select id="payment_type" class="form-select bg-light" x-model="header.payment_type">
               <option value="receive">{{ _('Recibir/Recibido') }}</option>
               <option value="pay">{{ _('Pagar/Pagado') }}</option>
           </select>
@@ -735,8 +735,11 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
-            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
-            filterSources: ["#company_val"],
+            filters: {
+              company: { selector: "#company_val" },
+              entity_type: function() { return header.payment_type === 'pay' ? 'bank_payment' : 'bank_receipt' }
+            },
+            filterSources: ["#company_val", "#payment_type"],
             requiredFilters: ["company"],
             preload: true,
             loadOnFilterChange: true,

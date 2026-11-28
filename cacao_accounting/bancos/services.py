@@ -352,6 +352,16 @@ def _payment_type_to_entity_type(payment_type: str) -> str:
     return PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry")
 
 
+def _compatible_default_payment_series(naming_series_id: str | None, payment_type: str) -> str | None:
+    """Ignora defaults con entity_type incompatible sin ocultar otras invalidaciones."""
+    if not naming_series_id:
+        return None
+    series = database.session.get(NamingSeries, naming_series_id)
+    if series is not None and series.entity_type != _payment_type_to_entity_type(payment_type):
+        return None
+    return naming_series_id
+
+
 def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
     """Crea configuraciones predeterminadas de numeracion para cada tipo de transaccion.
 
@@ -367,11 +377,7 @@ def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
         ).scalar_one_or_none()
         if existing:
             continue
-        naming_series_id = bank_account.default_naming_series_id
-        if naming_series_id:
-            series = database.session.get(NamingSeries, naming_series_id)
-            if series and series.entity_type == "payment_entry":
-                naming_series_id = None
+        naming_series_id = _compatible_default_payment_series(bank_account.default_naming_series_id, payment_type)
         use_external = payment_type in ("pay", "receive")
         config = BankAccountNumberingConfig(
             bank_account_id=bank_account.id,
@@ -3216,11 +3222,12 @@ def _resolve_payment_numbering(
     # que los defaults generales (#2181).
     naming_series_id = (str(payload.get("naming_series_id") or "").strip()) or None
     if naming_series_id is None:
+        payment_type = payment.payment_type or "pay"
         if config and config.naming_series_id:
-            naming_series_id = config.naming_series_id
-        else:
+            naming_series_id = _compatible_default_payment_series(config.naming_series_id, payment_type)
+        if naming_series_id is None:
             legacy_series_id, _legacy_counter_id = _payment_numbering_defaults(payment.bank_account_id)
-            naming_series_id = legacy_series_id
+            naming_series_id = _compatible_default_payment_series(legacy_series_id, payment_type)
 
     external_counter_id: str | None = None
     if mode_of_payment == "check":

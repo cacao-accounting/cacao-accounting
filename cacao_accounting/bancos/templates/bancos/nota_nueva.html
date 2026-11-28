@@ -110,7 +110,10 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
-            filters: { company: { selector: "#company" }, entity_type: function() { return "payment_entry" } },
+            filters: {
+              company: { selector: "#company" },
+              entity_type: "{{ 'bank_debit_note' if payment_type == 'debit_note' else 'bank_credit_note' }}"
+            },
             filterSources: ["#company"],
             autoSelectDefault: true
           })'>
