@@ -1691,11 +1691,16 @@ def _prior_payment_document_net(
     company: str,
     exclude_payment_id: str,
     voucher_net: Any,
+    as_of_date: date | None = None,
 ) -> Decimal:
-    """Prorratea el neto de pagos previos entre sus documentos aplicados."""
+    """Prorratea el neto de pagos previos entre sus documentos aplicados.
+
+    Con ``as_of_date`` solo considera pagos contabilizados hasta el corte, para
+    que una revalorizacion historica no mezcle liquidaciones posteriores.
+    """
     from sqlalchemy import func
 
-    prior_references = database.session.execute(
+    consulta = (
         select(PaymentReference.payment_id, PaymentReference.allocated_amount)
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
@@ -1705,7 +1710,10 @@ def _prior_payment_document_net(
             PaymentReference.payment_id != exclude_payment_id,
             PaymentEntry.docstatus == 1,
         )
-    ).all()
+    )
+    if as_of_date is not None:
+        consulta = consulta.where(PaymentEntry.posting_date <= as_of_date)
+    prior_references = database.session.execute(consulta).all()
     if not prior_references:
         return Decimal("0")
     allocated_by_payment = {str(payment_id): Decimal("0") for payment_id, _ in prior_references}
@@ -1766,16 +1774,19 @@ def _document_carrying_value_in_ledger(
     def _voucher_net(voucher_type: str, voucher_ids: list[str]) -> Decimal:
         if not voucher_ids:
             return Decimal("0")
+        condiciones = [
+            GLEntry.company == company,
+            GLEntry.ledger_id == ledger_id,
+            GLEntry.account_id == party_account_id,
+            GLEntry.voucher_type == voucher_type,
+            GLEntry.voucher_id.in_(voucher_ids),
+            GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
+        ]
+        if as_of_date is not None:
+            condiciones.append(GLEntry.posting_date <= as_of_date)
         row = database.session.execute(
-            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
-                GLEntry.company == company,
-                GLEntry.ledger_id == ledger_id,
-                GLEntry.account_id == party_account_id,
-                GLEntry.voucher_type == voucher_type,
-                GLEntry.voucher_id.in_(voucher_ids),
-                GLEntry.is_cancelled.is_(False),
-                GLEntry.is_reversal.is_(False),
-            )
+            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(*condiciones)
         ).scalar_one()
         return _decimal_value(row)
 
@@ -1804,6 +1815,7 @@ def _document_carrying_value_in_ledger(
         company=company,
         exclude_payment_id=exclude_payment_id,
         voucher_net=_voucher_net,
+        as_of_date=as_of_date,
     )
     has_gl = document_net != 0 or payments_net != 0
     if not has_gl:
