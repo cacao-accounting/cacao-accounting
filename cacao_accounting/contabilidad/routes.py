@@ -3696,7 +3696,7 @@ def aplicar_recurrentes_cierre(identifier: str):
 
     template_ids = request.form.getlist("template_ids")
     if not template_ids:
-        template_ids = _discover_applicable_templates(close_run.company, period.end)
+        template_ids = _discover_applicable_templates(close_run.company, period.id, period.end)
 
     close_run.run_status = "in_progress"
     success_count, errors = _apply_recurring_templates(

@@ -1250,7 +1250,15 @@ def reopen_accounting_period(period_id: str, user_id: str, reason: str, *, commi
     return period
 
 
-def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
+def _discover_applicable_templates(company: str, period_id: str, period_end: date) -> list[str]:
+    """Descubre plantillas vigentes que aún no fueron aplicadas al período."""
+    from cacao_accounting.database import RecurringJournalApplication
+
+    applied_template_ids = select(RecurringJournalApplication.template_id).where(
+        RecurringJournalApplication.company == company,
+        RecurringJournalApplication.accounting_period_id == period_id,
+        RecurringJournalApplication.status == "applied",
+    )
     templates = (
         database.session.execute(
             database.select(RecurringJournalTemplate)
@@ -1258,6 +1266,8 @@ def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
             .where(RecurringJournalTemplate.start_date <= period_end)
             .where(RecurringJournalTemplate.end_date >= period_end)
             .where(RecurringJournalTemplate.is_completed.is_(False))
+            .where(RecurringJournalTemplate.id.not_in(applied_template_ids))
+            .order_by(RecurringJournalTemplate.code, RecurringJournalTemplate.id)
         )
         .scalars()
         .all()
