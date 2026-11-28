@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 William José Moreno Reyes
 
-"""#2290: la conciliación no descuenta stock sin costo funcional.
+"""#2290: la reducción de conciliación siempre consume evidencia valorada.
 
-La guarda de #2259 cubría salidas y transferencias. La reducción por
-conciliación usaba un respaldo ``target_value / counted_qty`` que podía ser
-cero cuando el bin tenía cantidad pero ningún valor ni capas consumibles,
-dejando Stock Ledger y GL desalineados. Ahora se rechaza de forma atómica,
-igual que en las salidas, sin bloquear el respaldo con capas parciales
-valoradas.
+La guarda de #2259/#2290 rechaza un respaldo sin valor funcional. Antes de
+aceptarla como defensa, estas pruebas recorren los flujos reales de posting:
+cada movimiento de cantidad crea una capa de valuación, por lo que el neto de
+capas coincide con el bin y una reducción no supera la evidencia disponible.
+El estado "bin positivo, sin capas valoradas" solo puede venir de evidencia
+histórica inconsistente, no de los flujos actuales.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from decimal import Decimal
 import pytest
 
 from cacao_accounting.approval_engine import approved_execution
-from cacao_accounting.contabilidad.posting_service import PostingError, submit_document
+from cacao_accounting.contabilidad.posting_service import _consume_stock_valuation_layers, submit_document
 from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
@@ -28,7 +28,6 @@ from cacao_accounting.database import (
     StockBin,
     StockEntry,
     StockEntryItem,
-    StockLedgerEntry,
     StockValuationLayer,
     User,
     WarehouseCompanyAccount,
@@ -43,7 +42,7 @@ WAREHOUSE = "BOD01"
 
 @pytest.fixture
 def entorno_conciliacion(entorno_contable_aislado):
-    """Habilita stock negativo y las cuentas de inventario y ajuste."""
+    """Configura cuentas de inventario y ajuste sobre el escenario aislado."""
     app = entorno_contable_aislado.app
     with app.app_context():
         item = database.session.execute(database.select(Item).filter_by(code=ITEM_CODE)).scalar_one()
@@ -68,52 +67,50 @@ def entorno_conciliacion(entorno_contable_aislado):
         yield app, inventario.id, ajuste.id
 
 
-def _seed_bin(app, *, qty: str, value: str, rate: str = "0") -> None:
-    """Deja el bin con la cantidad y el valor indicados, sin capas."""
+def _movimiento(app, *, purpose: str, qty: str, rate: str, document_no: str) -> str:
+    """Crea un StockEntry de recepción o salida y lo contabiliza con el flujo real."""
     with app.app_context():
-        database.session.add(
-            StockBin(
-                company="cacao",
-                item_code=ITEM_CODE,
-                warehouse=WAREHOUSE,
-                actual_qty=Decimal(qty),
-                reserved_qty=Decimal("0"),
-                valuation_rate=Decimal(rate),
-                stock_value=Decimal(value),
-            )
+        entry = StockEntry(
+            company="cacao",
+            purpose=purpose,
+            posting_date=FECHA,
+            document_no=document_no,
+            from_warehouse=WAREHOUSE,
+            to_warehouse=WAREHOUSE,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            docstatus=0,
         )
-        database.session.commit()
-
-
-def _seed_partial_layer(app, *, qty: str, rate: str) -> None:
-    """Agrega una capa valorada parcial, como evidencia histórica incompleta."""
-    with app.app_context():
+        database.session.add(entry)
+        database.session.flush()
         database.session.add(
-            StockValuationLayer(
-                company="cacao",
+            StockEntryItem(
+                stock_entry_id=entry.id,
                 item_code=ITEM_CODE,
-                warehouse=WAREHOUSE,
                 qty=Decimal(qty),
-                rate=Decimal(rate),
-                stock_value_difference=Decimal(qty) * Decimal(rate),
-                remaining_qty=Decimal(qty),
-                remaining_stock_value=Decimal(qty) * Decimal(rate),
-                voucher_type="stock_entry",
-                voucher_id="SEED-2290-PARCIAL",
-                posting_date=FECHA,
+                qty_in_base_uom=Decimal(qty),
+                uom="UND",
+                basic_rate=Decimal(rate),
+                valuation_rate=Decimal(rate),
+                amount=Decimal(qty) * Decimal(rate),
+                source_warehouse=WAREHOUSE,
+                target_warehouse=WAREHOUSE,
             )
         )
         database.session.commit()
+        _submit(app, entry.id)
+        return str(entry.id)
 
 
-def _reconciliation(app, *, counted_qty: str, target_rate: str, adjustment_account_id: str) -> str:
-    """Crea un borrador de conciliación reductora contra la bodega central."""
+def _conciliacion(app, *, counted_qty: str, target_rate: str, adjustment_account_id: str) -> str:
+    """Crea y contabiliza una conciliación reductora contra la bodega central."""
     with app.app_context():
         entry = StockEntry(
             company="cacao",
             purpose="stock_reconciliation",
             posting_date=FECHA,
-            document_no="REC-2290",
+            document_no=f"REC-2290-{counted_qty}-{target_rate}",
             from_warehouse=WAREHOUSE,
             to_warehouse=WAREHOUSE,
             transaction_currency="NIO",
@@ -138,6 +135,7 @@ def _reconciliation(app, *, counted_qty: str, target_rate: str, adjustment_accou
             )
         )
         database.session.commit()
+        _submit(app, entry.id)
         return str(entry.id)
 
 
@@ -151,67 +149,78 @@ def _submit(app, entry_id: str) -> None:
         database.session.commit()
 
 
-def _bin_snapshot(app) -> tuple[Decimal, Decimal]:
-    """Devuelve cantidad y valor actuales del bin."""
+def _evidencia(app) -> tuple[tuple[Decimal, Decimal], list[tuple[str, Decimal, Decimal, str | None]]]:
+    """Devuelve el bin y las capas del artículo/bodega."""
     with app.app_context():
         database.session.expire_all()
-        row = database.session.execute(
+        bin_row = database.session.execute(
             database.select(StockBin).filter_by(company="cacao", item_code=ITEM_CODE, warehouse=WAREHOUSE)
         ).scalar_one()
-        return Decimal(row.actual_qty), Decimal(row.stock_value)
+        capas = (
+            database.session.execute(
+                database.select(StockValuationLayer)
+                .filter_by(company="cacao", item_code=ITEM_CODE, warehouse=WAREHOUSE)
+                .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+            )
+            .scalars()
+            .all()
+        )
+        return (
+            (Decimal(bin_row.actual_qty), Decimal(bin_row.stock_value)),
+            [(str(capa.id), Decimal(capa.qty), Decimal(capa.stock_value_difference), capa.source_layer_id) for capa in capas],
+        )
 
 
-def test_reduccion_sin_capas_ni_valor_rechaza_sin_cambios_parciales(entorno_conciliacion):
-    """Un bin positivo en cero sin capas no puede reducirse a costo cero."""
+def _cuadra(bin_row: tuple[Decimal, Decimal], capas: list[tuple[str, Decimal, Decimal, str | None]]) -> None:
+    """El neto de capas debe reproducir cantidad y valor del bin."""
+    qty = sum((capa[1] for capa in capas), Decimal("0"))
+    valor = sum((capa[2] for capa in capas), Decimal("0"))
+    assert bin_row == (qty, valor)
+
+
+def test_stock_valorado_cuadra_y_la_reduccion_consume_capas(entorno_conciliacion):
+    """Recepción, salida y conciliación dejan capas que cubren toda reducción."""
     app, _inventario_id, ajuste_id = entorno_conciliacion
-    _seed_bin(app, qty="10", value="0")
-    entry_id = _reconciliation(app, counted_qty="4", target_rate="0", adjustment_account_id=ajuste_id)
+    _movimiento(app, purpose="material_receipt", qty="10", rate="10", document_no="REC-2290-VAL")
+    _movimiento(app, purpose="material_issue", qty="4", rate="10", document_no="ISS-2290-VAL")
 
-    with pytest.raises(PostingError, match="valor funcional mayor que cero"):
-        _submit(app, entry_id)
-    with app.app_context():
-        database.session.rollback()
+    entrada_id = _conciliacion(app, counted_qty="4", target_rate="10", adjustment_account_id=ajuste_id)
 
-    assert _bin_snapshot(app) == (Decimal("10"), Decimal("0"))
+    bin_row, capas = _evidencia(app)
+    assert bin_row == (Decimal("4"), Decimal("40"))
+    _cuadra(bin_row, capas)
     with app.app_context():
-        database.session.expire_all()
-        entry = database.session.get(StockEntry, entry_id)
-        assert entry.docstatus == 0
-        movimientos = (
-            database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=entry_id)).scalars().all()
+        cost, rate, _source, _composicion = _consume_stock_valuation_layers(
+            company="cacao", item_code=ITEM_CODE, warehouse=WAREHOUSE, quantity=Decimal("4")
         )
-        asientos = database.session.execute(database.select(GLEntry).filter_by(voucher_id=entry_id)).scalars().all()
-        capas = database.session.execute(database.select(StockValuationLayer).filter_by(voucher_id=entry_id)).scalars().all()
-        assert movimientos == []
-        assert asientos == []
-        assert capas == []
-
-
-def test_reduccion_con_capas_parciales_valoradas_conserva_gl(entorno_conciliacion):
-    """El respaldo con capas parciales positivas sigue conciliando cantidad y valor."""
-    app, inventario_id, ajuste_id = entorno_conciliacion
-    _seed_bin(app, qty="10", value="100", rate="10")
-    _seed_partial_layer(app, qty="2", rate="10")
-    entry_id = _reconciliation(app, counted_qty="4", target_rate="10", adjustment_account_id=ajuste_id)
-
-    _submit(app, entry_id)
-
-    assert _bin_snapshot(app) == (Decimal("4"), Decimal("40"))
+        assert cost == Decimal("40")
+        assert rate == Decimal("10")
     with app.app_context():
-        database.session.expire_all()
-        movimientos = (
-            database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=entry_id)).scalars().all()
-        )
-        assert len(movimientos) == 1
-        assert movimientos[0].qty_change == Decimal("-6")
-        assert movimientos[0].stock_value_difference == Decimal("-60")
-        assert movimientos[0].qty_after_transaction == Decimal("4")
-
-        asientos = database.session.execute(database.select(GLEntry).filter_by(voucher_id=entry_id)).scalars().all()
-        assert asientos
+        asientos = database.session.execute(database.select(GLEntry).filter_by(voucher_id=entrada_id)).scalars().all()
         libros = {row.ledger_id for row in asientos}
-        assert len(libros) >= 2
-        credito_inventario = sum((Decimal(row.credit) for row in asientos if row.account_id == inventario_id), Decimal("0"))
-        debito_ajuste = sum((Decimal(row.debit) for row in asientos if row.account_id == ajuste_id), Decimal("0"))
-        assert credito_inventario == Decimal("60") * len(libros)
-        assert debito_ajuste == Decimal("60") * len(libros)
+        assert libros
+        assert all(
+            sum((Decimal(row.credit) for row in asientos if row.ledger_id == libro), Decimal("0")) == Decimal("20")
+            for libro in libros
+        )
+
+
+def test_stock_en_cero_solo_reduce_con_capas_de_evidencia(entorno_conciliacion):
+    """La conciliación puede dejar stock sin valor, pero con capas que lo respaldan."""
+    app, _inventario_id, ajuste_id = entorno_conciliacion
+    _conciliacion(app, counted_qty="10", target_rate="0", adjustment_account_id=ajuste_id)
+
+    bin_row, capas = _evidencia(app)
+    assert bin_row == (Decimal("10"), Decimal("0"))
+    _cuadra(bin_row, capas)
+
+    _conciliacion(app, counted_qty="4", target_rate="0", adjustment_account_id=ajuste_id)
+
+    bin_row, capas = _evidencia(app)
+    assert bin_row == (Decimal("4"), Decimal("0"))
+    _cuadra(bin_row, capas)
+    with app.app_context():
+        cost, _rate, _source, _composicion = _consume_stock_valuation_layers(
+            company="cacao", item_code=ITEM_CODE, warehouse=WAREHOUSE, quantity=Decimal("4")
+        )
+        assert cost == Decimal("0")

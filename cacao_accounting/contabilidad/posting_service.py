@@ -3283,7 +3283,14 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
 
 
 def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_value, counted_qty):
-    """Consume capas FIFO y resuelve el costo de una salida de conciliación."""
+    """Consume capas FIFO y resuelve el costo de una salida de conciliación.
+
+    Con evidencia consistente, cada movimiento de cantidad crea una capa, así
+    que el neto de capas iguala la cantidad del bin y una reducción no agota la
+    evidencia. El respaldo por stock negativo solo cubre datos históricos
+    incompletos; si no aporta valor funcional se rechaza para no descontar
+    unidades sin contrapartida en GL (#2290).
+    """
     item = _stock_item_for(line)
     try:
         cost_amount, rate, source_layer_id, consumed_layers = _consume_stock_valuation_layers(
