@@ -352,3 +352,51 @@ def test_dos_cambios_concurrentes_dejan_un_solo_default(tmp_path, monkeypatch):
     with reader.app_context():
         database.session.remove()
         database.engine.dispose()
+
+
+def test_orden_de_locks_es_compania_y_luego_scope(app, monkeypatch):
+    """#2323: el orden no se invierte respecto de las rutas de alta/edición."""
+    from cacao_accounting.contabilidad import services as cost_center_services
+
+    code = f"O{uuid4().hex[:7].upper()}"
+    calls: list[str] = []
+    monkeypatch.setattr(
+        cost_center_services,
+        "_lock_cost_center_companies",
+        lambda _codes: calls.append("company"),
+    )
+    monkeypatch.setattr(
+        "cacao_accounting.default_scope.lock_default_scope",
+        lambda *args, **kwargs: calls.append("scope"),
+    )
+    with app.app_context():
+        database.session.add(
+            Entity(
+                code=code,
+                name=code,
+                company_name=code,
+                tax_id=f"T{code}",
+                currency="NIO",
+                status="activo",
+                enabled=True,
+            )
+        )
+        database.session.flush()
+        database.session.add(
+            CostCenter(
+                entity=code,
+                code="MAIN",
+                name="Main",
+                active=True,
+                enabled=True,
+                default=True,
+                group=False,
+                status="activo",
+            )
+        )
+        database.session.flush()
+        try:
+            cost_center_services._ensure_single_default_cost_center(code)
+            assert calls == ["company", "scope"]
+        finally:
+            database.session.rollback()

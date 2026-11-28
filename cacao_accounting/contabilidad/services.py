@@ -523,8 +523,8 @@ def _ensure_single_default_cost_center(entity: str, *, preferred_id: str | None 
     from cacao_accounting.database import CostCenter
     from cacao_accounting.default_scope import lock_default_scope
 
-    lock_default_scope("cost_center_default", entity)
     _lock_cost_center_companies((entity,))
+    lock_default_scope("cost_center_default", entity)
     centers = (
         database.session.execute(
             database.select(CostCenter)
