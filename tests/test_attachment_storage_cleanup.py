@@ -98,8 +98,46 @@ def test_fallo_de_confirmacion_elimina_el_archivo(tmp_path, monkeypatch):
     assert [p for p in os.listdir(carpeta) if p != "origen.txt"] == []
 
 
+def test_reconciliacion_avanza_mas_alla_de_eventos_resueltos(tmp_path, monkeypatch):
+    """#1967: una cola de eventos resueltos no bloquea fallos posteriores."""
+    app = _app(tmp_path)
+    import cacao_accounting.attachment_service as service
+
+    def _upload(name: str):
+        return upload_attachment(
+            "supplier",
+            "PROV-1",
+            FileStorage(stream=BytesIO(b"%PDF-1.4\n%%EOF"), filename=name),
+            user_id="admin-user",
+        )
+
+    with app.app_context():
+        monkeypatch.setattr(service, "_remove_file", lambda path: False)
+        for index in range(3):
+            upload = _upload(f"old-{index}.pdf")
+            delete_attachment(upload["file_id"], "supplier", "PROV-1", user_id="admin-user")
+
+    monkeypatch.setattr(service, "_remove_file", lambda path: (os.remove(path), True)[1])
+    with app.app_context():
+        resolved = reconcile_pending_attachment_cleanups(actor_id="admin-user", limit=10)
+        assert resolved["resolved"] == 3
+        assert resolved["pending"] == 0
+
+    with app.app_context():
+        monkeypatch.setattr(service, "_remove_file", lambda path: False)
+        pending = _upload("pending.pdf")
+        delete_attachment(pending["file_id"], "supplier", "PROV-1", user_id="admin-user")
+
+    monkeypatch.setattr(service, "_remove_file", lambda path: (os.remove(path), True)[1])
+    with app.app_context():
+        retry = reconcile_pending_attachment_cleanups(actor_id="admin-user", limit=1)
+        assert retry["resolved"] == 1
+        assert retry["pending"] == 0
+        assert retry["resolved_ids"] == [pending["file_id"]]
+
+
 def test_unlink_fallido_reporta_pendiente_y_reconciliacion_resuelve(tmp_path, monkeypatch):
-    """Unlink fallido queda auditado; reconciliaci?n lo resuelve sin exponer ruta."""
+    """Unlink fallido queda auditado; reconciliación lo resuelve sin exponer ruta."""
     app = _app(tmp_path)
     import cacao_accounting.attachment_service as service
 

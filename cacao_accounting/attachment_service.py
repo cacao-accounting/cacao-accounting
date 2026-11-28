@@ -986,42 +986,59 @@ def reconcile_pending_attachment_cleanups(*, actor_id: str | None = None, limit:
     """Reintenta limpieza física pendiente registrada por ``cleanup_failed``.
 
     Recuperación: un operador/admin ejecuta esta reconciliación (servicio interno
-    o tarea programada). Para cada evento ``cleanup_failed`` sin un
-    ``cleanup_resolved`` posterior para el mismo ``document_id`` y ``file_id``,
-    intenta eliminar el archivo físico. Si el archivo ya no existe, se considera
-    resuelto. La respuesta no expone rutas absolutas del filesystem.
+    o tarea programada). Recorre los eventos en páginas y solo cuenta los que
+    siguen pendientes, para que una cola histórica de eventos resueltos no
+    bloquee los fallos posteriores. La respuesta no expone rutas absolutas.
     """
+    from sqlalchemy import and_, or_
+
     _ensure_cloud_mode()
-    if limit < 1:
-        limit = 1
-    failed_events = (
-        database.session.execute(
+    limit = max(1, limit)
+    batch_size = max(limit, 200)
+    resolved_ids: list[str] = []
+    still_pending = 0
+    processed = 0
+    seen: set[tuple[str, str]] = set()
+    cursor: tuple[Any, str] | None = None
+
+    while processed < limit:
+        query = (
             database.select(AuditTrail)
             .where(AuditTrail.action == "cleanup_failed")
             .order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())
-            .limit(limit)
+            .limit(batch_size)
         )
-        .scalars()
-        .all()
-    )
-
-    resolved_ids: list[str] = []
-    still_pending = 0
-    seen: set[tuple[str, str]] = set()
-    for event in failed_events:
-        payload = _cleanup_event_payload(event)
-        file_id = str(payload.get("file_id") or "")
-        file_path = str(payload.get("file_path") or "")
-        key = (str(event.document_id or ""), file_id or file_path)
-        if not file_path or key in seen:
-            continue
-        seen.add(key)
-        if _cleanup_event_already_resolved(event, file_id, file_path):
-            continue
-        if _resolve_cleanup_event(event, payload, file_id, file_path, actor_id):
-            resolved_ids.append(file_id or str(event.id))
-        else:
-            still_pending += 1
+        if cursor is not None:
+            cursor_timestamp, cursor_id = cursor
+            query = query.where(
+                or_(
+                    AuditTrail.timestamp > cursor_timestamp,
+                    and_(AuditTrail.timestamp == cursor_timestamp, AuditTrail.id > cursor_id),
+                )
+            )
+        events = database.session.execute(query).scalars().all()
+        if not events:
+            break
+        cursor = (events[-1].timestamp, events[-1].id)
+        for event in events:
+            payload = _cleanup_event_payload(event)
+            file_id = str(payload.get("file_id") or "")
+            file_path = str(payload.get("file_path") or "")
+            key = (str(event.document_id or ""), file_id or file_path)
+            if not file_path or key in seen:
+                continue
+            seen.add(key)
+            if _cleanup_event_already_resolved(event, file_id, file_path):
+                continue
+            processed += 1
+            if _resolve_cleanup_event(event, payload, file_id, file_path, actor_id):
+                resolved_ids.append(file_id or str(event.id))
+            else:
+                still_pending += 1
+            if processed >= limit:
+                break
+        if len(events) < batch_size:
+            break
 
     return {"resolved": len(resolved_ids), "pending": still_pending, "resolved_ids": resolved_ids}
 
