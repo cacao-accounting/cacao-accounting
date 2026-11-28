@@ -1511,7 +1511,7 @@
           // #1895: preserve batch/serial/expiry traceability from source line after sync.
           if (item.batch_id !== undefined && item.batch_id !== null && line.has_batch) line.batch_id = item.batch_id;
           if (item.serial_no !== undefined && item.serial_no !== null && line.has_serial_no) line.serial_no = item.serial_no;
-          if (item.expiry_date !== undefined && item.expiry_date !== null) line.expiry_date = item.expiry_date;
+          if (item.expiry_date !== undefined && item.expiry_date !== null && line.has_expiry_date) line.expiry_date = item.expiry_date;
           this.calcAmount(line);
           return line;
         },
