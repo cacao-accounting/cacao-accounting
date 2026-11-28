@@ -116,6 +116,51 @@ def test_sales_debit_note_approved_is_submitted_and_posted(entorno_contable_aisl
         assert entries, "El submit aprobado debe generar movimientos del mayor."
 
 
+def test_solicitud_doctype_sin_dispatch_falla_antes_de_persistir(entorno_contable_aislado):
+    """Una regla histórica sin despacho no puede crear una solicitud pendiente."""
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction
+
+    with entorno_contable_aislado.app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        bank = Bank(name=f"Banco {uuid4().hex[:8]}")
+        database.session.add(bank)
+        database.session.flush()
+        account = BankAccount(
+            company="cacao",
+            bank_id=bank.id,
+            account_name="Cuenta de prueba",
+            account_no=f"APP-{uuid4().hex[:10]}",
+            is_active=True,
+        )
+        database.session.add(account)
+        database.session.flush()
+        transaction = BankTransaction(
+            bank_account_id=account.id,
+            identity_key=f"approval-{uuid4().hex}",
+            posting_date=date(2026, 5, 15),
+            withdrawal=Decimal("5"),
+            description="Movimiento manual para prueba de despacho",
+        )
+        transaction.company = "cacao"
+        database.session.add(transaction)
+        _enable_approval_for_admin("bank_transaction", admin)
+        database.session.commit()
+        transaction_id = transaction.id
+
+        with pytest.raises(ValueError, match="no tiene flujo de envío"):
+            ApprovalEngine.request_approval(transaction, actor=admin)
+
+        solicitudes = (
+            database.session.execute(
+                database.select(ApprovalRequest).filter_by(document_type="bank_transaction", document_id=transaction_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert solicitudes == []
+        assert database.session.get(BankTransaction, transaction_id) is transaction
+
+
 def test_doctype_sin_dispatch_falla_sin_marcar_solicitud_aprobada(entorno_contable_aislado):
     """An unsupported configured doctype cannot silently complete its approval."""
     from cacao_accounting.database import Bank, BankAccount, BankTransaction
@@ -171,3 +216,7 @@ def test_doctype_sin_dispatch_falla_sin_marcar_solicitud_aprobada(entorno_contab
         assert persisted_request is not None and persisted_request.status == "Pending Approval"
         assert persisted_transaction is not None
         assert actions == []
+
+        with pytest.raises(ValueError, match="no tiene flujo de envío"):
+            ApprovalEngine._execute_submit("bank_transaction", transaction, admin)
+        assert database.session.get(ApprovalRequest, request.id).status == "Pending Approval"

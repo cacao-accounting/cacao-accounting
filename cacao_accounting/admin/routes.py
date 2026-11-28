@@ -2183,9 +2183,10 @@ def config_approval_matrix():
     roles = database.session.execute(database.select(Roles).order_by(Roles.name)).scalars().all()
     users = database.session.execute(database.select(User).order_by(User.user)).scalars().all()
 
+    from cacao_accounting.approval_engine import APPROVAL_SUBMIT_DOCTYPES
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
-    doc_types = [(k, v.label) for k, v in DOCUMENT_TYPES.items()]
+    doc_types = [(k, v.label) for k, v in DOCUMENT_TYPES.items() if k in APPROVAL_SUBMIT_DOCTYPES]
 
     return render_template(
         "admin/approval_matrix.html",
@@ -2197,6 +2198,7 @@ def config_approval_matrix():
         roles=roles,
         users=users,
         doc_types=doc_types,
+        supported_doctypes=APPROVAL_SUBMIT_DOCTYPES,
         titulo=_("Matriz de Aprobaciones"),
     )
 

@@ -647,9 +647,18 @@ def _handle_approval_matrix_post(set_setup_value, selected_company: str):
 
 def _toggle_approval_rule(rule_id: str | None) -> None:
     """Alterna la vigencia de una regla de aprobación sin borrarla."""
+    from cacao_accounting.approval_engine import validate_approval_submit_doctype
+
     rule = database.session.get(ApprovalMatrix, rule_id)
     if not rule:
         return
+    if not rule.enabled:
+        try:
+            validate_approval_submit_doctype(rule.document_type)
+        except ValueError as exc:
+            database.session.rollback()
+            flash_error(exc)
+            return
     rule.enabled = not bool(rule.enabled)
     database.session.commit()
     mensaje = _("Regla de aprobación habilitada.") if rule.enabled else _("Regla de aprobación deshabilitada.")
@@ -658,6 +667,7 @@ def _toggle_approval_rule(rule_id: str | None) -> None:
 
 def _approval_rule_from_form(company: str) -> ApprovalMatrix:
     """Construye una regla validando compañía, documento y receptor."""
+    from cacao_accounting.approval_engine import validate_approval_submit_doctype
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
     if database.session.execute(database.select(Entity.id).filter_by(code=company)).scalar_one_or_none() is None:
@@ -665,6 +675,7 @@ def _approval_rule_from_form(company: str) -> ApprovalMatrix:
     document_type = (request.form.get("document_type") or "").strip()
     if document_type not in DOCUMENT_TYPES:
         raise ValueError(_("El tipo de documento de la regla de aprobación no es válido."))
+    validate_approval_submit_doctype(document_type)
     max_amount = request.form.get("max_amount")
     role_id = request.form.get("role_id") or None
     user_id = request.form.get("user_id") or None

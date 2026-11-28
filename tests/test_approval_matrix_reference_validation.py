@@ -11,10 +11,12 @@ dejar filas ni provocar HTTP 500. La regla válida sí se guarda.
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
+from cacao_accounting.approval_engine import APPROVAL_SUBMIT_DOCTYPES
 from cacao_accounting.database import ApprovalMatrix, Modules, Roles, User, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
@@ -75,7 +77,7 @@ def _payload(**overrides: str) -> dict[str, str]:
     data = {
         "action": "add_rule",
         "company": "cacao",
-        "document_type": next(iter(DOCUMENT_TYPES)),
+        "document_type": "purchase_order",
         "approval_level": "1",
         "min_amount": "0",
         "max_amount": "",
@@ -121,7 +123,7 @@ def test_regla_con_referencia_invalida_no_persiste(app, authenticated_client, ma
 def test_regla_valida_persiste(app, authenticated_client, matriz_entorno):
     """El receptor existente y el tipo de documento válido sí crean la regla."""
     role_id, _user_id = matriz_entorno
-    tipo = next(iter(DOCUMENT_TYPES))
+    tipo = "purchase_order"
 
     response = authenticated_client("admin").post(
         "/settings/approval-matrix",
@@ -133,3 +135,75 @@ def test_regla_valida_persiste(app, authenticated_client, matriz_entorno):
     assert "Regla de aprobación creada correctamente." in response.get_data(as_text=True)
     reglas = _reglas(app, role_id=role_id, document_type=tipo)
     assert len(reglas) == 1
+
+
+def test_tipo_registrado_sin_despacho_no_crea_regla(app, authenticated_client, matriz_entorno, monkeypatch):
+    """Un tipo futuro sin implementación se rechaza aunque exista en el registro."""
+    monkeypatch.setitem(DOCUMENT_TYPES, "bank_transaction", SimpleNamespace(label="Transacción bancaria"))
+    role_id, _user_id = matriz_entorno
+    antes = len(_reglas(app))
+
+    response = authenticated_client("admin").post(
+        "/settings/approval-matrix",
+        data=_payload(document_type="bank_transaction", role_id=role_id),
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "El motor de aprobación no tiene flujo de envío para el tipo de documento bank_transaction." in response.get_data(
+        as_text=True
+    )
+    assert len(_reglas(app)) == antes
+
+
+def test_selector_solo_ofrece_tipos_con_despacho(app, authenticated_client, matriz_entorno, monkeypatch):
+    """El formulario no ofrece tipos que dejarían una solicitud sin acción posible."""
+    monkeypatch.setitem(DOCUMENT_TYPES, "bank_transaction", SimpleNamespace(label="Transacción bancaria"))
+    response = authenticated_client("admin").get("/settings/approval-matrix?company=cacao")
+    cuerpo = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    for doctype in APPROVAL_SUBMIT_DOCTYPES:
+        assert f'<option value="{doctype}">' in cuerpo
+    assert '<option value="bank_transaction">' not in cuerpo
+
+
+def test_regla_historica_sin_despacho_no_se_puede_habilitar(app, authenticated_client, matriz_entorno):
+    """Una regla legada se muestra y puede deshabilitarse, pero no reactivarse."""
+    role_id, _user_id = matriz_entorno
+    with app.app_context():
+        regla = ApprovalMatrix(
+            company_id="cacao",
+            document_type="bank_transaction",
+            role_id=role_id,
+            min_amount=0,
+            approval_level=1,
+            enabled=False,
+        )
+        database.session.add(regla)
+        database.session.commit()
+        regla_id = regla.id
+
+    client = authenticated_client("admin")
+    response = client.post(
+        "/settings/approval-matrix?company=cacao",
+        data={"action": "toggle_rule", "rule_id": regla_id},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "El motor de aprobación no tiene flujo de envío para el tipo de documento bank_transaction." in response.get_data(
+        as_text=True
+    )
+    assert _reglas(app, id=regla_id)[0].enabled is False
+
+    with app.app_context():
+        database.session.get(ApprovalMatrix, regla_id).enabled = True
+        database.session.commit()
+    response = client.post(
+        "/settings/approval-matrix?company=cacao",
+        data={"action": "toggle_rule", "rule_id": regla_id},
+        follow_redirects=True,
+    )
+    assert "Regla de aprobación deshabilitada." in response.get_data(as_text=True)
+    assert _reglas(app, id=regla_id)[0].enabled is False

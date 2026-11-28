@@ -38,6 +38,36 @@ _APPROVAL_EXECUTION: ContextVar[tuple[str, str, str, str] | None] = ContextVar("
 
 PENDING_APPROVAL_STATUS = "Pending Approval"
 PENDING_CANCELLATION_STATUS = "Pending Cancellation"
+_DRAFT_SUBMIT_DOCTYPES = frozenset(
+    {
+        "purchase_request",
+        "purchase_quotation",
+        "supplier_quotation",
+        "purchase_order",
+        "sales_request",
+        "sales_quotation",
+    }
+)
+_SALES_POSTED_SUBMIT_DOCTYPES = frozenset({"sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note"})
+_PURCHASE_POSTED_SUBMIT_DOCTYPES = frozenset({"purchase_invoice", "purchase_credit_note", "purchase_debit_note"})
+_STOCK_PAYMENT_SUBMIT_DOCTYPES = frozenset({"purchase_receipt", "payment_entry", "stock_entry", "import_landed_cost"})
+APPROVAL_SUBMIT_DOCTYPES = (
+    frozenset({"journal_entry", "sales_order", "delivery_note"})
+    | _DRAFT_SUBMIT_DOCTYPES
+    | _SALES_POSTED_SUBMIT_DOCTYPES
+    | _PURCHASE_POSTED_SUBMIT_DOCTYPES
+    | _STOCK_PAYMENT_SUBMIT_DOCTYPES
+)
+
+
+def validate_approval_submit_doctype(doctype: str) -> None:
+    """Rechaza tipos de documento sin despacho de aprobación implementado."""
+    if doctype not in APPROVAL_SUBMIT_DOCTYPES:
+        raise ValueError(
+            _("El motor de aprobación no tiene flujo de envío para el tipo de documento %(doctype)s.") % {"doctype": doctype}
+        )
+
+
 _RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
     {
         "purchase_request",
@@ -827,6 +857,7 @@ class ApprovalEngine:
             return None
 
         doctype = cls._resolve_doctype(document)
+        validate_approval_submit_doctype(doctype)
         amount = cls.get_document_amount(document)
 
         cls._lock_document(document)
@@ -1014,6 +1045,7 @@ class ApprovalEngine:
         if request is None and not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return True
 
+        validate_approval_submit_doctype(doctype)
         if doctype in {
             "sales_order",
             "sales_invoice",
@@ -1079,6 +1111,7 @@ class ApprovalEngine:
         """Ejecuta de manera segura la submision de un documento con todos sus hooks."""
         from cacao_accounting.audit_trail_service import log_submit
 
+        validate_approval_submit_doctype(doctype)
         cls._validate_final_submission(doctype, document)
         if doctype == "purchase_order":
             from cacao_accounting.compras.services import (
@@ -1099,14 +1132,7 @@ class ApprovalEngine:
             submit_journal(document.id, commit=False, user_id=str(user.id))
             return
 
-        if doctype in {
-            "purchase_request",
-            "purchase_quotation",
-            "supplier_quotation",
-            "purchase_order",
-            "sales_request",
-            "sales_quotation",
-        }:
+        if doctype in _DRAFT_SUBMIT_DOCTYPES:
             document.docstatus = 1
             log_submit(document)
             return
@@ -1129,12 +1155,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {
-            "sales_invoice",
-            "sales_return",
-            "sales_credit_note",
-            "sales_debit_note",
-        }:
+        if doctype in _SALES_POSTED_SUBMIT_DOCTYPES:
             from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
@@ -1144,7 +1165,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
+        if doctype in _PURCHASE_POSTED_SUBMIT_DOCTYPES:
             from cacao_accounting.compras import _persist_purchase_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
@@ -1152,7 +1173,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {"purchase_receipt", "payment_entry", "stock_entry", "import_landed_cost"}:
+        if doctype in _STOCK_PAYMENT_SUBMIT_DOCTYPES:
             _submit_document_and_refresh_flow(doctype, document)
             log_submit(document)
             return

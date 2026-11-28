@@ -171,6 +171,12 @@
                     <strong>{{ label }}</strong>
                   {% endif %}
                 {% endfor %}
+                {% if r.document_type not in supported_doctypes %}
+                  <strong>{{ r.document_type }}</strong>
+                  <div class="small text-danger">
+                    {{ _("El motor de aprobación no tiene flujo de envío para el tipo de documento %(doctype)s.", doctype=r.document_type) }}
+                  </div>
+                {% endif %}
               </td>
               <td>
                 {% if r.user_id %}
