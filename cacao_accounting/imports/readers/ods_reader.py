@@ -3,6 +3,9 @@
 
 """Lector de archivos ODS."""
 
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
 from defusedxml.sax import make_parser
 from xml.sax.handler import ContentHandler, feature_external_ges, feature_namespaces
 from xml.sax.xmlreader import AttributesNSImpl
@@ -11,6 +14,8 @@ from zipfile import ZipFile
 from cacao_accounting.imports.readers.base import BaseReader, TabularBook
 from cacao_accounting.imports.readers.limits import (
     MAX_IMPORT_ARCHIVE_BYTES,
+    MAX_IMPORT_COLUMNS,
+    MAX_IMPORT_ROWS,
     MAX_IMPORT_TEXT_CHARS,
     ImportReadLimitError,
     ReadBudget,
@@ -225,3 +230,79 @@ def _space_count(attributes: AttributesNSImpl) -> int:
     if count < 0 or count > MAX_IMPORT_ARCHIVE_BYTES:
         raise ImportReadLimitError()
     return count
+
+
+def ods_cell_repeat(cell) -> int:
+    """Lee ``number-columns-repeated`` con el mismo contrato que el lector SAX."""
+    raw = cell.getAttribute("numbercolumnsrepeated")
+    try:
+        repeat = int(raw) if raw else 1
+    except (TypeError, ValueError):
+        return 1
+    if repeat < 1:
+        raise ImportReadLimitError()
+    return repeat
+
+
+def ods_cell_value(cell, extract_text) -> str:
+    """Prioriza el valor tipado canónico sobre el texto visible de la celda.
+
+    Un ODS puede mostrar ``15/05/2026`` o ``1.234,56`` y guardar a la vez el
+    valor canónico en ``date-value`` o ``value``. La importación debe usar el
+    segundo cuando exista y sea válido (#2348).
+    """
+    for attribute in ("value", "date-value", "time-value", "boolean-value", "string-value"):
+        value = cell.getAttrNS(OFFICE_NS, attribute)
+        if value not in (None, "") and _is_valid_typed_value(attribute, str(value)):
+            return str(value)
+    return str(extract_text(cell))
+
+
+def _is_valid_typed_value(attribute: str, value: str) -> bool:
+    """Valida el atributo tipado antes de preferirlo sobre el texto."""
+    match attribute:
+        case "value":
+            try:
+                number = Decimal(value)
+            except InvalidOperation:
+                return False
+            return number.is_finite()
+        case "date-value":
+            try:
+                datetime.fromisoformat(value)
+            except ValueError:
+                return False
+            return True
+        case "boolean-value":
+            return value in {"true", "false"}
+        case _:
+            return True
+
+
+def ods_row_repeat(row) -> int:
+    """Lee ``number-rows-repeated`` rechazando multiplicadores excesivos."""
+    raw = row.getAttribute("numberrowsrepeated")
+    try:
+        count = int(raw) if raw else 1
+    except (TypeError, ValueError) as exc:
+        raise ImportReadLimitError() from exc
+    if count < 1 or count > MAX_IMPORT_ROWS:
+        raise ImportReadLimitError()
+    return count
+
+
+def ods_rows_from_table(table, table_row_class, table_cell_class, extract_text) -> list[list[str]]:
+    """Devuelve las filas y columnas expandidas de una tabla odfpy con límites."""
+    rows: list[list[str]] = []
+    for row in table.getElementsByType(table_row_class):
+        repeat = ods_row_repeat(row)
+        values: list[str] = []
+        for cell in row.getElementsByType(table_cell_class):
+            cell_repeat = ods_cell_repeat(cell)
+            if len(values) + cell_repeat > MAX_IMPORT_COLUMNS:
+                raise ImportReadLimitError()
+            values.extend([ods_cell_value(cell, extract_text)] * cell_repeat)
+        if len(rows) + repeat > MAX_IMPORT_ROWS:
+            raise ImportReadLimitError()
+        rows.extend(values.copy() for _ in range(repeat))
+    return rows

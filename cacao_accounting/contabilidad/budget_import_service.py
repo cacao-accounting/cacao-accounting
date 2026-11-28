@@ -29,7 +29,7 @@ from cacao_accounting.database import (
     Unit,
     database,
 )
-from cacao_accounting.imports.readers.limits import MAX_IMPORT_COLUMNS, ImportReadLimitError
+from cacao_accounting.imports.readers.ods_reader import ods_rows_from_table
 
 from cacao_accounting.i18n import _
 
@@ -109,7 +109,7 @@ class BudgetImportService:
         return self._matrix_to_dicts(values)
 
     def _parse_ods(self, file_content: bytes) -> List[Dict[str, str]]:
-        """Parsea un archivo ODS usando odfpy con soporte para columnas repetidas."""
+        """Parsea un archivo ODS usando odfpy con soporte para repeticiones."""
         from odf.opendocument import load
         from odf.table import Table, TableRow, TableCell
         from odf.teletype import extractText
@@ -118,7 +118,7 @@ class BudgetImportService:
         tables = doc.getElementsByType(Table)
         if not tables:
             return []
-        rows = self._ods_rows(tables[0], TableRow, TableCell, extractText)
+        rows = ods_rows_from_table(tables[0], TableRow, TableCell, extractText)
         return self._matrix_to_dicts(rows)
 
     def _matrix_to_dicts(self, values_iter) -> List[Dict[str, str]]:
@@ -207,42 +207,6 @@ class BudgetImportService:
             None,
             comb,
         )
-
-    def _ods_rows(self, table, table_row_class, table_cell_class, extract_text) -> list[list[str]]:
-        rows = []
-        for row in table.getElementsByType(table_row_class):
-            rows.append(self._ods_row_values(row, table_cell_class, extract_text))
-        return rows
-
-    def _ods_row_values(self, row, table_cell_class, extract_text) -> list[str]:
-        row_values: list[str] = []
-        for cell in row.getElementsByType(table_cell_class):
-            repeat = self._ods_cell_repeat(cell)
-            # #1373: una repetición declarada no se expande más allá del ancho
-            # máximo compartido por los lectores tabulares.
-            if repeat < 1 or len(row_values) + repeat > MAX_IMPORT_COLUMNS:
-                raise ImportReadLimitError()
-            row_values.extend([self._ods_cell_value(cell, extract_text)] * repeat)
-        return row_values
-
-    @staticmethod
-    def _ods_cell_value(cell, extract_text) -> str:
-        text = extract_text(cell)
-        if str(text).strip() != "":
-            return str(text)
-        office_ns = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-        for attr in ("value", "date-value", "time-value", "boolean-value", "string-value"):
-            value = cell.getAttrNS(office_ns, attr)
-            if value not in (None, ""):
-                return str(value)
-        return str(text)
-
-    def _ods_cell_repeat(self, cell) -> int:
-        repeat = cell.getAttribute("numbercolumnsrepeated")
-        try:
-            return int(repeat) if repeat else 1
-        except (ValueError, TypeError):
-            return 1
 
     def _normalize_headers(self, headers_row) -> list[str]:
         return [str(header).strip() if header is not None else "" for header in headers_row]

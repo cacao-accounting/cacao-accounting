@@ -142,3 +142,186 @@ def test_tasas_parsea_ods_tipos_office_value():
     """#1625 QA: lee celdas tipadas sin text:p."""
     filas = ExchangeRateImportService()._parse_ods(_ods_typed_bytes())
     assert filas == [{"Moneda Origen": "USD", "Moneda Destino": "NIO", "Fecha": "2026-05-15", "Tasa": "36.5"}]
+
+
+def _typed_cell(value_type: str, text: str | None = None, **attributes):
+    """Crea una celda tipada con texto visible opcional."""
+    celda = TableCell(valuetype=value_type, **attributes)
+    if text is not None:
+        celda.addElement(P(text=text))
+    return celda
+
+
+def _ods_bytes_with(
+    headers: list[str],
+    data_rows: list[tuple[int, list[TableCell]]],
+) -> bytes:
+    """Construye un ODS con la repetición de fila declarada por cada grupo."""
+    documento = OpenDocumentSpreadsheet()
+    tabla = Table(name="Datos")
+    fila_encabezado = TableRow()
+    for header in headers:
+        fila_encabezado.addElement(_typed_cell("string", header))
+    tabla.addElement(fila_encabezado)
+    for repeat, cells in data_rows:
+        fila = TableRow()
+        if repeat != 1:
+            fila.setAttribute("numberrowsrepeated", str(repeat))
+        for cell in cells:
+            fila.addElement(cell)
+        tabla.addElement(fila)
+    documento.spreadsheet.addElement(tabla)
+    salida = io.BytesIO()
+    documento.save(salida)
+    return salida.getvalue()
+
+
+def test_tasas_expande_filas_repetidas():
+    """Un ODS que comprime filas iguales importa todas las filas lógicas."""
+    contenido = _ods_bytes_with(
+        ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"],
+        [
+            (
+                2,
+                [
+                    _typed_cell("string", "USD"),
+                    _typed_cell("string", "NIO"),
+                    _typed_cell("date", "2026-05-15", datevalue="2026-05-15"),
+                    _typed_cell("float", "36.5", value="36.5"),
+                ],
+            ),
+        ],
+    )
+
+    filas = ExchangeRateImportService()._parse_ods(contenido)
+
+    assert len(filas) == 2
+    assert all(fila["Fecha"] == "2026-05-15" and fila["Tasa"] == "36.5" for fila in filas)
+
+
+def test_presupuesto_expande_filas_repetidas():
+    """El presupuesto no pierde filas comprimidas por numberrowsrepeated."""
+    contenido = _ods_bytes_with(
+        ["Cuenta", "Centro de Costo", "Mayo 2026"],
+        [
+            (
+                3,
+                [
+                    _typed_cell("string", "1101"),
+                    _typed_cell("string", "ADM"),
+                    _typed_cell("float", "10", value="10"),
+                ],
+            ),
+        ],
+    )
+
+    filas = BudgetImportService()._parse_ods(contenido)
+
+    assert len(filas) == 3
+    assert all(fila == {"Cuenta": "1101", "Centro de Costo": "ADM", "Mayo 2026": "10"} for fila in filas)
+
+
+def test_tasas_prioriza_el_valor_tipado_sobre_el_texto_visible():
+    """La fecha y la tasa usan value/date-value, no la presentación local."""
+    contenido = _ods_bytes_with(
+        ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"],
+        [
+            (
+                1,
+                [
+                    _typed_cell("string", "USD"),
+                    _typed_cell("string", "NIO"),
+                    _typed_cell("date", "15/05/2026", datevalue="2026-05-15"),
+                    _typed_cell("float", "36,5", value="36.5"),
+                ],
+            ),
+        ],
+    )
+
+    filas = ExchangeRateImportService()._parse_ods(contenido)
+
+    assert filas == [{"Moneda Origen": "USD", "Moneda Destino": "NIO", "Fecha": "2026-05-15", "Tasa": "36.5"}]
+
+
+def test_presupuesto_prioriza_el_valor_tipado_sobre_el_texto_visible():
+    """El importe presupuestado usa el valor canónico y no el formato local."""
+    contenido = _ods_bytes_with(
+        ["Cuenta", "Centro de Costo", "Mayo 2026"],
+        [
+            (
+                1,
+                [
+                    _typed_cell("string", "1101"),
+                    _typed_cell("string", "ADM"),
+                    _typed_cell("float", "1.500,00", value="1500"),
+                ],
+            ),
+        ],
+    )
+
+    filas = BudgetImportService()._parse_ods(contenido)
+
+    assert filas[0]["Mayo 2026"] == "1500"
+
+
+def test_tasas_usa_el_texto_si_el_valor_tipado_es_invalido():
+    """Un date-value inválido no se impone sobre el texto visible."""
+    contenido = _ods_bytes_with(
+        ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"],
+        [
+            (
+                1,
+                [
+                    _typed_cell("string", "USD"),
+                    _typed_cell("string", "NIO"),
+                    _typed_cell("date", "15/05/2026", datevalue="no-es-fecha"),
+                    _typed_cell("float", "36.5", value="36.5"),
+                ],
+            ),
+        ],
+    )
+
+    filas = ExchangeRateImportService()._parse_ods(contenido)
+
+    assert filas[0]["Fecha"] == "15/05/2026"
+
+
+def test_tasas_rechaza_filas_repetidas_excesivas():
+    """Una repetición de filas enorme falla antes de materializarla."""
+    contenido = _ods_bytes_with(
+        ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"],
+        [
+            (
+                100_001,
+                [
+                    _typed_cell("string", "USD"),
+                    _typed_cell("string", "NIO"),
+                    _typed_cell("date", "2026-05-15", datevalue="2026-05-15"),
+                    _typed_cell("float", "36.5", value="36.5"),
+                ],
+            ),
+        ],
+    )
+
+    with pytest.raises(ImportReadLimitError):
+        ExchangeRateImportService()._parse_ods(contenido)
+
+
+def test_presupuesto_rechaza_filas_repetidas_excesivas():
+    """El presupuesto aplica el mismo límite de filas repetidas."""
+    contenido = _ods_bytes_with(
+        ["Cuenta", "Centro de Costo", "Mayo 2026"],
+        [
+            (
+                100_001,
+                [
+                    _typed_cell("string", "1101"),
+                    _typed_cell("string", "ADM"),
+                    _typed_cell("float", "10", value="10"),
+                ],
+            ),
+        ],
+    )
+
+    with pytest.raises(ImportReadLimitError):
+        BudgetImportService()._parse_ods(contenido)

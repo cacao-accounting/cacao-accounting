@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import Currency, ExchangeRate, database
-from cacao_accounting.imports.readers.limits import MAX_IMPORT_COLUMNS, ImportReadLimitError
+from cacao_accounting.imports.readers.ods_reader import ods_rows_from_table
 
 
 from cacao_accounting.i18n import _
@@ -258,7 +258,7 @@ class ExchangeRateImportService:
         return self._matrix_to_dicts(values)
 
     def _parse_ods(self, file_content: bytes) -> List[Dict[str, str]]:
-        """Parsea un archivo ODS."""
+        """Parsea un archivo ODS respetando filas y columnas repetidas."""
         from odf.opendocument import load
         from odf.table import Table, TableCell, TableRow
         from odf.teletype import extractText
@@ -267,39 +267,8 @@ class ExchangeRateImportService:
         tables = doc.getElementsByType(Table)
         if not tables:
             return []
-        rows = [self._ods_row_values(row, TableCell, extractText) for row in tables[0].getElementsByType(TableRow)]
+        rows = ods_rows_from_table(tables[0], TableRow, TableCell, extractText)
         return self._matrix_to_dicts(rows)
-
-    @staticmethod
-    def _ods_row_values(row, table_cell_class, extract_text) -> list[str]:
-        row_values: list[str] = []
-        for cell in row.getElementsByType(table_cell_class):
-            repeat = ExchangeRateImportService._ods_cell_repeat(cell)
-            # #1373: la repetición declarada no puede expandir la fila sin límite.
-            if repeat < 1 or len(row_values) + repeat > MAX_IMPORT_COLUMNS:
-                raise ImportReadLimitError()
-            row_values.extend([ExchangeRateImportService._ods_cell_value(cell, extract_text)] * repeat)
-        return row_values
-
-    @staticmethod
-    def _ods_cell_repeat(cell) -> int:
-        repeat_attr = cell.getAttribute("numbercolumnsrepeated")
-        try:
-            return int(repeat_attr) if repeat_attr else 1
-        except (ValueError, TypeError):
-            return 1
-
-    @staticmethod
-    def _ods_cell_value(cell, extract_text) -> str:
-        text = extract_text(cell)
-        if str(text).strip() != "":
-            return str(text)
-        office_ns = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
-        for attr in ("value", "date-value", "time-value", "boolean-value", "string-value"):
-            value = cell.getAttrNS(office_ns, attr)
-            if value not in (None, ""):
-                return str(value)
-        return str(text)
 
     def _matrix_to_dicts(self, values_iter) -> List[Dict[str, Any]]:
         """Convierte una matriz (primera fila = encabezados) a lista de diccionarios.
