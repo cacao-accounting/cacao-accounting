@@ -28591,3 +28591,9 @@ msgstr "Could not load the inventory snapshot."
 
 msgid "tasa consultada"
 msgstr "looked-up rate"
+
+msgid "Enviados:"
+msgstr "Sent:"
+
+msgid "Errores:"
+msgstr "Errors:"

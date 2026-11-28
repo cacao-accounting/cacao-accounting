@@ -755,6 +755,18 @@
            })
            .catch(() => { this.loading = false; });
        },
+       partialMessage(body) {
+         const sent = Array.isArray(body.recipients) ? body.recipients : [];
+         const errors = Array.isArray(body.errors) ? body.errors : [];
+         let message = body.message || {{ _("El correo se envió parcialmente.")|tojson }};
+         if (sent.length) {
+           message += ' ' + {{ _("Enviados:")|tojson }} + ' ' + sent.join(', ');
+         }
+         if (errors.length) {
+           message += '. ' + {{ _("Errores:")|tojson }} + ' ' + errors.join('; ');
+         }
+         return message;
+       },
        sendEmail() {
          if (!this.recipients.trim()) {
            this.alertType = 'danger';
@@ -779,18 +791,22 @@
          .then(r => r.json().then(d => ({ status: r.status, body: d })))
          .then(res => {
            this.loading = false;
-           if (res.status === 200 && res.body.success) {
+           const body = res.body || {};
+           if (res.status === 200 && body.success) {
              this.alertType = 'success';
-             this.alertMessage = res.body.message || {{ _("Correo enviado exitosamente.")|tojson }};
+             this.alertMessage = body.message || {{ _("Correo enviado exitosamente.")|tojson }};
              setTimeout(() => {
                var modalEl = document.getElementById('emailNotificationModal');
                var modal = bootstrap.Modal.getInstance(modalEl);
                if (modal) modal.hide();
                window.location.reload();
              }, 1500);
+           } else if (body.partial || res.status === 207) {
+             this.alertType = 'warning';
+             this.alertMessage = this.partialMessage(body);
            } else {
              this.alertType = 'danger';
-             this.alertMessage = res.body.error || {{ _("Error al enviar el correo.")|tojson }};
+             this.alertMessage = body.error || {{ _("Error al enviar el correo.")|tojson }};
            }
          })
          .catch(() => {
