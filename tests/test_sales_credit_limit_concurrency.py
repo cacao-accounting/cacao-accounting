@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     Entity,
     Party,
     Item,
+    Modules,
     SalesOrder,
     SalesOrderItem,
     UOM,
@@ -73,6 +74,7 @@ def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
             [
                 Currency(code=f"C{suffix}", name="Moneda", decimals=2, active=True, default=False),
                 UOM(code=f"U{suffix}", name="Unidad", is_active=True),
+                Modules(module="sales", default=False, enabled=True),
                 Entity(
                     code=company,
                     name=f"Empresa {suffix}",
@@ -147,8 +149,6 @@ def test_aprobaciones_diferidas_no_superan_el_limite(tmp_path):
     """El flujo real de ApprovalEngine respeta el lock de crédito."""
     app = _app(tmp_path)
     with app.app_context():
-        if database.session.get_bind().dialect.name == "sqlite":
-            pytest.skip("El flujo de aprobación diferida se valida en motores externos.")
         database.session.remove()
     suffix = uuid4().hex[:6].upper()
     company, customer_id, order_ids = _seed(app, suffix)
