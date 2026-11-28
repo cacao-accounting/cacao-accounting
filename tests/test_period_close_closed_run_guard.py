@@ -15,6 +15,7 @@ from cacao_accounting.database import AccountingPeriod, PeriodCloseCheck, Period
 PASOS = (
     "/accounting/period-close/monthly/{}/project-capitalization",
     "/accounting/period-close/monthly/{}/apply-recurring",
+    "/accounting/period-close/monthly/{}/exchange-revaluation",
 )
 
 
@@ -55,5 +56,7 @@ def test_paso_sobre_corrida_cerrada_no_muta_estado(app, authenticated_client, cl
     with app.app_context():
         run = database.session.get(PeriodCloseRun, closed_run)
         assert run.run_status == "closed"
+        period = database.session.get(AccountingPeriod, run.period_id)
+        assert period.is_closed is True
         checks = database.session.execute(database.select(PeriodCloseCheck).filter_by(close_run_id=closed_run)).scalars().all()
         assert checks == []

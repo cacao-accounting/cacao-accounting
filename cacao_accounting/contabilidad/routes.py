@@ -3736,6 +3736,10 @@ def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
         flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
+    if close_run.run_status == "closed":
+        flash(_("La corrida de cierre está cerrada. Reabra el período antes de ejecutar pasos adicionales."), "warning")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
     try:
         run = ExchangeRevaluationService().run(
             company=close_run.company,
