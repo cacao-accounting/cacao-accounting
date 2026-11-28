@@ -9,6 +9,7 @@ from cacao_accounting.accounting_engine.document_builders import _document_carry
 from cacao_accounting.database import (
     Accounts,
     Book,
+    DocumentRelation,
     GLEntry,
     PaymentEntry,
     PaymentReference,
@@ -65,13 +66,27 @@ def _pago(application, *, libro_id, cuenta_id, fecha, monto, factura=FACTURA):
         pago = PaymentEntry(company="cacao", payment_type="receive", posting_date=fecha, currency="NIO", docstatus=1)
         database.session.add(pago)
         database.session.flush()
+        referencia = PaymentReference(
+            payment_id=pago.id,
+            reference_type="sales_invoice",
+            reference_id=factura,
+            company="cacao",
+            allocated_amount=Decimal(monto),
+        )
+        database.session.add(referencia)
+        database.session.flush()
         database.session.add(
-            PaymentReference(
-                payment_id=pago.id,
-                reference_type="sales_invoice",
-                reference_id=factura,
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=factura,
+                target_type="payment_entry",
+                target_id=str(pago.id),
+                target_item_id=str(referencia.id),
                 company="cacao",
-                allocated_amount=Decimal(monto),
+                qty=Decimal(monto),
+                amount=Decimal(monto),
+                relation_type="payment_allocation",
+                status="active",
             )
         )
         database.session.commit()
@@ -132,13 +147,27 @@ def test_ap_ignora_pago_posterior_al_corte(entorno_contable_aislado):
         pago = PaymentEntry(company="cacao", payment_type="pay", posting_date=PAGO, currency="NIO", docstatus=1)
         database.session.add(pago)
         database.session.flush()
+        referencia = PaymentReference(
+            payment_id=pago.id,
+            reference_type="purchase_invoice",
+            reference_id=FACTURA,
+            company="cacao",
+            allocated_amount=Decimal("400"),
+        )
+        database.session.add(referencia)
+        database.session.flush()
         database.session.add(
-            PaymentReference(
-                payment_id=pago.id,
-                reference_type="purchase_invoice",
-                reference_id=FACTURA,
+            DocumentRelation(
+                source_type="purchase_invoice",
+                source_id=FACTURA,
+                target_type="payment_entry",
+                target_id=str(pago.id),
+                target_item_id=str(referencia.id),
                 company="cacao",
-                allocated_amount=Decimal("400"),
+                qty=Decimal("400"),
+                amount=Decimal("400"),
+                relation_type="payment_allocation",
+                status="active",
             )
         )
         database.session.commit()

@@ -1703,12 +1703,21 @@ def _prior_payment_document_net(
     consulta = (
         select(PaymentReference.payment_id, PaymentReference.allocated_amount)
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .join(
+            DocumentRelation,
+            (DocumentRelation.target_item_id == PaymentReference.id)
+            & (DocumentRelation.target_type == "payment_entry")
+            & (DocumentRelation.target_id == PaymentEntry.id)
+            & (DocumentRelation.source_type == document_type)
+            & (DocumentRelation.source_id == document_id),
+        )
         .where(
             PaymentReference.reference_type == document_type,
             PaymentReference.reference_id == document_id,
             PaymentReference.company == company,
             PaymentReference.payment_id != exclude_payment_id,
-            PaymentEntry.docstatus == 1,
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == company),
+            _payment_relation_active_at_cutoff(as_of_date),
         )
     )
     if as_of_date is not None:
@@ -1751,6 +1760,18 @@ def _prior_payment_document_net(
 def _cutoff_timestamp(as_of_date: date) -> datetime:
     """Primer instante posterior al corte para distinguir bajas posteriores."""
     return datetime.combine(as_of_date + timedelta(days=1), time.min)
+
+
+def _payment_relation_active_at_cutoff(as_of_date: date | None) -> Any:
+    """Exige una aplicación vigente y conserva reversas posteriores al corte."""
+    if as_of_date is None:
+        return DocumentRelation.status == "active"
+    cutoff_start = _cutoff_timestamp(as_of_date)
+    return or_(
+        DocumentRelation.status == "active",
+        and_(DocumentRelation.status == "reverted", DocumentRelation.reversed_at >= cutoff_start),
+        and_(DocumentRelation.status == "cancelled", DocumentRelation.cancelled_at >= cutoff_start),
+    )
 
 
 def _document_carrying_value_in_ledger(

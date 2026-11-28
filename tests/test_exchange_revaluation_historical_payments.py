@@ -14,6 +14,7 @@ from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeR
 from cacao_accounting.database import (
     Accounts,
     Book,
+    DocumentRelation,
     GLEntry,
     PaymentEntry,
     PaymentReference,
@@ -55,13 +56,27 @@ def _escenario(entorno_contable_aislado):
         )
         database.session.add(pago)
         database.session.flush()
+        referencia = PaymentReference(
+            payment_id=pago.id,
+            reference_type="sales_invoice",
+            reference_id=FACTURA,
+            company="cacao",
+            allocated_amount=Decimal("400"),
+        )
+        database.session.add(referencia)
+        database.session.flush()
         database.session.add(
-            PaymentReference(
-                payment_id=pago.id,
-                reference_type="sales_invoice",
-                reference_id=FACTURA,
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=FACTURA,
+                target_type="payment_entry",
+                target_id=str(pago.id),
+                target_item_id=str(referencia.id),
                 company="cacao",
-                allocated_amount=Decimal("400"),
+                qty=Decimal("400"),
+                amount=Decimal("400"),
+                relation_type="payment_allocation",
+                status="active",
             )
         )
         database.session.add(
