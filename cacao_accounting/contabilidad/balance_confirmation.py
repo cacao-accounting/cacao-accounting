@@ -296,8 +296,10 @@ def _invoice_open_items(
             )
         else:
             outstanding = compute_outstanding_amount(document, as_of_date=cutoff_date)
-        if is_credit:
-            outstanding -= compute_applied_credit_document_amount(document, cutoff_date)
+            # #1113: el saldo canónico ya descuenta las aplicaciones de la nota;
+            # solo la rama legacy necesita restarlas por separado.
+            if is_credit:
+                outstanding -= compute_applied_credit_document_amount(document, cutoff_date)
         if outstanding <= 0:
             continue
         items.append(_invoice_item(document, default_label, outstanding))

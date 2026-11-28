@@ -468,7 +468,11 @@ def _subledger_document_amounts(
         # Keep the report aligned with the document balance helper, which also
         # accounts for effective legacy allocations not represented in AR/AP.
         outstanding = compute_outstanding_amount(document, as_of_date=effective_as_of)
-        paid = max(original_amount - _decimal_value(ledger_balance) + pending_amount, Decimal("0"))
+        # #1116: una devolución abre con document_amount negativo. Se orienta el
+        # saldo del ledger a la magnitud del documento para no contar el pago dos
+        # veces; el signo de presentación se aplica una sola vez en _subledger_row.
+        oriented_balance = _document_sign(document) * _decimal_value(ledger_balance)
+        paid = max(original_amount - oriented_balance + pending_amount, Decimal("0"))
         return paid, outstanding
     return (
         _payment_allocations(document, effective_as_of),
