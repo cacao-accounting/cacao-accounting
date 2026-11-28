@@ -138,6 +138,8 @@ class AllocationLine:
     source_amount: Decimal
     rate: Decimal
     idempotency_key: str | None = None
+    open_item_id: str | None = None
+    economic_line_id: str | None = None
 
 
 def _canonical_decimal(value: Decimal) -> str:
@@ -157,6 +159,8 @@ def allocation_fingerprint(line: AllocationLine) -> str:
             _canonical_decimal(line.document_amount),
             _canonical_decimal(line.source_amount),
             _canonical_decimal(line.rate),
+            str(line.open_item_id or ""),
+            str(line.economic_line_id or ""),
         )
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -249,9 +253,22 @@ class OpenItemResolver:
         """Devuelve una instantánea de los documentos indexados."""
         return tuple(self._items.values())
 
-    def consume(self, document_id: str, amount: Decimal) -> None:
-        """Consume saldo después de persistir una línea."""
-        item = self.resolve(document_id)
+    def consume(
+        self,
+        document_id: str,
+        amount: Decimal,
+        *,
+        open_item_id: str | None = None,
+        economic_line_id: str | None = None,
+    ) -> None:
+        """Consume saldo de la identidad de línea elegida, no solo del documento."""
+        item = None
+        if open_item_id:
+            item = self._items.get(str(open_item_id))
+        elif economic_line_id:
+            item = self._items.get(f"{document_id}:{economic_line_id}")
+        if item is None:
+            item = self.resolve(document_id)
         key = self._key(item)
         amount = _decimal(amount)
         if amount <= 0 or amount > item.outstanding:
@@ -308,6 +325,15 @@ def list_open_items(
         func.sum(ARAPLedgerEntry.document_amount).label("outstanding"),
         func.max(ARAPLedgerEntry.posting_date).label("posting_date"),
         func.max(ARAPLedgerEntry.document_no).label("document_no"),
+        select(func.max(ARAPOpenItemModel.line_number))
+        .where(
+            ARAPOpenItemModel.document_type == ARAPLedgerEntry.document_type,
+            ARAPOpenItemModel.document_id == ARAPLedgerEntry.document_id,
+            ARAPOpenItemModel.economic_line_id == ARAPLedgerEntry.economic_line_id,
+        )
+        .correlate(ARAPLedgerEntry)
+        .scalar_subquery()
+        .label("line_number"),
     ).group_by(
         ARAPLedgerEntry.document_id,
         ARAPLedgerEntry.document_type,
@@ -343,6 +369,7 @@ def list_open_items(
             party_id=row.party_id,
             ledger_type=row.ledger_type,
             posting_date=row.posting_date,
+            line_number=row.line_number,
             direction="debit" if _decimal(row.outstanding) > 0 else "credit",
         )
         for row in rows
@@ -427,6 +454,8 @@ class AllocationPlanner:
                 source_amount=source_line,
                 rate=rate,
                 idempotency_key=key,
+                open_item_id=item.open_item_id,
+                economic_line_id=item.economic_line_id,
             )
             # #1836: una clave solo es repetición si coincide todo el contenido.
             if key and key in existing:
@@ -496,7 +525,12 @@ class AllocationExecutor:
                         raise AllocationIdempotencyError(_("La clave %(key)s ya fue usada con otro importe.") % {"key": key})
                     output.append(line)
                     continue
-                self.resolver.consume(line.document_id, line.document_amount)
+                self.resolver.consume(
+                    line.document_id,
+                    line.document_amount,
+                    open_item_id=line.open_item_id,
+                    economic_line_id=line.economic_line_id,
+                )
                 if persist is not None:
                     persist(line)
                 if key:

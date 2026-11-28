@@ -1454,7 +1454,9 @@ def _find_target_open_item(
     ledger_matches = [
         item
         for item in list_open_items(company=company, party_type=party_type, party_id=party_id)
-        if item.document_type == reference_type and item.document_id == reference_name and item.outstanding > 0
+        if item.document_type == reference_type
+        and (item.document_id == reference_name or item.document_no == reference_name)
+        and item.outstanding > 0
     ]
     if len(ledger_matches) != 1:
         return None
@@ -1589,15 +1591,18 @@ def _process_journal_line_reference(
     )
     reference_name = str(
         getattr(line, "reference_name", None)
-        or getattr(line, "reference_open_item_id", None)
         or getattr(line, "internal_reference_id", None)
+        or getattr(line, "reference_open_item_id", None)
         or ""
     ).strip()
-    if not reference_type and not reference_name:
+    open_item_id = str(getattr(line, "reference_open_item_id", None) or "").strip()
+    if not reference_type and not reference_name and not open_item_id:
         return None
-    if not reference_type or not reference_name:
+    if not reference_type or not (reference_name or open_item_id):
         raise ValueError(_("La referencia AP/AR requiere tipo y documento."))
-    target = database.session.get(ARAPOpenItem, reference_name)
+    target = database.session.get(ARAPOpenItem, open_item_id) if open_item_id else None
+    if target is None:
+        target = database.session.get(ARAPOpenItem, reference_name)
     if target is None:
         target = _find_target_open_item(
             company=str(document.entity),

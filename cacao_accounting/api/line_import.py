@@ -998,7 +998,13 @@ def _filter_open_item_reference_line(query: Any, line_hint: str) -> Any:
 
 
 def _ledger_open_item_matches(
-    *, company_id: str, party_type: str | None, party_id: Any, reference_type: str, reference_document: str
+    *,
+    company_id: str,
+    party_type: str | None,
+    party_id: Any,
+    reference_type: str,
+    reference_document: str,
+    line_hint: str = "",
 ) -> list[Any]:
     """Find available AP/AR references exposed by the financial ledger."""
     from cacao_accounting.contabilidad.arap_allocation import list_open_items
@@ -1007,7 +1013,17 @@ def _ledger_open_item_matches(
         item
         for item in list_open_items(company=company_id, party_type=party_type, party_id=party_id)
         if _is_matching_ledger_open_item(item, reference_type, reference_document)
+        and _ledger_item_matches_line(item, line_hint)
     ]
+
+
+def _ledger_item_matches_line(item: Any, line_hint: str) -> bool:
+    """Indica si el open item del ledger corresponde a la línea solicitada."""
+    if not line_hint:
+        return True
+    if item.economic_line_id and str(item.economic_line_id) == line_hint:
+        return True
+    return bool(line_hint.isdigit() and item.line_number is not None and int(item.line_number) == int(line_hint))
 
 
 def _is_matching_ledger_open_item(item: Any, reference_type: str, reference_document: str) -> bool:
@@ -1044,6 +1060,7 @@ def _resolve_ledger_open_item_fallback(
     party_id: Any,
     reference_type: str,
     reference_document: str,
+    line_hint: str = "",
 ) -> bool:
     """Resolve a reference from the ledger when no materialized open item exists."""
     ledger_matches = _ledger_open_item_matches(
@@ -1052,6 +1069,7 @@ def _resolve_ledger_open_item_fallback(
         party_id=party_id,
         reference_type=reference_type,
         reference_document=reference_document,
+        line_hint=line_hint,
     )
     if len(ledger_matches) == 1:
         _record_open_item_reference(validated_row, reference_type, ledger_matches[0], include_open_item_id=False)
@@ -1103,6 +1121,7 @@ def _validate_open_item_reference(
         party_id=party_id,
         reference_type=reference_type,
         reference_document=reference_document,
+        line_hint=line_hint,
     ):
         return
     if not matches:
