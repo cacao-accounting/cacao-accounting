@@ -720,6 +720,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     data = _normalize_journal_payload(payload)
     if journal.reversal_of:
         data = _preserve_reversal_line_identities(journal, data)
+        _validate_reversal_line_currencies(journal, data)
     if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
         raise JournalValidationError(_("Los flags de cierre no pueden cambiarse al editar un borrador."))
     data = replace(
@@ -1354,6 +1355,22 @@ def _preserve_reversal_line_identities(journal: ComprobanteContable, data: Journ
             raise JournalValidationError(_("No se puede cambiar la identidad de las líneas de una reversión."))
         updated_lines.append(replace(line, economic_line_id=source_id))
     return replace(data, lines=updated_lines)
+
+
+def _validate_reversal_line_currencies(journal: ComprobanteContable, data: JournalDraftInput) -> None:
+    """Impide sustituir la moneda histórica de una línea al editar la reversión."""
+    source_lines = list_journal_lines(str(journal.reversal_of))
+    currencies_by_line_id = {
+        str(line.economic_line_id or line.id): str(line.currency_id or "")
+        for line in source_lines
+        if line.economic_line_id or line.id
+    }
+    if len(currencies_by_line_id) != len(data.lines):
+        raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+    for line in data.lines:
+        source_currency = currencies_by_line_id.get(str(line.economic_line_id or ""))
+        if not source_currency or line.currency != source_currency:
+            raise JournalValidationError(_("La moneda debe coincidir con el documento origen."))
 
 
 def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id: str | None) -> None:
